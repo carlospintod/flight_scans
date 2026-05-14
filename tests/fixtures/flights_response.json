@@ -1,0 +1,57 @@
+{
+  "search_metadata": {
+    "id": "test-pt-1",
+    "status": "Success",
+    "created_at": "2026-05-14T12:00:00Z"
+  },
+  "search_parameters": {
+    "engine": "google_flights",
+    "departure_id": "MAD",
+    "arrival_id": "NBO",
+    "outbound_date": "2026-09-05",
+    "return_date": "2026-10-08",
+    "currency": "EUR",
+    "flight_type": "round_trip"
+  },
+  "best_flights": [
+    {
+      "flights": [
+        {"departure_airport": {"id": "MAD", "name": "Madrid Barajas", "date": "2026-09-05", "time": "12:00"},
+         "arrival_airport":   {"id": "DOH", "name": "Doha Hamad",      "date": "2026-09-05", "time": "21:30"},
+         "duration": 390, "airline": "Qatar Airways", "flight_number": "QR150", "travel_class": "Economy"},
+        {"departure_airport": {"id": "DOH", "name": "Doha Hamad",      "date": "2026-09-06", "time": "02:10"},
+         "arrival_airport":   {"id": "NBO", "name": "Nairobi JKIA",    "date": "2026-09-06", "time": "07:25"},
+         "duration": 315, "airline": "Qatar Airways", "flight_number": "QR1335", "travel_class": "Economy"}
+      ],
+      "layovers": [{"duration": 280, "name": "Doha Hamad", "id": "DOH"}],
+      "total_duration": 985,
+      "price": 489,
+      "type": "Round trip"
+    },
+    {
+      "flights": [
+        {"departure_airport": {"id": "MAD", "name": "Madrid Barajas", "date": "2026-09-05", "time": "10:35"},
+         "arrival_airport":   {"id": "AMS", "name": "Amsterdam",      "date": "2026-09-05", "time": "13:05"},
+         "duration": 150, "airline": "KLM", "flight_number": "KL1700", "travel_class": "Economy"},
+        {"departure_airport": {"id": "AMS", "name": "Amsterdam",      "date": "2026-09-05", "time": "20:30"},
+         "arrival_airport":   {"id": "NBO", "name": "Nairobi JKIA",   "date": "2026-09-06", "time": "06:15"},
+         "duration": 525, "airline": "Kenya Airways", "flight_number": "KQ117", "travel_class": "Economy"}
+      ],
+      "layovers": [{"duration": 445, "name": "Amsterdam", "id": "AMS"}],
+      "total_duration": 1120,
+      "price": 512,
+      "type": "Round trip"
+    },
+    {
+      "flights": [
+        {"departure_airport": {"id": "MAD", "name": "Madrid Barajas", "date": "2026-09-05", "time": "07:25"},
+         "arrival_airport":   {"id": "NBO", "name": "Nairobi JKIA",   "date": "2026-09-05", "time": "19:50"},
+         "duration": 745, "airline": "Iberia", "flight_number": "IB283", "travel_class": "Economy"}
+      ],
+      "layovers": [],
+      "total_duration": 745,
+      "price": 705,
+      "type": "Round trip"
+    }
+  ]
+}

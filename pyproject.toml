@@ -1,0 +1,18 @@
+[project]
+name = "flight-tracker"
+version = "0.1.0"
+description = "Flexible-date round-trip flight price tracker built on SearchAPI.io"
+requires-python = ">=3.12"
+dependencies = [
+    "requests>=2.32",
+    "python-dotenv>=1.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

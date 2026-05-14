@@ -1,0 +1,70 @@
+from pathlib import Path
+
+import pytest
+
+from lib.config import ConfigError, load_route
+
+
+REPO = Path(__file__).resolve().parents[1]
+
+
+def test_loads_first_run_yaml():
+    cfg = load_route(REPO / "routes" / "spain-nairobi.yaml")
+    assert cfg.name == "spain-nairobi"
+    assert cfg.origins == ("MAD", "BCN")
+    assert cfg.destinations == ("NBO",)
+    assert cfg.currency == "EUR"
+    assert cfg.stay.min_days == 30
+    assert cfg.stay.max_days == 60
+    assert cfg.sweep.outbound_window_days == 14
+    assert cfg.sweep.return_window_days == 14
+    assert cfg.sweep.overlap_days == 3
+    assert cfg.sweep.cadence_days == 14
+    assert cfg.alerts.drop_threshold_pct == 15
+    assert cfg.alerts.baseline_window_days == 30
+    assert cfg.alerts.min_observations == 4
+    # search_window dates are dates, not strings
+    assert cfg.search_window.earliest_departure.year == 2026
+    assert cfg.search_window.latest_return.year == 2027
+
+
+def test_rejects_oversized_calendar_rectangle(tmp_path):
+    p = tmp_path / "bad.yaml"
+    p.write_text(
+        "route:\n  name: x\n  origins: [MAD]\n  destinations: [NBO]\n"
+        "search_window:\n  earliest_departure: 2026-06-01\n  latest_return: 2027-05-31\n"
+        "stay_preferences: {min_days: 30, max_days: 60}\n"
+        "currency: EUR\n"
+        "sweep: {outbound_window_days: 20, return_window_days: 14, overlap_days: 3, cadence_days: 14}\n"
+        "alerts: {drop_threshold_pct: 15, baseline_window_days: 30, min_observations: 4}\n"
+    )
+    with pytest.raises(ConfigError, match="200-combo"):
+        load_route(p)
+
+
+def test_rejects_bad_iata_code(tmp_path):
+    p = tmp_path / "bad.yaml"
+    p.write_text(
+        "route:\n  name: x\n  origins: [MADRID]\n  destinations: [NBO]\n"
+        "search_window:\n  earliest_departure: 2026-06-01\n  latest_return: 2027-05-31\n"
+        "stay_preferences: {min_days: 30, max_days: 60}\n"
+        "currency: EUR\n"
+        "sweep: {outbound_window_days: 14, return_window_days: 14, overlap_days: 3, cadence_days: 14}\n"
+        "alerts: {drop_threshold_pct: 15, baseline_window_days: 30, min_observations: 4}\n"
+    )
+    with pytest.raises(ConfigError, match="IATA"):
+        load_route(p)
+
+
+def test_rejects_stay_inversion(tmp_path):
+    p = tmp_path / "bad.yaml"
+    p.write_text(
+        "route:\n  name: x\n  origins: [MAD]\n  destinations: [NBO]\n"
+        "search_window:\n  earliest_departure: 2026-06-01\n  latest_return: 2027-05-31\n"
+        "stay_preferences: {min_days: 60, max_days: 30}\n"
+        "currency: EUR\n"
+        "sweep: {outbound_window_days: 14, return_window_days: 14, overlap_days: 3, cadence_days: 14}\n"
+        "alerts: {drop_threshold_pct: 15, baseline_window_days: 30, min_observations: 4}\n"
+    )
+    with pytest.raises(ConfigError, match="max_days"):
+        load_route(p)

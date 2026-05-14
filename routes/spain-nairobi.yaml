@@ -1,0 +1,25 @@
+route:
+  name: spain-nairobi
+  origins: [MAD, BCN]
+  destinations: [NBO]
+
+search_window:
+  earliest_departure: 2026-06-01
+  latest_return: 2027-05-31
+
+stay_preferences:
+  min_days: 30
+  max_days: 60
+
+currency: EUR
+
+sweep:
+  outbound_window_days: 14
+  return_window_days: 14
+  overlap_days: 3
+  cadence_days: 14   # biweekly
+
+alerts:
+  drop_threshold_pct: 15
+  baseline_window_days: 30
+  min_observations: 4

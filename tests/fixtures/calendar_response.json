@@ -1,0 +1,29 @@
+{
+  "search_metadata": {
+    "id": "test-cal-1",
+    "status": "Success",
+    "created_at": "2026-05-14T12:00:00Z",
+    "request_time_taken": 0.5,
+    "parsing_time_taken": 0.1,
+    "total_time_taken": 0.6
+  },
+  "search_parameters": {
+    "engine": "google_flights_calendar",
+    "departure_id": "MAD",
+    "arrival_id": "NBO",
+    "currency": "EUR",
+    "flight_type": "round_trip",
+    "outbound_date_start": "2026-09-01",
+    "outbound_date_end": "2026-09-14",
+    "return_date_start": "2026-10-01",
+    "return_date_end": "2026-10-14"
+  },
+  "calendar": [
+    {"departure": "2026-09-01", "return": "2026-10-01", "price": 612, "has_no_flights": false, "is_lowest_price": false},
+    {"departure": "2026-09-03", "return": "2026-10-03", "price": 549, "has_no_flights": false, "is_lowest_price": false},
+    {"departure": "2026-09-05", "return": "2026-10-08", "price": 489, "has_no_flights": false, "is_lowest_price": true},
+    {"departure": "2026-09-08", "return": "2026-10-10", "price": 580, "has_no_flights": false, "is_lowest_price": false},
+    {"departure": "2026-09-11", "return": "2026-10-14", "price": 0, "has_no_flights": true, "is_lowest_price": false},
+    {"departure": "2026-09-12", "return": "2026-10-12", "price": 605, "has_no_flights": false, "is_lowest_price": false}
+  ]
+}
