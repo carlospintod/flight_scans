@@ -5,6 +5,7 @@ from pathlib import Path
 
 from lib.config import (
     AlertParams,
+    FollowupParams,
     RouteConfig,
     SearchWindow,
     StayPreferences,
@@ -32,6 +33,7 @@ def _route() -> RouteConfig:
         stay=StayPreferences(min_days=30, max_days=60),
         currency="EUR",
         sweep=SweepParams(14, 14, 3, 14),
+        followup=FollowupParams(),
         alerts=AlertParams(15, 30, 4),
     )
 

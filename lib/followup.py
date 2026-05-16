@@ -1,12 +1,21 @@
 """Tier 2: point-query followups on itineraries flagged by Tier 1.
 
-An itinerary is a followup candidate when, from its most-recent calendar
-snapshot, it:
+Two candidate-selection modes:
 
-  1. falls within the configured stay range, AND
-  2. either was flagged `is_lowest_price` in its sweep, OR
-     is below the trailing baseline by `drop_threshold_pct` (when we
-     already have `min_observations` prior snapshots).
+* **Price-threshold mode** (active when both `followup.watch_below_price`
+  and `followup.drop_above_price` are set in the route config). An
+  itinerary is a candidate iff:
+    1. Stay length falls within the configured range.
+    2. The itinerary has been observed at or below `watch_below_price`
+       at some point in its history.
+    3. Its most recent observed price is at or below `drop_above_price`.
+  This is the "track itineraries we've seen cheap, abandon them when
+  they price out" strategy.
+
+* **Legacy baseline-trigger mode** (fallback when either threshold is
+  unset). An itinerary is a candidate when its most-recent snapshot
+  either was flagged `is_lowest_price` or sits below the trailing
+  baseline by `alerts.drop_threshold_pct`.
 
 For each candidate we capture up to three `best_flights` from the
 google_flights engine and store one row per rank.
@@ -42,29 +51,64 @@ class FollowupResult:
 
 
 def select_candidates(conn, route: RouteConfig, *, today: date | None = None) -> list[dict]:
-    """Return a list of candidate-itinerary dicts ready for point queries."""
+    """Return a list of candidate-itinerary dicts ready for point queries.
+
+    Mode is selected by config: price-threshold if both
+    `followup.watch_below_price` and `followup.drop_above_price` are
+    set, otherwise legacy baseline-trigger.
+    """
     today = today or date.today()
-    baseline_since = today - timedelta(days=route.alerts.baseline_window_days)
     min_stay = route.stay.min_days
     max_stay = route.stay.max_days
-    drop_pct = route.alerts.drop_threshold_pct
-    min_obs = route.alerts.min_observations
+    watch_below = route.followup.watch_below_price
+    drop_above = route.followup.drop_above_price
+    price_mode = watch_below is not None and drop_above is not None
 
     out: list[dict] = []
     for row in latest_calendar_snapshot_per_itinerary(conn, route.name):
         stay = row["stay_days"]
         if stay < min_stay or stay > max_stay:
             continue
-        is_lowest = bool(row["is_lowest_price"])
-        below_baseline = False
+
+        # Full history (we need the all-time min for the price-mode check
+        # and the trailing baseline for the legacy check).
         history = calendar_history_for_itinerary(
             conn,
             route.name,
             row["origin"], row["destination"],
             row["departure_date"], row["return_date"],
-            since=baseline_since,
         )
-        prior = [r["price"] for r in history if r["snapshot_at"] < row["snapshot_at"]]
+        all_prices = [r["price"] for r in history]
+        all_time_min = min(all_prices) if all_prices else None
+
+        if price_mode:
+            # Price-threshold candidate selection.
+            if all_time_min is None or all_time_min > watch_below:
+                continue
+            if row["price"] > drop_above:
+                continue
+            out.append({
+                "origin": row["origin"],
+                "destination": row["destination"],
+                "departure_date": row["departure_date"],
+                "return_date": row["return_date"],
+                "snapshot_price": row["price"],
+                "all_time_min": all_time_min,
+                "trigger": "price_threshold",
+            })
+            continue
+
+        # --- legacy baseline-trigger mode -----------------------------
+        drop_pct = route.alerts.drop_threshold_pct
+        min_obs = route.alerts.min_observations
+        baseline_since = today - timedelta(days=route.alerts.baseline_window_days)
+        is_lowest = bool(row["is_lowest_price"])
+        prior = [
+            r["price"] for r in history
+            if r["snapshot_at"] >= baseline_since.isoformat()
+            and r["snapshot_at"] < row["snapshot_at"]
+        ]
+        below_baseline = False
         if len(prior) >= min_obs:
             median = statistics.median(prior)
             if median > 0 and (median - row["price"]) / median * 100.0 >= drop_pct:
@@ -80,7 +124,9 @@ def select_candidates(conn, route: RouteConfig, *, today: date | None = None) ->
             "is_lowest_price": is_lowest,
             "below_baseline": below_baseline,
             "prior_count": len(prior),
+            "trigger": "baseline",
         })
+
     # Sort cheapest-first so when capped by max_calls we keep the best signals.
     out.sort(key=lambda c: c["snapshot_price"])
     return out

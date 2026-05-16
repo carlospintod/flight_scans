@@ -110,27 +110,40 @@ def run_sweep(
     route: RouteConfig,
     max_calls: int | None = None,
     dry_run: bool = False,
+    today: date | None = None,
 ) -> SweepResult:
+    today = today or date.today()
     windows = plan_windows(route)
     LOG.info("sweep route=%s windows=%d", route.name, len(windows))
 
     if dry_run:
         for w in windows:
+            skip, reason = _should_skip_window(conn, route, w, today)
+            tag = f" SKIP({reason})" if skip else ""
             LOG.info(
-                "plan origin=%s dst=%s ob=%s..%s ret=%s..%s combos=%d",
+                "plan origin=%s dst=%s ob=%s..%s ret=%s..%s combos=%d%s",
                 w.origin, w.destination,
                 w.outbound_start, w.outbound_end,
-                w.return_start, w.return_end, w.combo_count(),
+                w.return_start, w.return_end, w.combo_count(), tag,
             )
         return SweepResult(windows_planned=len(windows), calls_made=0, entries_stored=0)
 
     calls = 0
     stored = 0
+    skipped = 0
     snapshot_at = _now_iso()
     for w in windows:
         if max_calls is not None and calls >= max_calls:
             LOG.info("sweep stopping at max_calls=%d", max_calls)
             break
+        skip, reason = _should_skip_window(conn, route, w, today)
+        if skip:
+            skipped += 1
+            LOG.info(
+                "sweep skip origin=%s dst=%s ob=%s..%s reason=%s",
+                w.origin, w.destination, w.outbound_start, w.outbound_end, reason,
+            )
+            continue
         try:
             resp = client.calendar(
                 origin=w.origin,
@@ -160,7 +173,81 @@ def run_sweep(
             "sweep stored origin=%s dst=%s ob=%s..%s entries=%d",
             w.origin, w.destination, w.outbound_start, w.outbound_end, len(rows),
         )
+    LOG.info(
+        "sweep done route=%s calls=%d skipped=%d stored=%d",
+        route.name, calls, skipped, stored,
+    )
     return SweepResult(windows_planned=len(windows), calls_made=calls, entries_stored=stored)
+
+
+def _should_skip_window(
+    conn, route: RouteConfig, w: SweepWindow, today: date,
+) -> tuple[bool, str]:
+    """Decide whether a window can be skipped based on its history.
+
+    Skip only when ALL of:
+      * `sweep.skip_if_min_above` and `sweep.skip_grace_days` are set
+      * we have at least one prior snapshot inside this window
+      * that prior snapshot's minimum price was strictly above
+        `skip_if_min_above`
+      * the window's earliest outbound is more than `skip_grace_days`
+        days in the future from `today`
+
+    The grace period exists because prices typically drop in the final
+    weeks before departure — we don't want to keep ignoring a window
+    that may finally be turning cheap.
+    """
+    threshold = route.sweep.skip_if_min_above
+    grace = route.sweep.skip_grace_days
+    if threshold is None or grace is None:
+        return False, ""
+    days_to_departure = (w.outbound_start - today).days
+    if days_to_departure <= grace:
+        return False, ""
+    min_price = _last_snapshot_min_price(conn, route.name, w)
+    if min_price is None:
+        return False, ""  # never scanned -> always scan
+    if min_price > threshold:
+        return True, f"prev_min={min_price}>{threshold}"
+    return False, ""
+
+
+def _last_snapshot_min_price(conn, route_id: str, w: SweepWindow) -> int | None:
+    """Return min(price) from the most recent prior snapshot of this window.
+
+    Returns None if no prior snapshot exists.
+    """
+    row = conn.execute(
+        """
+        SELECT MIN(cs.price) AS min_price
+        FROM calendar_snapshots cs
+        WHERE cs.route_id = ?
+          AND cs.origin = ?
+          AND cs.destination = ?
+          AND cs.departure_date BETWEEN ? AND ?
+          AND cs.return_date BETWEEN ? AND ?
+          AND cs.snapshot_at = (
+              SELECT MAX(snapshot_at) FROM calendar_snapshots
+              WHERE route_id = ?
+                AND origin = ?
+                AND destination = ?
+                AND departure_date BETWEEN ? AND ?
+                AND return_date BETWEEN ? AND ?
+          )
+        """,
+        (
+            route_id, w.origin, w.destination,
+            w.outbound_start.isoformat(), w.outbound_end.isoformat(),
+            w.return_start.isoformat(), w.return_end.isoformat(),
+            route_id, w.origin, w.destination,
+            w.outbound_start.isoformat(), w.outbound_end.isoformat(),
+            w.return_start.isoformat(), w.return_end.isoformat(),
+        ),
+    ).fetchone()
+    if not row:
+        return None
+    val = row["min_price"]
+    return int(val) if val is not None else None
 
 
 def _entries_to_rows(

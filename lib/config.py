@@ -39,6 +39,20 @@ class SweepParams:
     return_window_days: int
     overlap_days: int
     cadence_days: int
+    # Smart-skip: if not None, a window will be skipped in subsequent
+    # sweeps when its most recent snapshot had no prices at or below
+    # this threshold, provided its earliest outbound is more than
+    # `skip_grace_days` away. Both must be set for skip to apply.
+    skip_if_min_above: int | None = None
+    skip_grace_days: int | None = None
+
+
+@dataclass(frozen=True)
+class FollowupParams:
+    # When both are None, fall back to the legacy is_lowest_price OR
+    # alerts-baseline candidate selection.
+    watch_below_price: int | None = None
+    drop_above_price: int | None = None
 
 
 @dataclass(frozen=True)
@@ -57,6 +71,7 @@ class RouteConfig:
     stay: StayPreferences
     currency: str
     sweep: SweepParams
+    followup: FollowupParams
     alerts: AlertParams
 
     def to_json(self) -> str:
@@ -110,6 +125,10 @@ def _from_dict(raw: dict[str, Any]) -> RouteConfig:
     ret = _require_positive_int(sweep_raw, "return_window_days", path="sweep.return_window_days")
     overlap = _require_nonneg_int(sweep_raw, "overlap_days", path="sweep.overlap_days")
     cadence = _require_positive_int(sweep_raw, "cadence_days", path="sweep.cadence_days")
+    skip_if_min_above = _optional_positive_int(
+        sweep_raw, "skip_if_min_above", path="sweep.skip_if_min_above")
+    skip_grace_days = _optional_nonneg_int(
+        sweep_raw, "skip_grace_days", path="sweep.skip_grace_days")
     # 200-combo API cap on the calendar engine.
     if outbound * ret > 200:
         raise ConfigError(
@@ -118,6 +137,18 @@ def _from_dict(raw: dict[str, Any]) -> RouteConfig:
         )
     if overlap >= outbound:
         raise ConfigError("sweep.overlap_days must be < outbound_window_days")
+
+    # `followup` block is optional. When omitted, thresholds are None and
+    # the legacy candidate-selection rule applies.
+    followup_raw = raw.get("followup") or {}
+    if not isinstance(followup_raw, dict):
+        raise ConfigError("followup: must be a mapping when present")
+    watch_below = _optional_positive_int(
+        followup_raw, "watch_below_price", path="followup.watch_below_price")
+    drop_above = _optional_positive_int(
+        followup_raw, "drop_above_price", path="followup.drop_above_price")
+    if watch_below is not None and drop_above is not None and drop_above < watch_below:
+        raise ConfigError("followup.drop_above_price must be >= watch_below_price")
 
     alerts_raw = _require_mapping(raw, "alerts")
     drop_pct = _require_positive_float(alerts_raw, "drop_threshold_pct",
@@ -139,6 +170,12 @@ def _from_dict(raw: dict[str, Any]) -> RouteConfig:
             return_window_days=ret,
             overlap_days=overlap,
             cadence_days=cadence,
+            skip_if_min_above=skip_if_min_above,
+            skip_grace_days=skip_grace_days,
+        ),
+        followup=FollowupParams(
+            watch_below_price=watch_below,
+            drop_above_price=drop_above,
         ),
         alerts=AlertParams(
             drop_threshold_pct=drop_pct,
@@ -200,6 +237,24 @@ def _require_nonneg_int(d: dict[str, Any], key: str, *, path: str) -> int:
     val = d.get(key)
     if not isinstance(val, int) or isinstance(val, bool) or val < 0:
         raise ConfigError(f"{path}: expected non-negative integer, got {val!r}")
+    return val
+
+
+def _optional_positive_int(d: dict[str, Any], key: str, *, path: str) -> int | None:
+    val = d.get(key)
+    if val is None:
+        return None
+    if not isinstance(val, int) or isinstance(val, bool) or val <= 0:
+        raise ConfigError(f"{path}: expected positive integer or null, got {val!r}")
+    return val
+
+
+def _optional_nonneg_int(d: dict[str, Any], key: str, *, path: str) -> int | None:
+    val = d.get(key)
+    if val is None:
+        return None
+    if not isinstance(val, int) or isinstance(val, bool) or val < 0:
+        raise ConfigError(f"{path}: expected non-negative integer or null, got {val!r}")
     return val
 
 

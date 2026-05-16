@@ -2,6 +2,7 @@ from datetime import date
 
 from lib.config import (
     AlertParams,
+    FollowupParams,
     RouteConfig,
     SearchWindow,
     StayPreferences,
@@ -27,6 +28,7 @@ def _make_route(**overrides) -> RouteConfig:
             overlap_days=3,
             cadence_days=14,
         ),
+        followup=FollowupParams(),
         alerts=AlertParams(
             drop_threshold_pct=15,
             baseline_window_days=30,

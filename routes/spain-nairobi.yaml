@@ -4,12 +4,12 @@ route:
   destinations: [NBO]
 
 search_window:
-  earliest_departure: 2026-06-01
+  earliest_departure: 2026-09-01
   latest_return: 2027-05-31
 
 stay_preferences:
-  min_days: 30
-  max_days: 60
+  min_days: 60
+  max_days: 90
 
 currency: EUR
 
@@ -18,6 +18,20 @@ sweep:
   return_window_days: 14
   overlap_days: 3
   cadence_days: 14   # biweekly
+  # Smart skip: in subsequent sweeps, skip a window if its most recent
+  # snapshot showed no prices at or below `skip_if_min_above`, AND the
+  # window's earliest outbound is more than `skip_grace_days` away.
+  # Disable by setting either to null.
+  skip_if_min_above: 800
+  skip_grace_days: 60
+
+followup:
+  # An itinerary is a followup candidate iff it has been seen at or
+  # below `watch_below_price` at some point in its history AND its most
+  # recent observed price is at or below `drop_above_price`.
+  # If both are null, fall back to the legacy alert-baseline trigger.
+  watch_below_price: 600
+  drop_above_price: 800
 
 alerts:
   drop_threshold_pct: 15
