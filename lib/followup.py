@@ -156,12 +156,17 @@ def run_followup(
     max_calls: int | None = None,
     dry_run: bool = False,
     skyscanner_client: SkyScrapperClient | None = None,
+    skyscanner_max_calls: int | None = None,
 ) -> FollowupResult:
     """For each candidate itinerary, point-query both sources.
 
-    `max_calls` caps the SearchAPI calls. Sky Scrapper has its own
-    1-2 calls per candidate (kickoff + optional poll); it's bounded by
-    candidate count, not separately cap-limited here.
+    `max_calls` caps SearchAPI point-queries. `skyscanner_max_calls`
+    caps Sky Scrapper point-queries (each costs 1-2 API calls due to
+    polling). Pass either as None to disable that source's cap;
+    pass 0 to disable that source entirely for this run.
+
+    Candidates are processed cheapest-first, so a cap keeps the most
+    promising itineraries and drops the marginal ones.
     """
     candidates = select_candidates(conn, route)
     LOG.info("followup route=%s candidates=%d", route.name, len(candidates))
@@ -242,7 +247,10 @@ def run_followup(
             sa_calls += 1
 
         # ---- Sky Scrapper ----
-        if skyscanner_client is not None:
+        if (
+            skyscanner_client is not None
+            and (skyscanner_max_calls is None or sky_calls + 2 <= skyscanner_max_calls)
+        ):
             try:
                 sky_resp = skyscanner_client.point_query(
                     origin=c["origin"],
@@ -251,9 +259,8 @@ def run_followup(
                     return_=return_,
                     currency=route.currency,
                 )
-                sky_call_count = 1 + (1 if sky_resp.raw.get(
-                    "data", {}).get("context", {}).get("status") == "complete" else 1)
                 # Conservative: kickoff + 1 poll = 2 calls in typical case.
+                # If best_flights is empty after one poll, the kickoff still counted.
                 sky_call_count = 2 if any(
                     True for _ in sky_resp.best_flights) else 1
                 sky_calls += sky_call_count
@@ -291,6 +298,12 @@ def run_followup(
                     c["departure_date"], c["return_date"], exc,
                 )
                 sky_calls += 1
+        elif skyscanner_client is not None and skyscanner_max_calls is not None:
+            LOG.info(
+                "skyscanner skipping %s->%s dep=%s ret=%s (cap reached: %d)",
+                c["origin"], c["destination"],
+                c["departure_date"], c["return_date"], skyscanner_max_calls,
+            )
     return FollowupResult(
         candidates=len(candidates),
         calls_made=sa_calls,

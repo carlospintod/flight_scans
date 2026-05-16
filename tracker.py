@@ -94,6 +94,7 @@ def cmd_followup(args: argparse.Namespace) -> int:
             max_calls=args.max_calls,
             dry_run=args.dry_run,
             skyscanner_client=sky_client,
+            skyscanner_max_calls=args.skyscanner_max_calls,
         )
     print(
         f"followup route={route.name} "
@@ -146,7 +147,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     f = sub.add_parser("followup", help="Tier 2 point queries on flagged itineraries")
     f.add_argument("--route", required=True)
-    f.add_argument("--max-calls", type=int, default=None)
+    f.add_argument("--max-calls", type=int, default=None,
+                   help="cap on SearchAPI point-query calls")
+    f.add_argument("--skyscanner-max-calls", type=int, default=4,
+                   help="cap on Sky Scrapper calls. Each candidate costs 1-2 calls. "
+                        "Default 4 fits inside the 20/month free tier across "
+                        "multiple followup runs. Pass 0 to disable Sky Scrapper.")
     f.add_argument("--dry-run", action="store_true")
     f.add_argument("--sources", nargs="+", default=["searchapi", "skyscanner"],
                    choices=["searchapi", "skyscanner"],

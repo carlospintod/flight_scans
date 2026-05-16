@@ -65,6 +65,14 @@ itinerary_history_chart(
 
 # Most recent point-query results per source.
 st.subheader("Latest carrier detail (point queries)")
+st.caption(
+    "Each row is one flight option the API returned for this exact "
+    "(departure, return) pair. `rank 0` is the source's top-pick (usually "
+    "cheapest); `rank 1` and `rank 2` are alternatives, ordered by the same "
+    "source's relevance score. `self-transfer` means a virtual-interlining "
+    "bundle (e.g. Ryanair + Kenya Airways sold as one ticket) — only Sky "
+    "Scrapper flags these."
+)
 rows = conn.execute(
     """
     SELECT pq.* FROM point_queries pq
