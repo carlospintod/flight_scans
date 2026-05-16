@@ -62,8 +62,13 @@ with st.sidebar:
     sources = st.multiselect(
         "Sources",
         ["searchapi", "skyscanner"],
-        default=["searchapi", "skyscanner"],
-        help="Untick a source you've used up the quota on.",
+        default=["searchapi"],
+        help=(
+            "Default is SearchAPI only — Sky Scrapper's 20/mo free tier is "
+            "exhausted until reset (~end of month). Tick it back in once "
+            "the cap resets, but consider keeping the Sky Scrapper cap "
+            "(below) at 0 for followup to stay safe."
+        ),
     )
     dry_run = st.checkbox(
         "Dry run (no API calls)", value=False,
