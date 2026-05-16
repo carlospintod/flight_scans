@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import replace as dc_replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -30,6 +31,55 @@ def setup_page(title: str) -> None:
 
 def list_routes() -> list[str]:
     return sorted(p.stem for p in ROUTES_DIR.glob("*.yaml"))
+
+
+def apply_overrides(
+    route: config_mod.RouteConfig,
+    *,
+    earliest_departure: date | None = None,
+    latest_return: date | None = None,
+    min_stay_days: int | None = None,
+    max_stay_days: int | None = None,
+    origins: tuple[str, ...] | None = None,
+    destinations: tuple[str, ...] | None = None,
+) -> config_mod.RouteConfig:
+    """Return a copy of `route` with the given fields overridden.
+
+    Validates the resulting object minimally — invalid combos (e.g.
+    latest_return before earliest_departure) raise ValueError before
+    any sweep planning would silently produce zero windows.
+    """
+    sw = route.search_window
+    stay = route.stay
+    new_earliest = earliest_departure or sw.earliest_departure
+    new_latest = latest_return or sw.latest_return
+    if new_latest <= new_earliest:
+        raise ValueError(
+            f"latest_return ({new_latest}) must be after "
+            f"earliest_departure ({new_earliest})"
+        )
+    new_min_stay = min_stay_days if min_stay_days is not None else stay.min_days
+    new_max_stay = max_stay_days if max_stay_days is not None else stay.max_days
+    if new_max_stay < new_min_stay:
+        raise ValueError(
+            f"max_stay ({new_max_stay}) must be >= min_stay ({new_min_stay})"
+        )
+    new_origins = origins or route.origins
+    new_destinations = destinations or route.destinations
+    if not new_origins or not new_destinations:
+        raise ValueError("at least one origin and one destination are required")
+
+    return dc_replace(
+        route,
+        origins=tuple(new_origins),
+        destinations=tuple(new_destinations),
+        search_window=dc_replace(
+            sw,
+            earliest_departure=new_earliest,
+            latest_return=new_latest,
+        ),
+        stay=dc_replace(stay, min_days=new_min_stay, max_days=new_max_stay),
+    )
 
 
 def load_route_from_sidebar() -> tuple[config_mod.RouteConfig, sqlite3.Connection]:
