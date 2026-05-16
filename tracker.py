@@ -20,7 +20,8 @@ from lib import db as db_mod
 from lib import followup as followup_mod
 from lib import report as report_mod
 from lib import sweep as sweep_mod
-from lib.api import SearchApiClient
+from lib.searchapi_io import SearchApiClient
+from lib.skyscanner_rapidapi import SkyScrapperClient
 
 ROOT = Path(__file__).resolve().parent
 ROUTES_DIR = ROOT / "routes"
@@ -42,42 +43,64 @@ def _load_route(route_name: str) -> config_mod.RouteConfig:
     return config_mod.load_route(path)
 
 
+def _make_clients(dry_run: bool, db_conn, *, sources: set[str]):
+    """Construct the API clients we need. None means 'don't use this source'."""
+    sa_client = None
+    sky_client = None
+    if not dry_run:
+        if "searchapi" in sources:
+            sa_client = SearchApiClient.from_env()
+        if "skyscanner" in sources:
+            sky_client = SkyScrapperClient.from_env(db_conn=db_conn)
+    return sa_client, sky_client
+
+
 def cmd_sweep(args: argparse.Namespace) -> int:
     route = _load_route(args.route)
-    client = None if args.dry_run else SearchApiClient.from_env()
+    requested = set(args.sources)
     with db_mod.connect(args.db) as conn:
         db_mod.ensure_schema(conn)
         db_mod.upsert_route(conn, route)
+        sa_client, sky_client = _make_clients(args.dry_run, conn, sources=requested)
         result = sweep_mod.run_sweep(
             conn=conn,
-            client=client,
+            client=sa_client,
             route=route,
             max_calls=args.max_calls,
             dry_run=args.dry_run,
+            skyscanner_client=sky_client,
+            skyscanner_planned="skyscanner" in requested,
         )
     print(
-        f"sweep route={route.name} calls={result.calls_made} "
-        f"entries={result.entries_stored}"
+        f"sweep route={route.name} "
+        f"searchapi_calls={result.calls_made} grid_rows={result.entries_stored} "
+        f"skyscanner_calls={result.curve_calls_made} "
+        f"curve_rows={result.curve_entries_stored}"
     )
     return 0
 
 
 def cmd_followup(args: argparse.Namespace) -> int:
     route = _load_route(args.route)
-    client = None if args.dry_run else SearchApiClient.from_env()
+    requested = set(args.sources)
     with db_mod.connect(args.db) as conn:
         db_mod.ensure_schema(conn)
         db_mod.upsert_route(conn, route)
+        sa_client, sky_client = _make_clients(args.dry_run, conn, sources=requested)
         result = followup_mod.run_followup(
             conn=conn,
-            client=client,
+            client=sa_client,
             route=route,
             max_calls=args.max_calls,
             dry_run=args.dry_run,
+            skyscanner_client=sky_client,
         )
     print(
-        f"followup route={route.name} calls={result.calls_made} "
-        f"itineraries={result.itineraries_queried}"
+        f"followup route={route.name} "
+        f"searchapi_calls={result.calls_made} "
+        f"skyscanner_calls={result.skyscanner_calls} "
+        f"itineraries_searchapi={result.itineraries_queried} "
+        f"rows_stored={result.rows_stored}"
     )
     return 0
 
@@ -113,15 +136,21 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("sweep", help="Tier 1 calendar sweep across the search window")
     s.add_argument("--route", required=True)
     s.add_argument("--max-calls", type=int, default=None,
-                   help="hard cap on API calls for this invocation")
+                   help="hard cap on SearchAPI grid calls for this invocation")
     s.add_argument("--dry-run", action="store_true",
                    help="plan windows but do not call the API")
+    s.add_argument("--sources", nargs="+", default=["searchapi", "skyscanner"],
+                   choices=["searchapi", "skyscanner"],
+                   help="which data sources to query")
     s.set_defaults(func=cmd_sweep)
 
     f = sub.add_parser("followup", help="Tier 2 point queries on flagged itineraries")
     f.add_argument("--route", required=True)
     f.add_argument("--max-calls", type=int, default=None)
     f.add_argument("--dry-run", action="store_true")
+    f.add_argument("--sources", nargs="+", default=["searchapi", "skyscanner"],
+                   choices=["searchapi", "skyscanner"],
+                   help="which data sources to query")
     f.set_defaults(func=cmd_followup)
 
     a = sub.add_parser("alerts", help="evaluate alert conditions and log them")

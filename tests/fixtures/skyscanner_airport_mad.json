@@ -1,0 +1,190 @@
+{
+  "status": true,
+  "timestamp": 1778932131005,
+  "data": [
+    {
+      "presentation": {
+        "title": "Madurai",
+        "suggestionTitle": "Madurai (IXM)",
+        "subtitle": "India"
+      },
+      "navigation": {
+        "entityId": "95673566",
+        "entityType": "AIRPORT",
+        "localizedName": "Madurai",
+        "relevantFlightParams": {
+          "skyId": "IXM",
+          "entityId": "95673566",
+          "flightPlaceType": "AIRPORT",
+          "localizedName": "Madurai"
+        },
+        "relevantHotelParams": {
+          "entityId": "27542930",
+          "entityType": "CITY",
+          "localizedName": "Madurai"
+        }
+      }
+    },
+    {
+      "presentation": {
+        "title": "Madrid",
+        "suggestionTitle": "Madrid (MAD)",
+        "subtitle": "Spain"
+      },
+      "navigation": {
+        "entityId": "95565077",
+        "entityType": "AIRPORT",
+        "localizedName": "Madrid",
+        "relevantFlightParams": {
+          "skyId": "MAD",
+          "entityId": "95565077",
+          "flightPlaceType": "AIRPORT",
+          "localizedName": "Madrid"
+        },
+        "relevantHotelParams": {
+          "entityId": "27544850",
+          "entityType": "CITY",
+          "localizedName": "Madrid"
+        }
+      }
+    },
+    {
+      "presentation": {
+        "title": "Madeira",
+        "suggestionTitle": "Madeira (FNC)",
+        "subtitle": "Portugal"
+      },
+      "navigation": {
+        "entityId": "95674222",
+        "entityType": "AIRPORT",
+        "localizedName": "Madeira",
+        "relevantFlightParams": {
+          "skyId": "FNC",
+          "entityId": "95674222",
+          "flightPlaceType": "AIRPORT",
+          "localizedName": "Madeira"
+        },
+        "relevantHotelParams": {
+          "entityId": "27536176",
+          "entityType": "CITY",
+          "localizedName": "Madeira"
+        }
+      }
+    },
+    {
+      "presentation": {
+        "title": "Madinah",
+        "suggestionTitle": "Madinah (MED)",
+        "subtitle": "Saudi Arabia"
+      },
+      "navigation": {
+        "entityId": "128668235",
+        "entityType": "AIRPORT",
+        "localizedName": "Madinah",
+        "relevantFlightParams": {
+          "skyId": "MED",
+          "entityId": "128668235",
+          "flightPlaceType": "AIRPORT",
+          "localizedName": "Madinah"
+        },
+        "relevantHotelParams": {
+          "entityId": "27544896",
+          "entityType": "CITY",
+          "localizedName": "Madinah"
+        }
+      }
+    },
+    {
+      "presentation": {
+        "title": "Madagascar",
+        "suggestionTitle": "Madagascar",
+        "subtitle": ""
+      },
+      "navigation": {
+        "entityId": "29475274",
+        "entityType": "COUNTRY",
+        "localizedName": "Madagascar",
+        "relevantFlightParams": {
+          "skyId": "MG",
+          "entityId": "29475274",
+          "flightPlaceType": "COUNTRY",
+          "localizedName": "Madagascar"
+        },
+        "relevantHotelParams": {
+          "entityId": "29475274",
+          "entityType": "COUNTRY",
+          "localizedName": "Madagascar"
+        }
+      }
+    },
+    {
+      "presentation": {
+        "title": "Indore",
+        "suggestionTitle": "Indore (IDR)",
+        "subtitle": "India"
+      },
+      "navigation": {
+        "entityId": "128667504",
+        "entityType": "AIRPORT",
+        "localizedName": "Indore",
+        "relevantFlightParams": {
+          "skyId": "IDR",
+          "entityId": "128667504",
+          "flightPlaceType": "AIRPORT",
+          "localizedName": "Indore"
+        },
+        "relevantHotelParams": {
+          "entityId": "27542801",
+          "entityType": "CITY",
+          "localizedName": "Indore"
+        }
+      }
+    },
+    {
+      "presentation": {
+        "title": "Madison",
+        "suggestionTitle": "Madison (MSN)",
+        "subtitle": "United States"
+      },
+      "navigation": {
+        "entityId": "95673689",
+        "entityType": "AIRPORT",
+        "localizedName": "Madison",
+        "relevantFlightParams": {
+          "skyId": "MSN",
+          "entityId": "95673689",
+          "flightPlaceType": "AIRPORT",
+          "localizedName": "Madison"
+        },
+        "relevantHotelParams": {
+          "entityId": "27545016",
+          "entityType": "CITY",
+          "localizedName": "Madison"
+        }
+      }
+    },
+    {
+      "presentation": {
+        "title": "Puerto Madryn",
+        "suggestionTitle": "Puerto Madryn (PMY)",
+        "subtitle": "Argentina"
+      },
+      "navigation": {
+        "entityId": "129053048",
+        "entityType": "AIRPORT",
+        "localizedName": "Puerto Madryn",
+        "relevantFlightParams": {
+          "skyId": "PMY",
+          "entityId": "129053048",
+          "flightPlaceType": "AIRPORT",
+          "localizedName": "Puerto Madryn"
+        },
+        "relevantHotelParams": {
+          "entityId": "27545993",
+          "entityType": "CITY",
+          "localizedName": "Puerto Madryn"
+        }
+      }
+    }
+  ]
+}

@@ -28,6 +28,7 @@ from .db import (
     insert_alert_rows,
     latest_calendar_snapshot_per_itinerary,
 )
+from .searchapi_io import SOURCE_ID as SEARCHAPI_SOURCE
 
 LOG = logging.getLogger(__name__)
 
@@ -47,19 +48,23 @@ def evaluate(
     min_obs = route.alerts.min_observations
     fired_at = _now_iso()
 
+    # One row per (source, itinerary). Alerts fire per-source so we
+    # don't conflate Sky Scrapper noise with SearchAPI baselines.
     latest = latest_calendar_snapshot_per_itinerary(conn, route.name)
-    LOG.info("alerts route=%s latest_itineraries=%d", route.name, len(latest))
+    LOG.info("alerts route=%s latest_rows=%d", route.name, len(latest))
 
     new_alerts: list[AlertRow] = []
     for row in latest:
         if row["stay_days"] < min_stay or row["stay_days"] > max_stay:
             continue
+        src = row["source"]
         history = calendar_history_for_itinerary(
             conn,
             route.name,
             row["origin"], row["destination"],
             row["departure_date"], row["return_date"],
             since=baseline_since,
+            source=src,
         )
         prior = [r["price"] for r in history if r["snapshot_at"] < row["snapshot_at"]]
         if len(prior) < min_obs:
@@ -73,6 +78,7 @@ def evaluate(
         new_alerts.append(AlertRow(
             fired_at=fired_at,
             route_id=route.name,
+            source=src,
             origin=row["origin"],
             destination=row["destination"],
             departure_date=row["departure_date"],
@@ -88,7 +94,7 @@ def evaluate(
         _append_log(log_path, new_alerts)
         for a in new_alerts:
             print(
-                f"ALERT {a.fired_at} {a.origin}->{a.destination} "
+                f"ALERT {a.fired_at} [{a.source}] {a.origin}->{a.destination} "
                 f"{a.departure_date}..{a.return_date} "
                 f"{a.price} {a.currency} (median={a.baseline_median}, "
                 f"-{a.drop_pct:.1f}%)"
@@ -101,7 +107,7 @@ def _append_log(log_path: Path, alerts: Iterable[AlertRow]) -> None:
     with log_path.open("a", encoding="utf-8") as f:
         for a in alerts:
             f.write(
-                f"{a.fired_at}\troute={a.route_id}\t"
+                f"{a.fired_at}\troute={a.route_id}\tsource={a.source}\t"
                 f"{a.origin}->{a.destination}\t"
                 f"dep={a.departure_date}\tret={a.return_date}\t"
                 f"price={a.price}\tccy={a.currency}\t"

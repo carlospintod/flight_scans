@@ -38,6 +38,7 @@ def _row(price: int, snapshot_at: datetime, stay_days: int = 33) -> CalendarRow:
     return CalendarRow(
         snapshot_at=snapshot_at.replace(microsecond=0).isoformat() + "Z",
         route_id=ROUTE.name,
+        source="searchapi",
         origin="MAD",
         destination="NBO",
         departure_date=DEP,

@@ -1,0 +1,2708 @@
+{
+  "status": true,
+  "timestamp": 1778934692788,
+  "data": {
+    "context": {
+      "status": "incomplete",
+      "sessionId": "<scrubbed>"
+    },
+    "itineraries": [
+      {
+        "id": "13870-2609051045--32339-1-14572-2609060610|14572-2611080715--32339-1-13870-2611081905",
+        "price": {
+          "raw": 606.42,
+          "formatted": "607 \u20ac",
+          "pricingOptionId": "IAiPkmHWkWqZ"
+        },
+        "legs": [
+          {
+            "id": "13870-2609051045--32339-1-14572-2609060610",
+            "origin": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 1105,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-09-05T10:45:00",
+            "arrival": "2026-09-06T06:10:00",
+            "timeDeltaInDays": 1,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32339,
+                  "alternateId": "60",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/60.png",
+                  "name": "Etihad Airways"
+                }
+              ],
+              "operationType": "fully_operated"
+            },
+            "segments": [
+              {
+                "id": "13870-9618-2609051045-2609051940--32339",
+                "origin": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "destination": {
+                  "entityId": "95673509",
+                  "flightPlaceId": "AUH",
+                  "displayCode": "AUH",
+                  "parent": {
+                    "entityId": "27548192",
+                    "flightPlaceId": "AUHA",
+                    "displayCode": "AUH",
+                    "name": "Abu Dhabi",
+                    "type": "City"
+                  },
+                  "name": "Zayed International",
+                  "type": "Airport",
+                  "country": "United Arab Emirates"
+                },
+                "departure": "2026-09-05T10:45:00",
+                "arrival": "2026-09-05T19:40:00",
+                "durationInMinutes": 415,
+                "flightNumber": "102",
+                "marketingCarrier": {
+                  "id": -32339,
+                  "name": "Etihad Airways",
+                  "alternateId": "60",
+                  "allianceId": 0,
+                  "displayCode": "EY"
+                },
+                "operatingCarrier": {
+                  "id": -32339,
+                  "name": "Etihad Airways",
+                  "alternateId": "60",
+                  "allianceId": 0,
+                  "displayCode": "EY"
+                }
+              },
+              {
+                "id": "9618-14572-2609060200-2609060610--32339",
+                "origin": {
+                  "entityId": "95673509",
+                  "flightPlaceId": "AUH",
+                  "displayCode": "AUH",
+                  "parent": {
+                    "entityId": "27548192",
+                    "flightPlaceId": "AUHA",
+                    "displayCode": "AUH",
+                    "name": "Abu Dhabi",
+                    "type": "City"
+                  },
+                  "name": "Zayed International",
+                  "type": "Airport",
+                  "country": "United Arab Emirates"
+                },
+                "destination": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "departure": "2026-09-06T02:00:00",
+                "arrival": "2026-09-06T06:10:00",
+                "durationInMinutes": 310,
+                "flightNumber": "769",
+                "marketingCarrier": {
+                  "id": -32339,
+                  "name": "Etihad Airways",
+                  "alternateId": "60",
+                  "allianceId": 0,
+                  "displayCode": "EY"
+                },
+                "operatingCarrier": {
+                  "id": -32339,
+                  "name": "Etihad Airways",
+                  "alternateId": "60",
+                  "allianceId": 0,
+                  "displayCode": "EY"
+                }
+              }
+            ]
+          },
+          {
+            "id": "14572-2611080715--32339-1-13870-2611081905",
+            "origin": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 830,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-11-08T07:15:00",
+            "arrival": "2026-11-08T19:05:00",
+            "timeDeltaInDays": 0,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32339,
+                  "alternateId": "60",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/60.png",
+                  "name": "Etihad Airways"
+                }
+              ],
+              "operationType": "fully_operated"
+            },
+            "segments": [
+              {
+                "id": "14572-9618-2611080715-2611081315--32339",
+                "origin": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "destination": {
+                  "entityId": "95673509",
+                  "flightPlaceId": "AUH",
+                  "displayCode": "AUH",
+                  "parent": {
+                    "entityId": "27548192",
+                    "flightPlaceId": "AUHA",
+                    "displayCode": "AUH",
+                    "name": "Abu Dhabi",
+                    "type": "City"
+                  },
+                  "name": "Zayed International",
+                  "type": "Airport",
+                  "country": "United Arab Emirates"
+                },
+                "departure": "2026-11-08T07:15:00",
+                "arrival": "2026-11-08T13:15:00",
+                "durationInMinutes": 300,
+                "flightNumber": "770",
+                "marketingCarrier": {
+                  "id": -32339,
+                  "name": "Etihad Airways",
+                  "alternateId": "60",
+                  "allianceId": 0,
+                  "displayCode": "EY"
+                },
+                "operatingCarrier": {
+                  "id": -32339,
+                  "name": "Etihad Airways",
+                  "alternateId": "60",
+                  "allianceId": 0,
+                  "displayCode": "EY"
+                }
+              },
+              {
+                "id": "9618-13870-2611081405-2611081905--32339",
+                "origin": {
+                  "entityId": "95673509",
+                  "flightPlaceId": "AUH",
+                  "displayCode": "AUH",
+                  "parent": {
+                    "entityId": "27548192",
+                    "flightPlaceId": "AUHA",
+                    "displayCode": "AUH",
+                    "name": "Abu Dhabi",
+                    "type": "City"
+                  },
+                  "name": "Zayed International",
+                  "type": "Airport",
+                  "country": "United Arab Emirates"
+                },
+                "destination": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "departure": "2026-11-08T14:05:00",
+                "arrival": "2026-11-08T19:05:00",
+                "durationInMinutes": 480,
+                "flightNumber": "103",
+                "marketingCarrier": {
+                  "id": -32339,
+                  "name": "Etihad Airways",
+                  "alternateId": "60",
+                  "allianceId": 0,
+                  "displayCode": "EY"
+                },
+                "operatingCarrier": {
+                  "id": -32339,
+                  "name": "Etihad Airways",
+                  "alternateId": "60",
+                  "allianceId": 0,
+                  "displayCode": "EY"
+                }
+              }
+            ]
+          }
+        ],
+        "isSelfTransfer": false,
+        "isProtectedSelfTransfer": false,
+        "farePolicy": {
+          "isChangeAllowed": false,
+          "isPartiallyChangeable": false,
+          "isCancellationAllowed": false,
+          "isPartiallyRefundable": false
+        },
+        "fareAttributes": {},
+        "tags": [
+          "cheapest"
+        ],
+        "isMashUp": false,
+        "hasFlexibleOptions": false,
+        "score": 0.999
+      },
+      {
+        "id": "13870-2609052215--32222-1-14572-2609061340|14572-2611080135--32222-1-13870-2611081350",
+        "price": {
+          "raw": 661.3,
+          "formatted": "662 \u20ac",
+          "pricingOptionId": "OWiZRhkueOK4"
+        },
+        "legs": [
+          {
+            "id": "13870-2609052215--32222-1-14572-2609061340",
+            "origin": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 865,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-09-05T22:15:00",
+            "arrival": "2026-09-06T13:40:00",
+            "timeDeltaInDays": 1,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32222,
+                  "alternateId": "IB",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/IB.png",
+                  "name": "Iberia"
+                }
+              ],
+              "operating": [
+                {
+                  "id": -31939,
+                  "alternateId": "QR",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/QR.png",
+                  "name": "Qatar Airways"
+                }
+              ],
+              "operationType": "not_operated"
+            },
+            "segments": [
+              {
+                "id": "13870-11089-2609052215-2609060600--32222",
+                "origin": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "destination": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "departure": "2026-09-05T22:15:00",
+                "arrival": "2026-09-06T06:00:00",
+                "durationInMinutes": 405,
+                "flightNumber": "6136",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              },
+              {
+                "id": "11089-14572-2609060835-2609061340--32222",
+                "origin": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "destination": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "departure": "2026-09-06T08:35:00",
+                "arrival": "2026-09-06T13:40:00",
+                "durationInMinutes": 305,
+                "flightNumber": "6189",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              }
+            ]
+          },
+          {
+            "id": "14572-2611080135--32222-1-13870-2611081350",
+            "origin": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 855,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-11-08T01:35:00",
+            "arrival": "2026-11-08T13:50:00",
+            "timeDeltaInDays": 0,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32222,
+                  "alternateId": "IB",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/IB.png",
+                  "name": "Iberia"
+                }
+              ],
+              "operating": [
+                {
+                  "id": -31939,
+                  "alternateId": "QR",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/QR.png",
+                  "name": "Qatar Airways"
+                }
+              ],
+              "operationType": "not_operated"
+            },
+            "segments": [
+              {
+                "id": "14572-11089-2611080135-2611080645--32222",
+                "origin": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "destination": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "departure": "2026-11-08T01:35:00",
+                "arrival": "2026-11-08T06:45:00",
+                "durationInMinutes": 310,
+                "flightNumber": "6296",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              },
+              {
+                "id": "11089-13870-2611080815-2611081350--32222",
+                "origin": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "destination": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "departure": "2026-11-08T08:15:00",
+                "arrival": "2026-11-08T13:50:00",
+                "durationInMinutes": 455,
+                "flightNumber": "6225",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              }
+            ]
+          }
+        ],
+        "isSelfTransfer": false,
+        "isProtectedSelfTransfer": false,
+        "farePolicy": {
+          "isChangeAllowed": false,
+          "isPartiallyChangeable": false,
+          "isCancellationAllowed": false,
+          "isPartiallyRefundable": false
+        },
+        "fareAttributes": {},
+        "isMashUp": false,
+        "hasFlexibleOptions": false,
+        "score": 0.90926
+      },
+      {
+        "id": "13870-2609050905--32222-1-14572-2609052350|14572-2611080135--32222-1-13870-2611081350",
+        "price": {
+          "raw": 661.3,
+          "formatted": "662 \u20ac",
+          "pricingOptionId": "dbU5QbOsZy8b"
+        },
+        "legs": [
+          {
+            "id": "13870-2609050905--32222-1-14572-2609052350",
+            "origin": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 825,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-09-05T09:05:00",
+            "arrival": "2026-09-05T23:50:00",
+            "timeDeltaInDays": 0,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32222,
+                  "alternateId": "IB",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/IB.png",
+                  "name": "Iberia"
+                }
+              ],
+              "operating": [
+                {
+                  "id": -31939,
+                  "alternateId": "QR",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/QR.png",
+                  "name": "Qatar Airways"
+                }
+              ],
+              "operationType": "not_operated"
+            },
+            "segments": [
+              {
+                "id": "13870-11089-2609050905-2609051650--32222",
+                "origin": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "destination": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "departure": "2026-09-05T09:05:00",
+                "arrival": "2026-09-05T16:50:00",
+                "durationInMinutes": 405,
+                "flightNumber": "6192",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              },
+              {
+                "id": "11089-14572-2609051845-2609052350--32222",
+                "origin": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "destination": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "departure": "2026-09-05T18:45:00",
+                "arrival": "2026-09-05T23:50:00",
+                "durationInMinutes": 305,
+                "flightNumber": "6178",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              }
+            ]
+          },
+          {
+            "id": "14572-2611080135--32222-1-13870-2611081350",
+            "origin": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 855,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-11-08T01:35:00",
+            "arrival": "2026-11-08T13:50:00",
+            "timeDeltaInDays": 0,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32222,
+                  "alternateId": "IB",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/IB.png",
+                  "name": "Iberia"
+                }
+              ],
+              "operating": [
+                {
+                  "id": -31939,
+                  "alternateId": "QR",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/QR.png",
+                  "name": "Qatar Airways"
+                }
+              ],
+              "operationType": "not_operated"
+            },
+            "segments": [
+              {
+                "id": "14572-11089-2611080135-2611080645--32222",
+                "origin": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "destination": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "departure": "2026-11-08T01:35:00",
+                "arrival": "2026-11-08T06:45:00",
+                "durationInMinutes": 310,
+                "flightNumber": "6296",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              },
+              {
+                "id": "11089-13870-2611080815-2611081350--32222",
+                "origin": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "destination": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "departure": "2026-11-08T08:15:00",
+                "arrival": "2026-11-08T13:50:00",
+                "durationInMinutes": 455,
+                "flightNumber": "6225",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              }
+            ]
+          }
+        ],
+        "isSelfTransfer": false,
+        "isProtectedSelfTransfer": false,
+        "farePolicy": {
+          "isChangeAllowed": false,
+          "isPartiallyChangeable": false,
+          "isCancellationAllowed": false,
+          "isPartiallyRefundable": false
+        },
+        "fareAttributes": {},
+        "tags": [
+          "third_cheapest",
+          "third_shortest"
+        ],
+        "isMashUp": false,
+        "hasFlexibleOptions": false,
+        "score": 0.879019
+      },
+      {
+        "id": "13870-2609052215--32222-1-14572-2609061340|14572-2611081700--32222-1-13870-2611090635",
+        "price": {
+          "raw": 661.3,
+          "formatted": "662 \u20ac",
+          "pricingOptionId": "tuB155IRqqR-"
+        },
+        "legs": [
+          {
+            "id": "13870-2609052215--32222-1-14572-2609061340",
+            "origin": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 865,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-09-05T22:15:00",
+            "arrival": "2026-09-06T13:40:00",
+            "timeDeltaInDays": 1,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32222,
+                  "alternateId": "IB",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/IB.png",
+                  "name": "Iberia"
+                }
+              ],
+              "operating": [
+                {
+                  "id": -31939,
+                  "alternateId": "QR",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/QR.png",
+                  "name": "Qatar Airways"
+                }
+              ],
+              "operationType": "not_operated"
+            },
+            "segments": [
+              {
+                "id": "13870-11089-2609052215-2609060600--32222",
+                "origin": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "destination": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "departure": "2026-09-05T22:15:00",
+                "arrival": "2026-09-06T06:00:00",
+                "durationInMinutes": 405,
+                "flightNumber": "6136",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              },
+              {
+                "id": "11089-14572-2609060835-2609061340--32222",
+                "origin": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "destination": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "departure": "2026-09-06T08:35:00",
+                "arrival": "2026-09-06T13:40:00",
+                "durationInMinutes": 305,
+                "flightNumber": "6189",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              }
+            ]
+          },
+          {
+            "id": "14572-2611081700--32222-1-13870-2611090635",
+            "origin": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 935,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-11-08T17:00:00",
+            "arrival": "2026-11-09T06:35:00",
+            "timeDeltaInDays": 1,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32222,
+                  "alternateId": "IB",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/IB.png",
+                  "name": "Iberia"
+                }
+              ],
+              "operating": [
+                {
+                  "id": -31939,
+                  "alternateId": "QR",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/QR.png",
+                  "name": "Qatar Airways"
+                }
+              ],
+              "operationType": "not_operated"
+            },
+            "segments": [
+              {
+                "id": "14572-11089-2611081700-2611082210--32222",
+                "origin": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "destination": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "departure": "2026-11-08T17:00:00",
+                "arrival": "2026-11-08T22:10:00",
+                "durationInMinutes": 310,
+                "flightNumber": "6298",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              },
+              {
+                "id": "11089-13870-2611090100-2611090635--32222",
+                "origin": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "destination": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "departure": "2026-11-09T01:00:00",
+                "arrival": "2026-11-09T06:35:00",
+                "durationInMinutes": 455,
+                "flightNumber": "6191",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              }
+            ]
+          }
+        ],
+        "isSelfTransfer": false,
+        "isProtectedSelfTransfer": false,
+        "farePolicy": {
+          "isChangeAllowed": false,
+          "isPartiallyChangeable": false,
+          "isCancellationAllowed": false,
+          "isPartiallyRefundable": false
+        },
+        "fareAttributes": {},
+        "isMashUp": false,
+        "hasFlexibleOptions": false,
+        "score": 0.876574
+      },
+      {
+        "id": "13870-2609052215--32222-1-14572-2609061340|14572-2611080845--32222-1-13870-2611082055",
+        "price": {
+          "raw": 661.3,
+          "formatted": "662 \u20ac",
+          "pricingOptionId": "yCc5dyEhG-6m"
+        },
+        "legs": [
+          {
+            "id": "13870-2609052215--32222-1-14572-2609061340",
+            "origin": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 865,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-09-05T22:15:00",
+            "arrival": "2026-09-06T13:40:00",
+            "timeDeltaInDays": 1,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32222,
+                  "alternateId": "IB",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/IB.png",
+                  "name": "Iberia"
+                }
+              ],
+              "operating": [
+                {
+                  "id": -31939,
+                  "alternateId": "QR",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/QR.png",
+                  "name": "Qatar Airways"
+                }
+              ],
+              "operationType": "not_operated"
+            },
+            "segments": [
+              {
+                "id": "13870-11089-2609052215-2609060600--32222",
+                "origin": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "destination": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "departure": "2026-09-05T22:15:00",
+                "arrival": "2026-09-06T06:00:00",
+                "durationInMinutes": 405,
+                "flightNumber": "6136",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              },
+              {
+                "id": "11089-14572-2609060835-2609061340--32222",
+                "origin": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "destination": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "departure": "2026-09-06T08:35:00",
+                "arrival": "2026-09-06T13:40:00",
+                "durationInMinutes": 305,
+                "flightNumber": "6189",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              }
+            ]
+          },
+          {
+            "id": "14572-2611080845--32222-1-13870-2611082055",
+            "origin": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 850,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-11-08T08:45:00",
+            "arrival": "2026-11-08T20:55:00",
+            "timeDeltaInDays": 0,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32222,
+                  "alternateId": "IB",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/IB.png",
+                  "name": "Iberia"
+                }
+              ],
+              "operating": [
+                {
+                  "id": -31939,
+                  "alternateId": "QR",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/QR.png",
+                  "name": "Qatar Airways"
+                }
+              ],
+              "operationType": "not_operated"
+            },
+            "segments": [
+              {
+                "id": "14572-11089-2611080845-2611081355--32222",
+                "origin": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "destination": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "departure": "2026-11-08T08:45:00",
+                "arrival": "2026-11-08T13:55:00",
+                "durationInMinutes": 310,
+                "flightNumber": "6373",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              },
+              {
+                "id": "11089-13870-2611081520-2611082055--32222",
+                "origin": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "destination": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "departure": "2026-11-08T15:20:00",
+                "arrival": "2026-11-08T20:55:00",
+                "durationInMinutes": 455,
+                "flightNumber": "6137",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              }
+            ]
+          }
+        ],
+        "isSelfTransfer": false,
+        "isProtectedSelfTransfer": false,
+        "farePolicy": {
+          "isChangeAllowed": false,
+          "isPartiallyChangeable": false,
+          "isCancellationAllowed": false,
+          "isPartiallyRefundable": false
+        },
+        "fareAttributes": {},
+        "isMashUp": false,
+        "hasFlexibleOptions": false,
+        "score": 0.866348
+      },
+      {
+        "id": "13870-2609050905--32222-1-14572-2609052350|14572-2611080845--32222-1-13870-2611082055",
+        "price": {
+          "raw": 661.3,
+          "formatted": "662 \u20ac",
+          "pricingOptionId": "N8vwJpBWkTLI"
+        },
+        "legs": [
+          {
+            "id": "13870-2609050905--32222-1-14572-2609052350",
+            "origin": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 825,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-09-05T09:05:00",
+            "arrival": "2026-09-05T23:50:00",
+            "timeDeltaInDays": 0,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32222,
+                  "alternateId": "IB",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/IB.png",
+                  "name": "Iberia"
+                }
+              ],
+              "operating": [
+                {
+                  "id": -31939,
+                  "alternateId": "QR",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/QR.png",
+                  "name": "Qatar Airways"
+                }
+              ],
+              "operationType": "not_operated"
+            },
+            "segments": [
+              {
+                "id": "13870-11089-2609050905-2609051650--32222",
+                "origin": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "destination": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "departure": "2026-09-05T09:05:00",
+                "arrival": "2026-09-05T16:50:00",
+                "durationInMinutes": 405,
+                "flightNumber": "6192",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              },
+              {
+                "id": "11089-14572-2609051845-2609052350--32222",
+                "origin": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "destination": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "departure": "2026-09-05T18:45:00",
+                "arrival": "2026-09-05T23:50:00",
+                "durationInMinutes": 305,
+                "flightNumber": "6178",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              }
+            ]
+          },
+          {
+            "id": "14572-2611080845--32222-1-13870-2611082055",
+            "origin": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 850,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-11-08T08:45:00",
+            "arrival": "2026-11-08T20:55:00",
+            "timeDeltaInDays": 0,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32222,
+                  "alternateId": "IB",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/IB.png",
+                  "name": "Iberia"
+                }
+              ],
+              "operating": [
+                {
+                  "id": -31939,
+                  "alternateId": "QR",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/QR.png",
+                  "name": "Qatar Airways"
+                }
+              ],
+              "operationType": "not_operated"
+            },
+            "segments": [
+              {
+                "id": "14572-11089-2611080845-2611081355--32222",
+                "origin": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "destination": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "departure": "2026-11-08T08:45:00",
+                "arrival": "2026-11-08T13:55:00",
+                "durationInMinutes": 310,
+                "flightNumber": "6373",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              },
+              {
+                "id": "11089-13870-2611081520-2611082055--32222",
+                "origin": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "destination": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "departure": "2026-11-08T15:20:00",
+                "arrival": "2026-11-08T20:55:00",
+                "durationInMinutes": 455,
+                "flightNumber": "6137",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              }
+            ]
+          }
+        ],
+        "isSelfTransfer": false,
+        "isProtectedSelfTransfer": false,
+        "farePolicy": {
+          "isChangeAllowed": false,
+          "isPartiallyChangeable": false,
+          "isCancellationAllowed": false,
+          "isPartiallyRefundable": false
+        },
+        "fareAttributes": {},
+        "tags": [
+          "second_cheapest",
+          "second_shortest"
+        ],
+        "isMashUp": false,
+        "hasFlexibleOptions": false,
+        "score": 0.855897
+      },
+      {
+        "id": "13870-2609050905--32222-1-14572-2609052350|14572-2611081700--32222-1-13870-2611090635",
+        "price": {
+          "raw": 661.3,
+          "formatted": "662 \u20ac",
+          "pricingOptionId": "X_Xc6MgyXcyF"
+        },
+        "legs": [
+          {
+            "id": "13870-2609050905--32222-1-14572-2609052350",
+            "origin": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 825,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-09-05T09:05:00",
+            "arrival": "2026-09-05T23:50:00",
+            "timeDeltaInDays": 0,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32222,
+                  "alternateId": "IB",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/IB.png",
+                  "name": "Iberia"
+                }
+              ],
+              "operating": [
+                {
+                  "id": -31939,
+                  "alternateId": "QR",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/QR.png",
+                  "name": "Qatar Airways"
+                }
+              ],
+              "operationType": "not_operated"
+            },
+            "segments": [
+              {
+                "id": "13870-11089-2609050905-2609051650--32222",
+                "origin": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "destination": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "departure": "2026-09-05T09:05:00",
+                "arrival": "2026-09-05T16:50:00",
+                "durationInMinutes": 405,
+                "flightNumber": "6192",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              },
+              {
+                "id": "11089-14572-2609051845-2609052350--32222",
+                "origin": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "destination": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "departure": "2026-09-05T18:45:00",
+                "arrival": "2026-09-05T23:50:00",
+                "durationInMinutes": 305,
+                "flightNumber": "6178",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              }
+            ]
+          },
+          {
+            "id": "14572-2611081700--32222-1-13870-2611090635",
+            "origin": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 935,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-11-08T17:00:00",
+            "arrival": "2026-11-09T06:35:00",
+            "timeDeltaInDays": 1,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32222,
+                  "alternateId": "IB",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/IB.png",
+                  "name": "Iberia"
+                }
+              ],
+              "operating": [
+                {
+                  "id": -31939,
+                  "alternateId": "QR",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/QR.png",
+                  "name": "Qatar Airways"
+                }
+              ],
+              "operationType": "not_operated"
+            },
+            "segments": [
+              {
+                "id": "14572-11089-2611081700-2611082210--32222",
+                "origin": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "destination": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "departure": "2026-11-08T17:00:00",
+                "arrival": "2026-11-08T22:10:00",
+                "durationInMinutes": 310,
+                "flightNumber": "6298",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              },
+              {
+                "id": "11089-13870-2611090100-2611090635--32222",
+                "origin": {
+                  "entityId": "95673852",
+                  "flightPlaceId": "DOH",
+                  "displayCode": "DOH",
+                  "parent": {
+                    "entityId": "27540785",
+                    "flightPlaceId": "DOHA",
+                    "displayCode": "DOH",
+                    "name": "Doha",
+                    "type": "City"
+                  },
+                  "name": "Hamad International",
+                  "type": "Airport",
+                  "country": "Qatar"
+                },
+                "destination": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "departure": "2026-11-09T01:00:00",
+                "arrival": "2026-11-09T06:35:00",
+                "durationInMinutes": 455,
+                "flightNumber": "6191",
+                "marketingCarrier": {
+                  "id": -32222,
+                  "name": "Iberia",
+                  "alternateId": "IB",
+                  "allianceId": -32000,
+                  "displayCode": "IB"
+                },
+                "operatingCarrier": {
+                  "id": -31939,
+                  "name": "Qatar Airways",
+                  "alternateId": "QR",
+                  "allianceId": -32000,
+                  "displayCode": "QR"
+                }
+              }
+            ]
+          }
+        ],
+        "isSelfTransfer": false,
+        "isProtectedSelfTransfer": false,
+        "farePolicy": {
+          "isChangeAllowed": false,
+          "isPartiallyChangeable": false,
+          "isCancellationAllowed": false,
+          "isPartiallyRefundable": false
+        },
+        "fareAttributes": {},
+        "isMashUp": false,
+        "hasFlexibleOptions": false,
+        "score": 0.849983
+      },
+      {
+        "id": "13870-2609051500--32139-1-14572-2609060610|14572-2611080835--32139-1-13870-2611081935",
+        "price": {
+          "raw": 799,
+          "formatted": "799 \u20ac",
+          "pricingOptionId": "uPya7BbkSn5b"
+        },
+        "legs": [
+          {
+            "id": "13870-2609051500--32139-1-14572-2609060610",
+            "origin": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 850,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-09-05T15:00:00",
+            "arrival": "2026-09-06T06:10:00",
+            "timeDeltaInDays": 1,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32139,
+                  "alternateId": "KQ",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/KQ.png",
+                  "name": "Kenya Airways"
+                }
+              ],
+              "operating": [
+                {
+                  "id": -32680,
+                  "alternateId": "UX",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/UX.png",
+                  "name": "Air Europa"
+                }
+              ],
+              "operationType": "partially_operated"
+            },
+            "segments": [
+              {
+                "id": "13870-9451-2609051500-2609051735--32139",
+                "origin": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "destination": {
+                  "entityId": "95565044",
+                  "flightPlaceId": "AMS",
+                  "displayCode": "AMS",
+                  "parent": {
+                    "entityId": "27536561",
+                    "flightPlaceId": "AMST",
+                    "displayCode": "AMS",
+                    "name": "Amsterdam",
+                    "type": "City"
+                  },
+                  "name": "Amsterdam Schiphol",
+                  "type": "Airport",
+                  "country": "Netherlands"
+                },
+                "departure": "2026-09-05T15:00:00",
+                "arrival": "2026-09-05T17:35:00",
+                "durationInMinutes": 155,
+                "flightNumber": "7201",
+                "marketingCarrier": {
+                  "id": -32139,
+                  "name": "Kenya Airways",
+                  "alternateId": "KQ",
+                  "allianceId": -31998,
+                  "displayCode": "KQ"
+                },
+                "operatingCarrier": {
+                  "id": -32680,
+                  "name": "Air Europa",
+                  "alternateId": "UX",
+                  "allianceId": -31998,
+                  "displayCode": "UX"
+                }
+              },
+              {
+                "id": "9451-14572-2609052035-2609060610--32139",
+                "origin": {
+                  "entityId": "95565044",
+                  "flightPlaceId": "AMS",
+                  "displayCode": "AMS",
+                  "parent": {
+                    "entityId": "27536561",
+                    "flightPlaceId": "AMST",
+                    "displayCode": "AMS",
+                    "name": "Amsterdam",
+                    "type": "City"
+                  },
+                  "name": "Amsterdam Schiphol",
+                  "type": "Airport",
+                  "country": "Netherlands"
+                },
+                "destination": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "departure": "2026-09-05T20:35:00",
+                "arrival": "2026-09-06T06:10:00",
+                "durationInMinutes": 515,
+                "flightNumber": "117",
+                "marketingCarrier": {
+                  "id": -32139,
+                  "name": "Kenya Airways",
+                  "alternateId": "KQ",
+                  "allianceId": -31998,
+                  "displayCode": "KQ"
+                },
+                "operatingCarrier": {
+                  "id": -32139,
+                  "name": "Kenya Airways",
+                  "alternateId": "KQ",
+                  "allianceId": -31998,
+                  "displayCode": "KQ"
+                }
+              }
+            ]
+          },
+          {
+            "id": "14572-2611080835--32139-1-13870-2611081935",
+            "origin": {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta",
+              "displayCode": "NBO",
+              "city": "Nairobi",
+              "country": "Kenya",
+              "isHighlighted": false
+            },
+            "destination": {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid",
+              "displayCode": "MAD",
+              "city": "Madrid",
+              "country": "Spain",
+              "isHighlighted": false
+            },
+            "durationInMinutes": 780,
+            "stopCount": 1,
+            "isSmallestStops": false,
+            "departure": "2026-11-08T08:35:00",
+            "arrival": "2026-11-08T19:35:00",
+            "timeDeltaInDays": 0,
+            "carriers": {
+              "marketing": [
+                {
+                  "id": -32139,
+                  "alternateId": "KQ",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/KQ.png",
+                  "name": "Kenya Airways"
+                }
+              ],
+              "operating": [
+                {
+                  "id": -32132,
+                  "alternateId": "KL",
+                  "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/KL.png",
+                  "name": "KLM"
+                }
+              ],
+              "operationType": "partially_operated"
+            },
+            "segments": [
+              {
+                "id": "14572-9451-2611080835-2611081535--32139",
+                "origin": {
+                  "entityId": "95673395",
+                  "flightPlaceId": "NBO",
+                  "displayCode": "NBO",
+                  "parent": {
+                    "entityId": "27536215",
+                    "flightPlaceId": "NBOA",
+                    "displayCode": "NBO",
+                    "name": "Nairobi",
+                    "type": "City"
+                  },
+                  "name": "Nairobi Jomo Kenyatta",
+                  "type": "Airport",
+                  "country": "Kenya"
+                },
+                "destination": {
+                  "entityId": "95565044",
+                  "flightPlaceId": "AMS",
+                  "displayCode": "AMS",
+                  "parent": {
+                    "entityId": "27536561",
+                    "flightPlaceId": "AMST",
+                    "displayCode": "AMS",
+                    "name": "Amsterdam",
+                    "type": "City"
+                  },
+                  "name": "Amsterdam Schiphol",
+                  "type": "Airport",
+                  "country": "Netherlands"
+                },
+                "departure": "2026-11-08T08:35:00",
+                "arrival": "2026-11-08T15:35:00",
+                "durationInMinutes": 540,
+                "flightNumber": "116",
+                "marketingCarrier": {
+                  "id": -32139,
+                  "name": "Kenya Airways",
+                  "alternateId": "KQ",
+                  "allianceId": -31998,
+                  "displayCode": "KQ"
+                },
+                "operatingCarrier": {
+                  "id": -32139,
+                  "name": "Kenya Airways",
+                  "alternateId": "KQ",
+                  "allianceId": -31998,
+                  "displayCode": "KQ"
+                }
+              },
+              {
+                "id": "9451-13870-2611081700-2611081935--32139",
+                "origin": {
+                  "entityId": "95565044",
+                  "flightPlaceId": "AMS",
+                  "displayCode": "AMS",
+                  "parent": {
+                    "entityId": "27536561",
+                    "flightPlaceId": "AMST",
+                    "displayCode": "AMS",
+                    "name": "Amsterdam",
+                    "type": "City"
+                  },
+                  "name": "Amsterdam Schiphol",
+                  "type": "Airport",
+                  "country": "Netherlands"
+                },
+                "destination": {
+                  "entityId": "95565077",
+                  "flightPlaceId": "MAD",
+                  "displayCode": "MAD",
+                  "parent": {
+                    "entityId": "27544850",
+                    "flightPlaceId": "MADR",
+                    "displayCode": "MAD",
+                    "name": "Madrid",
+                    "type": "City"
+                  },
+                  "name": "Madrid",
+                  "type": "Airport",
+                  "country": "Spain"
+                },
+                "departure": "2026-11-08T17:00:00",
+                "arrival": "2026-11-08T19:35:00",
+                "durationInMinutes": 155,
+                "flightNumber": "1703",
+                "marketingCarrier": {
+                  "id": -32139,
+                  "name": "Kenya Airways",
+                  "alternateId": "KQ",
+                  "allianceId": -31998,
+                  "displayCode": "KQ"
+                },
+                "operatingCarrier": {
+                  "id": -32132,
+                  "name": "KLM",
+                  "alternateId": "KL",
+                  "allianceId": -31998,
+                  "displayCode": "KL"
+                }
+              }
+            ]
+          }
+        ],
+        "isSelfTransfer": false,
+        "isProtectedSelfTransfer": false,
+        "farePolicy": {
+          "isChangeAllowed": false,
+          "isPartiallyChangeable": false,
+          "isCancellationAllowed": false,
+          "isPartiallyRefundable": false
+        },
+        "eco": {
+          "ecoContenderDelta": 9.964556
+        },
+        "fareAttributes": {},
+        "tags": [
+          "shortest"
+        ],
+        "isMashUp": false,
+        "hasFlexibleOptions": false,
+        "score": 0.847001
+      }
+    ],
+    "filterStats": {
+      "duration": {
+        "min": 850,
+        "max": 1105,
+        "multiCityMin": 1630,
+        "multiCityMax": 1935
+      },
+      "total": 10,
+      "hasCityOpenJaw": false,
+      "multipleCarriers": {
+        "minPrice": "",
+        "rawMinPrice": null
+      },
+      "airports": [
+        {
+          "city": "Madrid",
+          "airports": [
+            {
+              "id": "MAD",
+              "entityId": "95565077",
+              "name": "Madrid"
+            }
+          ]
+        },
+        {
+          "city": "Nairobi",
+          "airports": [
+            {
+              "id": "NBO",
+              "entityId": "95673395",
+              "name": "Nairobi Jomo Kenyatta"
+            }
+          ]
+        }
+      ],
+      "carriers": [
+        {
+          "id": -32348,
+          "alternateId": "EK",
+          "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/EK.png",
+          "name": "Emirates",
+          "minPrice": "689 \u20ac",
+          "allianceId": 0
+        },
+        {
+          "id": -32339,
+          "alternateId": "60",
+          "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/60.png",
+          "name": "Etihad Airways",
+          "minPrice": "607 \u20ac",
+          "allianceId": 0
+        },
+        {
+          "id": -32222,
+          "alternateId": "IB",
+          "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/IB.png",
+          "name": "Iberia",
+          "minPrice": "662 \u20ac",
+          "allianceId": -32000
+        },
+        {
+          "id": -32139,
+          "alternateId": "KQ",
+          "logoUrl": "https://logos.skyscnr.com/images/airlines/favicon/KQ.png",
+          "name": "Kenya Airways",
+          "minPrice": "799 \u20ac",
+          "allianceId": -31998
+        }
+      ],
+      "stopPrices": {
+        "direct": {
+          "isPresent": false
+        },
+        "one": {
+          "isPresent": true,
+          "formattedPrice": "607 \u20ac",
+          "rawPrice": 607
+        },
+        "twoOrMore": {
+          "isPresent": false
+        }
+      },
+      "alliances": [
+        {
+          "id": -32000,
+          "name": "OneWorld"
+        },
+        {
+          "id": -31998,
+          "name": "SkyTeam"
+        }
+      ],
+      "layoverAirports": [
+        {
+          "id": "AMS",
+          "entityId": "95565044",
+          "name": "Amsterdam Schiphol"
+        },
+        {
+          "id": "DXB",
+          "entityId": "95673506",
+          "name": "Dubai"
+        },
+        {
+          "id": "DOH",
+          "entityId": "95673852",
+          "name": "Hamad International"
+        },
+        {
+          "id": "AUH",
+          "entityId": "95673509",
+          "name": "Zayed International"
+        }
+      ],
+      "layoverDuration": {
+        "min": 50,
+        "max": 380
+      }
+    }
+  }
+}

@@ -42,6 +42,7 @@ def _row(snapshot: datetime, dep: str, ret: str, stay: int, price: int) -> Calen
     return CalendarRow(
         snapshot_at=snapshot.replace(microsecond=0).isoformat() + "Z",
         route_id="t",
+        source="searchapi",
         origin="MAD",
         destination="NBO",
         departure_date=dep,

@@ -61,6 +61,7 @@ def _seed(conn, window: SweepWindow, prices: list[int]):
         rows.append(CalendarRow(
             snapshot_at=snapshot_at,
             route_id="t",
+            source="searchapi",
             origin="MAD",
             destination="NBO",
             departure_date=window.outbound_start.isoformat(),

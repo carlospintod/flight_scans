@@ -40,6 +40,7 @@ def _row(snapshot: datetime, dep: str, ret: str, stay: int, price: int) -> Calen
     return CalendarRow(
         snapshot_at=snapshot.strftime("%Y-%m-%dT%H:%M:%SZ"),
         route_id="t",
+        source="searchapi",
         origin="MAD",
         destination="NBO",
         departure_date=dep,
@@ -107,7 +108,7 @@ def test_legacy_mode_when_thresholds_unset(tmp_path: Path):
             # Itinerary flagged is_lowest_price in latest snapshot.
             CalendarRow(
                 snapshot_at="2026-05-01T00:00:00Z",
-                route_id="t", origin="MAD", destination="NBO",
+                route_id="t", source="searchapi", origin="MAD", destination="NBO",
                 departure_date="2026-09-05", return_date="2026-11-08",
                 stay_days=64, price=720, currency="EUR",
                 is_lowest_price=True,

@@ -23,9 +23,14 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Iterable, Iterator
 
-from .api import CalendarEntry, SearchApiClient, SearchApiError
 from .config import RouteConfig
-from .db import CalendarRow, insert_calendar_rows
+from .db import CalendarRow, CurveRow, insert_calendar_rows, insert_curve_rows
+from .searchapi_io import CalendarEntry, SearchApiClient, SearchApiError, SOURCE_ID as SEARCHAPI_SOURCE
+from .skyscanner_rapidapi import (
+    SkyScrapperClient,
+    SkyScrapperError,
+    SOURCE_ID as SKYSCANNER_SOURCE,
+)
 
 LOG = logging.getLogger(__name__)
 
@@ -48,8 +53,10 @@ class SweepWindow:
 @dataclass
 class SweepResult:
     windows_planned: int
-    calls_made: int
-    entries_stored: int
+    calls_made: int               # SearchAPI calls only (legacy field name)
+    entries_stored: int           # SearchAPI grid rows stored
+    curve_calls_made: int = 0     # Sky Scrapper calls used for curve
+    curve_entries_stored: int = 0 # Sky Scrapper curve rows stored
 
 
 def plan_windows(route: RouteConfig) -> list[SweepWindow]:
@@ -106,15 +113,45 @@ def plan_windows(route: RouteConfig) -> list[SweepWindow]:
 def run_sweep(
     *,
     conn,
-    client: SearchApiClient,
+    client: SearchApiClient | None,
     route: RouteConfig,
     max_calls: int | None = None,
     dry_run: bool = False,
     today: date | None = None,
+    skyscanner_client: SkyScrapperClient | None = None,
+    skyscanner_planned: bool = False,
 ) -> SweepResult:
+    """Run the full sweep: Sky Scrapper curve + SearchAPI grid.
+
+    Sky Scrapper runs first (cheap: 1 call per origin-destination pair).
+    SearchAPI runs second across all planned windows, applying smart-skip
+    based on prior snapshots.
+
+    `skyscanner_planned` controls the dry-run preview when no real client
+    is available: pass True to log the planned Sky Scrapper calls.
+    """
     today = today or date.today()
     windows = plan_windows(route)
     LOG.info("sweep route=%s windows=%d", route.name, len(windows))
+
+    # ----- Sky Scrapper curve pass -----
+    curve_calls = 0
+    curve_stored = 0
+    snapshot_at = _now_iso()
+    sky_active = skyscanner_client is not None or skyscanner_planned
+    if skyscanner_client is not None and not dry_run:
+        curve_calls, curve_stored = _run_skyscanner_curve(
+            conn=conn,
+            client=skyscanner_client,
+            route=route,
+            snapshot_at=snapshot_at,
+            today=today,
+        )
+    elif sky_active and dry_run:
+        for origin in route.origins:
+            for destination in route.destinations:
+                LOG.info("plan skyscanner curve %s->%s fromDate=%s",
+                         origin, destination, max(today, route.search_window.earliest_departure))
 
     if dry_run:
         for w in windows:
@@ -126,12 +163,27 @@ def run_sweep(
                 w.outbound_start, w.outbound_end,
                 w.return_start, w.return_end, w.combo_count(), tag,
             )
-        return SweepResult(windows_planned=len(windows), calls_made=0, entries_stored=0)
+        return SweepResult(
+            windows_planned=len(windows),
+            calls_made=0,
+            entries_stored=0,
+            curve_calls_made=0,
+            curve_entries_stored=0,
+        )
+
+    if client is None:
+        LOG.info("no SearchAPI client; skipping grid pass")
+        return SweepResult(
+            windows_planned=len(windows),
+            calls_made=0,
+            entries_stored=0,
+            curve_calls_made=curve_calls,
+            curve_entries_stored=curve_stored,
+        )
 
     calls = 0
     stored = 0
     skipped = 0
-    snapshot_at = _now_iso()
     for w in windows:
         if max_calls is not None and calls >= max_calls:
             LOG.info("sweep stopping at max_calls=%d", max_calls)
@@ -174,10 +226,86 @@ def run_sweep(
             w.origin, w.destination, w.outbound_start, w.outbound_end, len(rows),
         )
     LOG.info(
-        "sweep done route=%s calls=%d skipped=%d stored=%d",
-        route.name, calls, skipped, stored,
+        "sweep done route=%s searchapi_calls=%d skipped=%d stored=%d "
+        "skyscanner_calls=%d curve_rows=%d",
+        route.name, calls, skipped, stored, curve_calls, curve_stored,
     )
-    return SweepResult(windows_planned=len(windows), calls_made=calls, entries_stored=stored)
+    return SweepResult(
+        windows_planned=len(windows),
+        calls_made=calls,
+        entries_stored=stored,
+        curve_calls_made=curve_calls,
+        curve_entries_stored=curve_stored,
+    )
+
+
+def _run_skyscanner_curve(
+    *,
+    conn,
+    client: SkyScrapperClient,
+    route: RouteConfig,
+    snapshot_at: str,
+    today: date,
+) -> tuple[int, int]:
+    """Per origin/destination pair: one Sky Scrapper getPriceCalendar call.
+
+    Each call resolves airport IDs (cached in DB after first sighting),
+    fetches up to ~206 days of departure-date prices, and persists them
+    into `departure_curves`.
+
+    Returns (calls_made, rows_stored). Airport-lookup calls count too.
+    """
+    calls = 0
+    stored = 0
+    # Sky Scrapper rejects from_date in the past. Clamp to today.
+    earliest = route.search_window.earliest_departure
+    from_date = max(today, earliest)
+
+    for origin in route.origins:
+        for destination in route.destinations:
+            # Track lookups by checking the cache state before/after.
+            from . import db as db_mod
+            lookups_needed = 0
+            if db_mod.lookup_airport(conn, origin) is None:
+                lookups_needed += 1
+            if db_mod.lookup_airport(conn, destination) is None:
+                lookups_needed += 1
+
+            try:
+                resp = client.calendar_curve(
+                    origin=origin,
+                    destination=destination,
+                    from_date=from_date,
+                    currency=route.currency,
+                )
+            except SkyScrapperError as exc:
+                LOG.error(
+                    "skyscanner curve failed %s->%s err=%s", origin, destination, exc,
+                )
+                calls += 1 + lookups_needed
+                continue
+            calls += 1 + lookups_needed
+
+            rows = [
+                CurveRow(
+                    snapshot_at=snapshot_at,
+                    route_id=route.name,
+                    source=SKYSCANNER_SOURCE,
+                    origin=origin,
+                    destination=destination,
+                    departure_date=e.departure_date,
+                    price=e.price,
+                    price_group=e.price_group,
+                    currency=route.currency,
+                )
+                for e in resp.entries
+            ]
+            stored += insert_curve_rows(conn, rows)
+            LOG.info(
+                "skyscanner curve %s->%s entries=%d",
+                origin, destination, len(rows),
+            )
+    return calls, stored
 
 
 def _should_skip_window(
@@ -269,6 +397,7 @@ def _entries_to_rows(
         yield CalendarRow(
             snapshot_at=snapshot_at,
             route_id=route.name,
+            source=SEARCHAPI_SOURCE,
             origin=window.origin,
             destination=window.destination,
             departure_date=e.departure_date,

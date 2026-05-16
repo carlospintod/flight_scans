@@ -1,0 +1,1056 @@
+{
+  "status": true,
+  "timestamp": 1778932203467,
+  "data": {
+    "flights": {
+      "noPriceLabel": "No price information",
+      "groups": [
+        {
+          "id": "low",
+          "label": "\u00a3"
+        },
+        {
+          "id": "medium",
+          "label": "\u00a3\u00a3"
+        },
+        {
+          "id": "high",
+          "label": "\u00a3\u00a3\u00a3"
+        }
+      ],
+      "days": [
+        {
+          "day": "2026-05-16",
+          "group": "low",
+          "price": 288.68
+        },
+        {
+          "day": "2026-05-17",
+          "group": "low",
+          "price": 276.21
+        },
+        {
+          "day": "2026-05-18",
+          "group": "low",
+          "price": 263.3
+        },
+        {
+          "day": "2026-05-19",
+          "group": "medium",
+          "price": 400
+        },
+        {
+          "day": "2026-05-20",
+          "group": "low",
+          "price": 262.82
+        },
+        {
+          "day": "2026-05-21",
+          "group": "medium",
+          "price": 386.77
+        },
+        {
+          "day": "2026-05-22",
+          "group": "medium",
+          "price": 403.51
+        },
+        {
+          "day": "2026-05-23",
+          "group": "high",
+          "price": 448
+        },
+        {
+          "day": "2026-05-24",
+          "group": "medium",
+          "price": 318.85
+        },
+        {
+          "day": "2026-05-25",
+          "group": "low",
+          "price": 296
+        },
+        {
+          "day": "2026-05-26",
+          "group": "medium",
+          "price": 431.2
+        },
+        {
+          "day": "2026-05-27",
+          "group": "low",
+          "price": 304
+        },
+        {
+          "day": "2026-05-28",
+          "group": "medium",
+          "price": 308.52
+        },
+        {
+          "day": "2026-05-29",
+          "group": "high",
+          "price": 534
+        },
+        {
+          "day": "2026-05-30",
+          "group": "high",
+          "price": 513
+        },
+        {
+          "day": "2026-05-31",
+          "group": "high",
+          "price": 536
+        },
+        {
+          "day": "2026-06-01",
+          "group": "medium",
+          "price": 308
+        },
+        {
+          "day": "2026-06-02",
+          "group": "low",
+          "price": 305
+        },
+        {
+          "day": "2026-06-03",
+          "group": "medium",
+          "price": 444
+        },
+        {
+          "day": "2026-06-04",
+          "group": "medium",
+          "price": 406.66
+        },
+        {
+          "day": "2026-06-05",
+          "group": "medium",
+          "price": 321.52
+        },
+        {
+          "day": "2026-06-06",
+          "group": "low",
+          "price": 298.11
+        },
+        {
+          "day": "2026-06-07",
+          "group": "medium",
+          "price": 401.51
+        },
+        {
+          "day": "2026-06-08",
+          "group": "low",
+          "price": 306
+        },
+        {
+          "day": "2026-06-09",
+          "group": "low",
+          "price": 304
+        },
+        {
+          "day": "2026-06-10",
+          "group": "medium",
+          "price": 312.58
+        },
+        {
+          "day": "2026-06-11",
+          "group": "medium",
+          "price": 310.69
+        },
+        {
+          "day": "2026-06-12",
+          "group": "medium",
+          "price": 319
+        },
+        {
+          "day": "2026-06-13",
+          "group": "medium",
+          "price": 322.47
+        },
+        {
+          "day": "2026-06-14",
+          "group": "medium",
+          "price": 322.67
+        },
+        {
+          "day": "2026-06-15",
+          "group": "low",
+          "price": 259.83
+        },
+        {
+          "day": "2026-06-16",
+          "group": "high",
+          "price": 448
+        },
+        {
+          "day": "2026-06-17",
+          "group": "low",
+          "price": 270
+        },
+        {
+          "day": "2026-06-18",
+          "group": "low",
+          "price": 306.21
+        },
+        {
+          "day": "2026-06-19",
+          "group": "high",
+          "price": 484.55
+        },
+        {
+          "day": "2026-06-20",
+          "group": "high",
+          "price": 450.56
+        },
+        {
+          "day": "2026-06-21",
+          "group": "medium",
+          "price": 316
+        },
+        {
+          "day": "2026-06-22",
+          "group": "medium",
+          "price": 444.95
+        },
+        {
+          "day": "2026-06-23",
+          "group": "medium",
+          "price": 442.86
+        },
+        {
+          "day": "2026-06-24",
+          "group": "low",
+          "price": 306.42
+        },
+        {
+          "day": "2026-06-25",
+          "group": "low",
+          "price": 276.21
+        },
+        {
+          "day": "2026-06-26",
+          "group": "high",
+          "price": 465.08
+        },
+        {
+          "day": "2026-06-27",
+          "group": "medium",
+          "price": 447.02
+        },
+        {
+          "day": "2026-06-28",
+          "group": "medium",
+          "price": 320
+        },
+        {
+          "day": "2026-06-29",
+          "group": "high",
+          "price": 457
+        },
+        {
+          "day": "2026-06-30",
+          "group": "high",
+          "price": 453
+        },
+        {
+          "day": "2026-07-01",
+          "group": "medium",
+          "price": 434
+        },
+        {
+          "day": "2026-07-02",
+          "group": "medium",
+          "price": 442
+        },
+        {
+          "day": "2026-07-03",
+          "group": "medium",
+          "price": 319.97
+        },
+        {
+          "day": "2026-07-04",
+          "group": "medium",
+          "price": 320
+        },
+        {
+          "day": "2026-07-05",
+          "group": "medium",
+          "price": 382
+        },
+        {
+          "day": "2026-07-06",
+          "group": "high",
+          "price": 454.92
+        },
+        {
+          "day": "2026-07-07",
+          "group": "low",
+          "price": 296.26
+        },
+        {
+          "day": "2026-07-08",
+          "group": "medium",
+          "price": 350
+        },
+        {
+          "day": "2026-07-09",
+          "group": "medium",
+          "price": 445
+        },
+        {
+          "day": "2026-07-10",
+          "group": "medium",
+          "price": 329
+        },
+        {
+          "day": "2026-07-11",
+          "group": "high",
+          "price": 483
+        },
+        {
+          "day": "2026-07-12",
+          "group": "medium",
+          "price": 363
+        },
+        {
+          "day": "2026-07-13",
+          "group": "high",
+          "price": 465
+        },
+        {
+          "day": "2026-07-14",
+          "group": "medium",
+          "price": 351.22
+        },
+        {
+          "day": "2026-07-15",
+          "group": "high",
+          "price": 465
+        },
+        {
+          "day": "2026-07-16",
+          "group": "high",
+          "price": 465
+        },
+        {
+          "day": "2026-07-17",
+          "group": "high",
+          "price": 526.5
+        },
+        {
+          "day": "2026-07-18",
+          "group": "high",
+          "price": 485
+        },
+        {
+          "day": "2026-07-19",
+          "group": "medium",
+          "price": 363
+        },
+        {
+          "day": "2026-07-20",
+          "group": "high",
+          "price": 489
+        },
+        {
+          "day": "2026-07-21",
+          "group": "high",
+          "price": 465
+        },
+        {
+          "day": "2026-07-22",
+          "group": "medium",
+          "price": 400
+        },
+        {
+          "day": "2026-07-23",
+          "group": "medium",
+          "price": 435
+        },
+        {
+          "day": "2026-07-24",
+          "group": "high",
+          "price": 501
+        },
+        {
+          "day": "2026-07-25",
+          "group": "high",
+          "price": 489
+        },
+        {
+          "day": "2026-07-26",
+          "group": "high",
+          "price": 493
+        },
+        {
+          "day": "2026-07-27",
+          "group": "high",
+          "price": 487
+        },
+        {
+          "day": "2026-07-28",
+          "group": "high",
+          "price": 496
+        },
+        {
+          "day": "2026-07-29",
+          "group": "high",
+          "price": 538
+        },
+        {
+          "day": "2026-07-30",
+          "group": "high",
+          "price": 468
+        },
+        {
+          "day": "2026-07-31",
+          "group": "high",
+          "price": 501
+        },
+        {
+          "day": "2026-08-01",
+          "group": "medium",
+          "price": 431
+        },
+        {
+          "day": "2026-08-02",
+          "group": "high",
+          "price": 653.32
+        },
+        {
+          "day": "2026-08-03",
+          "group": "high",
+          "price": 487
+        },
+        {
+          "day": "2026-08-04",
+          "group": "high",
+          "price": 478
+        },
+        {
+          "day": "2026-08-05",
+          "group": "high",
+          "price": 516
+        },
+        {
+          "day": "2026-08-06",
+          "group": "high",
+          "price": 462.34
+        },
+        {
+          "day": "2026-08-07",
+          "group": "high",
+          "price": 480
+        },
+        {
+          "day": "2026-08-08",
+          "group": "high",
+          "price": 465
+        },
+        {
+          "day": "2026-08-09",
+          "group": "high",
+          "price": 469
+        },
+        {
+          "day": "2026-08-10",
+          "group": "high",
+          "price": 462.86
+        },
+        {
+          "day": "2026-08-11",
+          "group": "medium",
+          "price": 325
+        },
+        {
+          "day": "2026-08-12",
+          "group": "low",
+          "price": 307
+        },
+        {
+          "day": "2026-08-13",
+          "group": "low",
+          "price": 307
+        },
+        {
+          "day": "2026-08-14",
+          "group": "high",
+          "price": 496
+        },
+        {
+          "day": "2026-08-15",
+          "group": "high",
+          "price": 526
+        },
+        {
+          "day": "2026-08-16",
+          "group": "high",
+          "price": 481
+        },
+        {
+          "day": "2026-08-17",
+          "group": "high",
+          "price": 466.85
+        },
+        {
+          "day": "2026-08-18",
+          "group": "low",
+          "price": 307.3
+        },
+        {
+          "day": "2026-08-19",
+          "group": "low",
+          "price": 307
+        },
+        {
+          "day": "2026-08-20",
+          "group": "medium",
+          "price": 309
+        },
+        {
+          "day": "2026-08-21",
+          "group": "medium",
+          "price": 320
+        },
+        {
+          "day": "2026-08-22",
+          "group": "high",
+          "price": 510.47
+        },
+        {
+          "day": "2026-08-23",
+          "group": "medium",
+          "price": 338
+        },
+        {
+          "day": "2026-08-25",
+          "group": "medium",
+          "price": 313
+        },
+        {
+          "day": "2026-08-27",
+          "group": "medium",
+          "price": 383.21
+        },
+        {
+          "day": "2026-08-28",
+          "group": "medium",
+          "price": 320
+        },
+        {
+          "day": "2026-08-29",
+          "group": "medium",
+          "price": 323.23
+        },
+        {
+          "day": "2026-08-30",
+          "group": "medium",
+          "price": 405
+        },
+        {
+          "day": "2026-08-31",
+          "group": "medium",
+          "price": 375
+        },
+        {
+          "day": "2026-09-01",
+          "group": "low",
+          "price": 296.4
+        },
+        {
+          "day": "2026-09-02",
+          "group": "medium",
+          "price": 307.5
+        },
+        {
+          "day": "2026-09-03",
+          "group": "medium",
+          "price": 375
+        },
+        {
+          "day": "2026-09-05",
+          "group": "medium",
+          "price": 323.8
+        },
+        {
+          "day": "2026-09-06",
+          "group": "medium",
+          "price": 333
+        },
+        {
+          "day": "2026-09-07",
+          "group": "low",
+          "price": 305
+        },
+        {
+          "day": "2026-09-08",
+          "group": "low",
+          "price": 307.32
+        },
+        {
+          "day": "2026-09-09",
+          "group": "low",
+          "price": 306
+        },
+        {
+          "day": "2026-09-10",
+          "group": "low",
+          "price": 306
+        },
+        {
+          "day": "2026-09-11",
+          "group": "medium",
+          "price": 330
+        },
+        {
+          "day": "2026-09-12",
+          "group": "medium",
+          "price": 331
+        },
+        {
+          "day": "2026-09-13",
+          "group": "low",
+          "price": 305
+        },
+        {
+          "day": "2026-09-14",
+          "group": "low",
+          "price": 307
+        },
+        {
+          "day": "2026-09-15",
+          "group": "low",
+          "price": 295.59
+        },
+        {
+          "day": "2026-09-16",
+          "group": "low",
+          "price": 303
+        },
+        {
+          "day": "2026-09-17",
+          "group": "medium",
+          "price": 307.45
+        },
+        {
+          "day": "2026-09-18",
+          "group": "medium",
+          "price": 331
+        },
+        {
+          "day": "2026-09-19",
+          "group": "medium",
+          "price": 333.06
+        },
+        {
+          "day": "2026-09-20",
+          "group": "low",
+          "price": 305
+        },
+        {
+          "day": "2026-09-21",
+          "group": "medium",
+          "price": 376
+        },
+        {
+          "day": "2026-09-22",
+          "group": "low",
+          "price": 305
+        },
+        {
+          "day": "2026-09-23",
+          "group": "low",
+          "price": 306
+        },
+        {
+          "day": "2026-09-25",
+          "group": "medium",
+          "price": 408.39
+        },
+        {
+          "day": "2026-09-27",
+          "group": "medium",
+          "price": 375.06
+        },
+        {
+          "day": "2026-09-28",
+          "group": "low",
+          "price": 307.4
+        },
+        {
+          "day": "2026-09-29",
+          "group": "medium",
+          "price": 307.45
+        },
+        {
+          "day": "2026-09-30",
+          "group": "low",
+          "price": 307
+        },
+        {
+          "day": "2026-10-01",
+          "group": "low",
+          "price": 306
+        },
+        {
+          "day": "2026-10-02",
+          "group": "medium",
+          "price": 333.3
+        },
+        {
+          "day": "2026-10-03",
+          "group": "medium",
+          "price": 357
+        },
+        {
+          "day": "2026-10-04",
+          "group": "low",
+          "price": 305
+        },
+        {
+          "day": "2026-10-05",
+          "group": "medium",
+          "price": 375
+        },
+        {
+          "day": "2026-10-06",
+          "group": "low",
+          "price": 306.61
+        },
+        {
+          "day": "2026-10-08",
+          "group": "low",
+          "price": 307
+        },
+        {
+          "day": "2026-10-09",
+          "group": "medium",
+          "price": 330
+        },
+        {
+          "day": "2026-10-10",
+          "group": "medium",
+          "price": 333.32
+        },
+        {
+          "day": "2026-10-11",
+          "group": "low",
+          "price": 306
+        },
+        {
+          "day": "2026-10-12",
+          "group": "low",
+          "price": 295.16
+        },
+        {
+          "day": "2026-10-13",
+          "group": "low",
+          "price": 302
+        },
+        {
+          "day": "2026-10-14",
+          "group": "low",
+          "price": 307
+        },
+        {
+          "day": "2026-10-15",
+          "group": "low",
+          "price": 307
+        },
+        {
+          "day": "2026-10-16",
+          "group": "medium",
+          "price": 444
+        },
+        {
+          "day": "2026-10-17",
+          "group": "medium",
+          "price": 333
+        },
+        {
+          "day": "2026-10-18",
+          "group": "low",
+          "price": 305
+        },
+        {
+          "day": "2026-10-19",
+          "group": "medium",
+          "price": 375
+        },
+        {
+          "day": "2026-10-21",
+          "group": "low",
+          "price": 307.02
+        },
+        {
+          "day": "2026-10-22",
+          "group": "medium",
+          "price": 308.02
+        },
+        {
+          "day": "2026-10-23",
+          "group": "medium",
+          "price": 401
+        },
+        {
+          "day": "2026-10-25",
+          "group": "low",
+          "price": 297.22
+        },
+        {
+          "day": "2026-10-27",
+          "group": "medium",
+          "price": 375
+        },
+        {
+          "day": "2026-10-28",
+          "group": "medium",
+          "price": 307.44
+        },
+        {
+          "day": "2026-10-29",
+          "group": "low",
+          "price": 307
+        },
+        {
+          "day": "2026-10-30",
+          "group": "medium",
+          "price": 330
+        },
+        {
+          "day": "2026-10-31",
+          "group": "medium",
+          "price": 401
+        },
+        {
+          "day": "2026-11-02",
+          "group": "medium",
+          "price": 307.5
+        },
+        {
+          "day": "2026-11-03",
+          "group": "medium",
+          "price": 375
+        },
+        {
+          "day": "2026-11-06",
+          "group": "medium",
+          "price": 408.21
+        },
+        {
+          "day": "2026-11-11",
+          "group": "low",
+          "price": 294.65
+        },
+        {
+          "day": "2026-11-14",
+          "group": "medium",
+          "price": 331
+        },
+        {
+          "day": "2026-11-16",
+          "group": "low",
+          "price": 306.49
+        },
+        {
+          "day": "2026-11-22",
+          "group": "medium",
+          "price": 333.4
+        },
+        {
+          "day": "2026-11-23",
+          "group": "low",
+          "price": 307.4
+        },
+        {
+          "day": "2026-11-24",
+          "group": "low",
+          "price": 307.4
+        },
+        {
+          "day": "2026-11-28",
+          "group": "medium",
+          "price": 397
+        },
+        {
+          "day": "2026-11-29",
+          "group": "medium",
+          "price": 333.3
+        },
+        {
+          "day": "2026-11-30",
+          "group": "medium",
+          "price": 404.93
+        },
+        {
+          "day": "2026-12-01",
+          "group": "medium",
+          "price": 404.93
+        },
+        {
+          "day": "2026-12-02",
+          "group": "medium",
+          "price": 307.5
+        },
+        {
+          "day": "2026-12-04",
+          "group": "medium",
+          "price": 333.45
+        },
+        {
+          "day": "2026-12-05",
+          "group": "medium",
+          "price": 333
+        },
+        {
+          "day": "2026-12-09",
+          "group": "medium",
+          "price": 405
+        },
+        {
+          "day": "2026-12-15",
+          "group": "high",
+          "price": 465
+        },
+        {
+          "day": "2026-12-18",
+          "group": "medium",
+          "price": 430.49
+        },
+        {
+          "day": "2026-12-25",
+          "group": "medium",
+          "price": 405
+        },
+        {
+          "day": "2026-12-26",
+          "group": "medium",
+          "price": 426
+        },
+        {
+          "day": "2026-12-29",
+          "group": "high",
+          "price": 538
+        },
+        {
+          "day": "2026-12-30",
+          "group": "medium",
+          "price": 406
+        },
+        {
+          "day": "2026-12-31",
+          "group": "medium",
+          "price": 423
+        },
+        {
+          "day": "2027-01-01",
+          "group": "high",
+          "price": 523
+        },
+        {
+          "day": "2027-01-02",
+          "group": "high",
+          "price": 463
+        },
+        {
+          "day": "2027-01-03",
+          "group": "high",
+          "price": 506
+        },
+        {
+          "day": "2027-01-04",
+          "group": "high",
+          "price": 454
+        },
+        {
+          "day": "2027-01-07",
+          "group": "medium",
+          "price": 433.01
+        },
+        {
+          "day": "2027-01-08",
+          "group": "high",
+          "price": 460.7
+        },
+        {
+          "day": "2027-01-11",
+          "group": "high",
+          "price": 460.21
+        },
+        {
+          "day": "2027-01-16",
+          "group": "medium",
+          "price": 405.59
+        },
+        {
+          "day": "2027-01-24",
+          "group": "medium",
+          "price": 406
+        },
+        {
+          "day": "2027-01-31",
+          "group": "medium",
+          "price": 414.98
+        },
+        {
+          "day": "2027-02-01",
+          "group": "medium",
+          "price": 405.4
+        },
+        {
+          "day": "2027-02-06",
+          "group": "medium",
+          "price": 397
+        },
+        {
+          "day": "2027-02-07",
+          "group": "medium",
+          "price": 411
+        },
+        {
+          "day": "2027-02-11",
+          "group": "medium",
+          "price": 372
+        },
+        {
+          "day": "2027-02-17",
+          "group": "medium",
+          "price": 383.69
+        },
+        {
+          "day": "2027-03-05",
+          "group": "medium",
+          "price": 437.43
+        },
+        {
+          "day": "2027-03-17",
+          "group": "medium",
+          "price": 404
+        },
+        {
+          "day": "2027-03-20",
+          "group": "medium",
+          "price": 405.68
+        },
+        {
+          "day": "2027-03-26",
+          "group": "high",
+          "price": 538.54
+        },
+        {
+          "day": "2027-03-27",
+          "group": "high",
+          "price": 532.99
+        },
+        {
+          "day": "2027-05-01",
+          "group": "medium",
+          "price": 404.66
+        },
+        {
+          "day": "2027-05-05",
+          "group": "high",
+          "price": 460.99
+        }
+      ],
+      "currency": "EUR"
+    }
+  }
+}

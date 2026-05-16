@@ -27,6 +27,7 @@ LOG = logging.getLogger(__name__)
 BASE_URL = "https://www.searchapi.io/api/v1/search"
 CALENDAR_COMBO_CAP = 200
 DEFAULT_TIMEOUT_S = 95  # API docs say 503 after 90s
+SOURCE_ID = "searchapi"
 
 
 class SearchApiError(RuntimeError):

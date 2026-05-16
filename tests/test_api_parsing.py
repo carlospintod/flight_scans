@@ -7,7 +7,7 @@ live client uses, against the same response shape.
 import json
 from pathlib import Path
 
-from lib.api import _parse_best_flights, _parse_calendar_entries
+from lib.searchapi_io import _parse_best_flights, _parse_calendar_entries
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
