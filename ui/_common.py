@@ -890,6 +890,40 @@ def refresh_searchapi_quota(conn: sqlite3.Connection) -> dict | None:
     return q
 
 
+def refresh_skyscanner_quota(conn: sqlite3.Connection) -> dict | None:
+    """Make one cheap Sky Scrapper call to capture rate-limit headers.
+
+    Sky Scrapper has no /me-style endpoint, so the only way to learn
+    the quota is to make a real API call and read the response headers.
+    This helper makes a single `searchAirport` lookup for 'MAD' (which
+    is already in our airport_cache, so the result is discarded — we
+    just need the headers).
+
+    Costs 1 RapidAPI call. The client's _request() persists a quota
+    snapshot to the DB as a side effect.
+
+    Returns the latest_quota dict (also accessible via
+    `latest_quota_for_ui(conn, 'skyscanner')` after this completes).
+    Returns None if RAPIDAPI_KEY isn't set; raises on network errors.
+    """
+    from lib.skyscanner_rapidapi import SkyScrapperClient
+    try:
+        client = SkyScrapperClient.from_env(db_conn=conn)
+    except RuntimeError:
+        return None  # key not set
+    # Direct call to _request — bypasses the cache that resolve_airport
+    # would hit. We don't care about the response, only the headers.
+    try:
+        client._request("searchAirport", {"query": "MAD", "locale": "en-US"})  # noqa: SLF001
+    except Exception:
+        # Even an error response carries the rate-limit headers; the
+        # client persists them before raising. Propagate so the UI can
+        # surface auth errors etc., but the quota snapshot was already
+        # written if the request reached the server at all.
+        raise
+    return client.latest_quota
+
+
 def recent_capture_summary(conn: sqlite3.Connection, route) -> dict[str, int]:
     """Rows captured for this route in the last 24h, per table.
 

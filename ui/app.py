@@ -30,6 +30,7 @@ from ui._common import (  # noqa: E402
     recent_alert_count,
     recent_capture_summary,
     refresh_searchapi_quota,
+    refresh_skyscanner_quota,
     run_all,
     setup_page,
     status_dot_row,
@@ -93,12 +94,33 @@ status_dot_row([
 st.markdown("## API quotas")
 qcol, refresh_col = st.columns([3, 1])
 with refresh_col:
-    if st.button("Refresh SearchAPI quota", help="Calls /me (free, doesn't count against your quota)"):
+    if st.button(
+        "Refresh SearchAPI quota",
+        help="Calls /me (free, doesn't count against your quota)",
+        use_container_width=True,
+    ):
         try:
             refresh_searchapi_quota(conn)
             st.toast("SearchAPI quota refreshed.")
         except Exception as exc:  # noqa: BLE001
             st.error(f"Quota check failed: {exc}")
+    if st.button(
+        "Refresh Sky Scrapper quota",
+        help=(
+            "Sky Scrapper has no /me-style endpoint, so this makes 1 cheap "
+            "searchAirport call just to read the rate-limit header off the "
+            "response. Costs 1 RapidAPI call."
+        ),
+        use_container_width=True,
+    ):
+        try:
+            q = refresh_skyscanner_quota(conn)
+            if q is None:
+                st.warning("RAPIDAPI_KEY is not set in .env.")
+            else:
+                st.toast("Sky Scrapper quota refreshed.")
+        except Exception as exc:  # noqa: BLE001
+            st.error(f"Sky Scrapper quota check failed: {exc}")
 
 sa_q = latest_quota_for_ui(conn, "searchapi")
 sky_q = latest_quota_for_ui(conn, "skyscanner")
