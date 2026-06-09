@@ -70,6 +70,25 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stAppViewContainer
     font-family: 'IBM Plex Mono', 'Consolas', 'Courier New', monospace !important;
     -webkit-font-smoothing: antialiased;
 }}
+/* Re-apply Material Symbols to Streamlit's icon elements — without this
+   the `*` rule above overrides their icon font and the icon NAMES
+   ('keyboard_double_arrow_left', 'arrow_right', etc.) render as text. */
+[data-testid="stIconMaterial"],
+[class*="material-symbols"],
+[class*="material-icons"],
+.material-symbols-rounded,
+.material-symbols-outlined,
+.material-icons,
+i.material-icons,
+span.material-symbols-rounded,
+span.material-symbols-outlined {{
+    font-family: 'Material Symbols Rounded', 'Material Symbols Outlined',
+                 'Material Icons', sans-serif !important;
+    font-feature-settings: 'liga' !important;
+    -webkit-font-feature-settings: 'liga' !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+}}
 .stApp {{
     background-color: {GTM99["bg"]} !important;
     color: {GTM99["text"]};
