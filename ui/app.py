@@ -29,6 +29,8 @@ from ui._common import (  # noqa: E402
     quota_state,
     recent_alert_count,
     recent_capture_summary,
+    refresh_aviasales_quota,
+    refresh_kiwi_quota,
     refresh_searchapi_quota,
     refresh_skyscanner_quota,
     run_all,
@@ -121,9 +123,45 @@ with refresh_col:
                 st.toast("Sky Scrapper quota refreshed.")
         except Exception as exc:  # noqa: BLE001
             st.error(f"Sky Scrapper quota check failed: {exc}")
+    if st.button(
+        "Refresh Aviasales quota",
+        help=(
+            "Aviasales has no /me endpoint. Costs 1 cheap_prices call to "
+            "the soft-rate-limited /v1/prices/cheap endpoint."
+        ),
+        use_container_width=True,
+    ):
+        try:
+            q = refresh_aviasales_quota(conn)
+            if q is None:
+                st.warning("TRAVELPAYOUTS_TOKEN is not set in .env.")
+            elif not q.get("remaining") and not q.get("limit_total"):
+                st.toast("Aviasales reachable; provider did not return rate-limit headers.")
+            else:
+                st.toast("Aviasales quota refreshed.")
+        except Exception as exc:  # noqa: BLE001
+            st.error(f"Aviasales quota check failed: {exc}")
+    if st.button(
+        "Refresh Kiwi quota",
+        help=(
+            "Costs 1 RapidAPI call to a Kiwi round-trip endpoint, just to "
+            "read the rate-limit headers from the response."
+        ),
+        use_container_width=True,
+    ):
+        try:
+            q = refresh_kiwi_quota(conn)
+            if q is None:
+                st.warning("RAPIDAPI_KEY is not set in .env.")
+            else:
+                st.toast("Kiwi quota refreshed.")
+        except Exception as exc:  # noqa: BLE001
+            st.error(f"Kiwi quota check failed: {exc}")
 
 sa_q = latest_quota_for_ui(conn, "searchapi")
 sky_q = latest_quota_for_ui(conn, "skyscanner")
+av_q = latest_quota_for_ui(conn, "aviasales")
+kw_q = latest_quota_for_ui(conn, "kiwi")
 
 
 def _q_value(q: dict | None) -> str:
@@ -144,17 +182,25 @@ def _q_caption(q: dict | None, source_label: str) -> str:
 
 with qcol:
     status_dot_row([
-        ("SearchAPI remaining", _q_value(sa_q),
+        ("SearchAPI", _q_value(sa_q),
          quota_state(sa_q["remaining"] if sa_q else None,
                      sa_q["limit_total"] if sa_q else None)),
-        ("Sky Scrapper remaining", _q_value(sky_q),
+        ("Sky Scrapper", _q_value(sky_q),
          quota_state(sky_q["remaining"] if sky_q else None,
                      sky_q["limit_total"] if sky_q else None)),
+        ("Aviasales", _q_value(av_q),
+         quota_state(av_q["remaining"] if av_q else None,
+                     av_q["limit_total"] if av_q else None)),
+        ("Kiwi", _q_value(kw_q),
+         quota_state(kw_q["remaining"] if kw_q else None,
+                     kw_q["limit_total"] if kw_q else None)),
     ])
     st.caption(
         f"SearchAPI: {_q_caption(sa_q, 'searchapi')}  ·  "
-        f"Sky Scrapper: {_q_caption(sky_q, 'skyscanner')} "
-        "(updates passively from RapidAPI response headers on each Sky Scrapper call)."
+        f"Sky Scrapper: {_q_caption(sky_q, 'skyscanner')}  ·  "
+        f"Aviasales: {_q_caption(av_q, 'aviasales')}  ·  "
+        f"Kiwi: {_q_caption(kw_q, 'kiwi')} "
+        "(RapidAPI quotas update passively from response headers on each call)."
     )
 
 st.info(next_action_hint(conn, base_route))
@@ -166,11 +212,13 @@ with st.expander("Advanced settings (sources, caps, overrides)", expanded=False)
     with col_a:
         sources = st.multiselect(
             "Data sources",
-            ["searchapi", "skyscanner"],
-            default=["searchapi"],
+            ["searchapi", "skyscanner", "aviasales", "kiwi"],
+            default=["searchapi", "aviasales"],
             help=(
-                "Sky Scrapper free tier is small (100/mo across all calls). "
-                "Default keeps it off so you don't surprise-exhaust it."
+                "Active by default: SearchAPI (Google Flights) + Aviasales "
+                "(Saudia + MENA coverage). Sky Scrapper has a 20/mo tier that "
+                "exhausts fast; tick it only when you specifically need it. "
+                "Kiwi adds virtual-interlining bundles (Ryanair+KQ-style)."
             ),
         )
         dry_run = st.checkbox(

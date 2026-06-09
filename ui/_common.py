@@ -890,6 +890,60 @@ def refresh_searchapi_quota(conn: sqlite3.Connection) -> dict | None:
     return q
 
 
+def refresh_aviasales_quota(conn: sqlite3.Connection) -> dict | None:
+    """Make one cheap Aviasales call to learn the (soft) rate-limit.
+
+    Travelpayouts doesn't expose a /me endpoint and may not return
+    explicit rate-limit headers either. This helper makes a tiny
+    cheap_prices call; whatever the response says (success or 429),
+    the client persists any headers it does get into the DB.
+    """
+    import json as _json
+    from lib.aviasales_api import AviasalesClient, AviasalesError
+    try:
+        client = AviasalesClient.from_env()
+    except RuntimeError:
+        return None
+    try:
+        client.check_quota()
+    except AviasalesError:
+        pass
+    if client.latest_quota:
+        db_mod.record_quota(
+            conn, source="aviasales",
+            remaining=client.latest_quota.get("remaining"),
+            limit_total=client.latest_quota.get("limit_total"),
+            raw_json=_json.dumps(client.latest_quota.get("raw") or {}),
+        )
+    return client.latest_quota
+
+
+def refresh_kiwi_quota(conn: sqlite3.Connection) -> dict | None:
+    """Make one cheap Kiwi call to capture the RapidAPI rate-limit headers."""
+    from datetime import date as _d
+    from lib.kiwi_rapidapi import KiwiClient, KiwiError
+    try:
+        client = KiwiClient.from_env(db_conn=conn)
+    except RuntimeError:
+        return None
+    # Use a date safely in the future so Kiwi can answer; the call's
+    # response is irrelevant — we just need the headers.
+    probe_dep = _d.today().replace(day=1)
+    if probe_dep.month == 12:
+        probe_ret = probe_dep.replace(year=probe_dep.year + 1, month=1, day=15)
+    else:
+        probe_ret = probe_dep.replace(month=probe_dep.month + 1, day=15)
+    try:
+        client.round_trip_search(
+            origin="MAD", destination="NBO",
+            depart_date=probe_dep, return_date=probe_ret,
+            currency="EUR", limit=1,
+        )
+    except KiwiError:
+        pass  # headers captured regardless
+    return client.latest_quota
+
+
 def refresh_skyscanner_quota(conn: sqlite3.Connection) -> dict | None:
     """Make one cheap Sky Scrapper call to capture rate-limit headers.
 
@@ -1260,29 +1314,191 @@ def alerts_dataframe(
 # --- Run orchestration ------------------------------------------------------
 
 
-def _make_clients(sources: list[str], dry_run: bool, conn: sqlite3.Connection):
-    """Build SearchAPI / Sky Scrapper clients per the source list.
+def _run_aviasales_sweep(conn, av_client, route, *, dry_run: bool) -> int:
+    """One latest_prices call per (origin, destination); persist rows.
 
-    Returns (sa, sky). Either can be None — emits st.warning when the
-    requested source has no key in .env. Returns (None, None) in dry_run.
+    Aviasales' /v2/prices/latest returns the cheapest recently-cached
+    prices on a route, including carriers Google Flights skips
+    (especially Saudia). We persist each returned itinerary as a
+    `calendar_snapshots` row tagged source='aviasales' — same shape
+    as SearchAPI calendar entries, just from a different aggregator.
+
+    Returns the number of rows stored (0 in dry-run).
     """
-    from lib.searchapi_io import SearchApiClient
-    from lib.skyscanner_rapidapi import SkyScrapperClient
+    if dry_run or av_client is None:
+        return 0
+    from lib.aviasales_api import AviasalesError, SOURCE_ID as AV_SOURCE
+    from lib.db import CalendarRow, insert_calendar_rows
+    snapshot_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    stored = 0
+    # Cover the next 6 months of departure-month buckets — Aviasales'
+    # latest_prices returns up to `limit` matches per month.
+    sw = route.search_window
+    months = _months_between(sw.earliest_departure, sw.latest_return)[:6]
+    for origin in route.origins:
+        for destination in route.destinations:
+            month_total = 0
+            for m in months:
+                try:
+                    resp = av_client.latest_prices(
+                        origin=origin, destination=destination,
+                        depart_date_month=m, currency=route.currency,
+                        limit=30,
+                    )
+                except AviasalesError as exc:
+                    LOG.warning(
+                        "aviasales %s->%s month=%s err=%s",
+                        origin, destination, m, exc,
+                    )
+                    continue
+                rows: list[CalendarRow] = []
+                for q in resp.quotes:
+                    if not q.return_date:
+                        continue  # need round-trip for calendar_snapshots
+                    try:
+                        from datetime import date as _d
+                        d_dep = _d.fromisoformat(q.departure_date)
+                        d_ret = _d.fromisoformat(q.return_date)
+                    except ValueError:
+                        continue
+                    stay_days = (d_ret - d_dep).days
+                    if stay_days <= 0:
+                        continue
+                    rows.append(CalendarRow(
+                        snapshot_at=snapshot_at,
+                        route_id=route.name,
+                        source=AV_SOURCE,
+                        origin=q.origin or origin,
+                        destination=q.destination or destination,
+                        departure_date=q.departure_date,
+                        return_date=q.return_date,
+                        stay_days=stay_days,
+                        price=q.price,
+                        currency=q.currency or route.currency,
+                        is_lowest_price=False,
+                    ))
+                stored += insert_calendar_rows(conn, rows)
+                month_total += len(rows)
+            LOG.info(
+                "aviasales sweep %s->%s rows=%d",
+                origin, destination, month_total,
+            )
+    return stored
 
-    if dry_run:
-        return None, None
-    sa = sky = None
-    if "searchapi" in sources:
+
+def _run_kiwi_followup(conn, kw_client, route, *, dry_run: bool) -> int:
+    """For each follow-up candidate, run one Kiwi round-trip search.
+
+    Stores top results in `point_queries` tagged source='kiwi', with
+    `is_self_transfer` set to True when Kiwi flagged virtual interlining.
+    Returns rows stored.
+    """
+    if dry_run or kw_client is None:
+        return 0
+    from datetime import date as _d
+    from lib.db import PointRow, insert_point_rows
+    from lib.followup import select_candidates
+    from lib.kiwi_rapidapi import KiwiError, SOURCE_ID as KW_SOURCE
+    candidates = select_candidates(conn, route)
+    snapshot_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    stored = 0
+    MAX_RANKS = 3
+    for c in candidates:
         try:
-            sa = SearchApiClient.from_env()
+            resp = kw_client.round_trip_search(
+                origin=c["origin"], destination=c["destination"],
+                depart_date=_d.fromisoformat(c["departure_date"]),
+                return_date=_d.fromisoformat(c["return_date"]),
+                currency=route.currency,
+            )
+        except KiwiError as exc:
+            LOG.warning(
+                "kiwi %s->%s dep=%s ret=%s err=%s",
+                c["origin"], c["destination"],
+                c["departure_date"], c["return_date"], exc,
+            )
+            continue
+        rows: list[PointRow] = []
+        for i, opt in enumerate(resp.options[:MAX_RANKS]):
+            rows.append(PointRow(
+                snapshot_at=snapshot_at,
+                route_id=route.name,
+                source=KW_SOURCE,
+                origin=c["origin"],
+                destination=c["destination"],
+                departure_date=c["departure_date"],
+                return_date=c["return_date"],
+                rank=i,
+                price=opt.price,
+                currency=opt.currency or route.currency,
+                carriers=opt.carriers,
+                total_minutes=opt.total_minutes,
+                stops=opt.stops,
+                is_self_transfer=opt.is_virtual_interlining,
+            ))
+        stored += insert_point_rows(conn, rows)
+        LOG.info(
+            "kiwi point %s->%s dep=%s ret=%s ranks=%d vi=%s",
+            c["origin"], c["destination"],
+            c["departure_date"], c["return_date"], len(rows),
+            any(r.is_self_transfer for r in rows),
+        )
+    return stored
+
+
+def _months_between(start, end) -> list:
+    """Return first-of-month dates from start_month to end_month inclusive."""
+    from datetime import date as _d
+    out = []
+    cur = _d(start.year, start.month, 1)
+    last = _d(end.year, end.month, 1)
+    while cur <= last:
+        out.append(cur)
+        # Step to next month
+        yr = cur.year + (cur.month // 12)
+        mo = (cur.month % 12) + 1
+        cur = _d(yr, mo, 1)
+    return out
+
+
+def _make_clients(sources: list[str], dry_run: bool, conn: sqlite3.Connection):
+    """Build API clients per the source list.
+
+    Returns dict {source_id: client_or_None}. A None entry means the key
+    isn't set in .env (st.warning emitted) — caller skips that source.
+    In dry_run all entries are None.
+    """
+    out: dict[str, object | None] = {
+        "searchapi": None, "skyscanner": None,
+        "aviasales": None, "kiwi": None,
+    }
+    if dry_run:
+        return out
+    if "searchapi" in sources:
+        from lib.searchapi_io import SearchApiClient
+        try:
+            out["searchapi"] = SearchApiClient.from_env()
         except RuntimeError as exc:
             st.warning(f"SearchAPI disabled: {exc}")
     if "skyscanner" in sources:
+        from lib.skyscanner_rapidapi import SkyScrapperClient
         try:
-            sky = SkyScrapperClient.from_env(db_conn=conn)
+            out["skyscanner"] = SkyScrapperClient.from_env(db_conn=conn)
         except RuntimeError as exc:
             st.warning(f"Sky Scrapper disabled: {exc}")
-    return sa, sky
+    if "aviasales" in sources:
+        from lib.aviasales_api import AviasalesClient
+        try:
+            out["aviasales"] = AviasalesClient.from_env()
+        except RuntimeError as exc:
+            st.warning(f"Aviasales disabled: {exc}")
+    if "kiwi" in sources:
+        from lib.kiwi_rapidapi import KiwiClient
+        try:
+            out["kiwi"] = KiwiClient.from_env(db_conn=conn)
+        except RuntimeError as exc:
+            st.warning(f"Kiwi disabled: {exc}")
+    return out
 
 
 def run_all(
@@ -1309,12 +1525,18 @@ def run_all(
     from lib import sweep as sweep_mod
 
     out: dict = {"sweep": None, "followup": None, "alerts": [],
+                 "aviasales_rows": 0, "kiwi_rows": 0,
                  "errors": [], "logs": {}}
-    sa, sky = _make_clients(sources, dry_run, conn)
-    if sa is None and sky is None and not dry_run:
+    clients = _make_clients(sources, dry_run, conn)
+    sa = clients["searchapi"]
+    sky = clients["skyscanner"]
+    av = clients["aviasales"]
+    kw = clients["kiwi"]
+    if all(c is None for c in clients.values()) and not dry_run:
         st.error(
             "No API clients available. Either tick **Dry run** in Advanced "
-            "settings or add SEARCHAPI_KEY / RAPIDAPI_KEY to your .env."
+            "settings or add the relevant key/token to your .env "
+            "(SEARCHAPI_KEY / RAPIDAPI_KEY / TRAVELPAYOUTS_TOKEN)."
         )
         return out
 
@@ -1384,6 +1606,35 @@ def run_all(
                 state="complete",
             )
 
+    # --- Sub-step: Aviasales latest cached prices per (origin, dest) ---
+    if av is not None or (dry_run and "aviasales" in sources):
+        with st.status(
+            "Step 1b — Aviasales (Saudia + MENA coverage)", expanded=True,
+        ) as s:
+            def _av_sweep():
+                return _run_aviasales_sweep(conn, av, route, dry_run=dry_run)
+            result, err, log = _capture(_av_sweep)
+            out["aviasales_rows"] = result or 0
+            out["logs"]["aviasales"] = log
+            st.code(log or "(no output)")
+            if err:
+                out["errors"].append(("aviasales", err))
+                s.update(label=f"Aviasales failed: {err}", state="error")
+            elif dry_run:
+                planned = len(route.origins) * len(route.destinations)
+                s.update(
+                    label=(
+                        f"Aviasales dry-run — {planned} (origin,destination) "
+                        f"calls planned. No data written."
+                    ),
+                    state="complete",
+                )
+            else:
+                s.update(
+                    label=f"Aviasales done — {result or 0} cached price rows stored",
+                    state="complete",
+                )
+
     # --- Step 2: followup ---
     with st.status("Step 2/3 — Following up on candidates", expanded=True) as s:
         def _follow():
@@ -1421,6 +1672,36 @@ def run_all(
                 ),
                 state="complete",
             )
+
+    # --- Sub-step: Kiwi virtual-interlining check on followup candidates ---
+    if kw is not None or (dry_run and "kiwi" in sources):
+        with st.status(
+            "Step 2b — Kiwi (virtual interlining bundles)", expanded=True,
+        ) as s:
+            def _kw_sweep():
+                return _run_kiwi_followup(conn, kw, route, dry_run=dry_run)
+            result, err, log = _capture(_kw_sweep)
+            out["kiwi_rows"] = result or 0
+            out["logs"]["kiwi"] = log
+            st.code(log or "(no output)")
+            if err:
+                out["errors"].append(("kiwi", err))
+                s.update(label=f"Kiwi failed: {err}", state="error")
+            elif dry_run:
+                from lib.followup import select_candidates
+                planned = len(select_candidates(conn, route))
+                s.update(
+                    label=(
+                        f"Kiwi dry-run — would query up to {planned} candidates "
+                        f"for virtual-interlining bundles. No data written."
+                    ),
+                    state="complete",
+                )
+            else:
+                s.update(
+                    label=f"Kiwi done — {result or 0} point-query rows stored",
+                    state="complete",
+                )
 
     # Refresh SearchAPI quota now that the calls have completed. This is a
     # /me call (free, doesn't count against quota). Sky Scrapper's quota is
