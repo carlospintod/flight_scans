@@ -95,6 +95,17 @@ CREATE TABLE IF NOT EXISTS airport_cache (
     looked_up_at   TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS quota_snapshots (
+    checked_at   TEXT NOT NULL,
+    source       TEXT NOT NULL,    -- 'searchapi' | 'skyscanner'
+    remaining    INTEGER,           -- calls left in window
+    limit_total  INTEGER,           -- total allowance (NULL when unknown)
+    raw_json     TEXT               -- raw provider response for debugging
+);
+
+CREATE INDEX IF NOT EXISTS idx_quota_lookup
+    ON quota_snapshots (source, checked_at);
+
 CREATE TABLE IF NOT EXISTS alerts (
     fired_at         TEXT NOT NULL,
     route_id         TEXT NOT NULL,
@@ -364,6 +375,43 @@ def store_airport(
         """,
         (iata, sky_id, entity_id, display_name, _now_iso()),
     )
+
+
+def record_quota(
+    conn: sqlite3.Connection, *,
+    source: str,
+    remaining: int | None,
+    limit_total: int | None = None,
+    raw_json: str | None = None,
+) -> None:
+    """Insert a quota snapshot.
+
+    Append-only; each call writes a new row. Callers should not write
+    snapshots more than once per second per source — store the latest
+    observation, not every poll.
+    """
+    conn.execute(
+        """
+        INSERT INTO quota_snapshots (checked_at, source, remaining, limit_total, raw_json)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (_now_iso(), source, remaining, limit_total, raw_json),
+    )
+
+
+def latest_quota(
+    conn: sqlite3.Connection, *, source: str,
+) -> sqlite3.Row | None:
+    """Return the most recent quota snapshot for a source, or None."""
+    return conn.execute(
+        """
+        SELECT * FROM quota_snapshots
+        WHERE source = ?
+        ORDER BY checked_at DESC
+        LIMIT 1
+        """,
+        (source,),
+    ).fetchone()
 
 
 def latest_calendar_snapshot_per_itinerary(

@@ -178,6 +178,56 @@ class SearchApiClient:
         best = tuple(_parse_best_flights(data))
         return PointResponse(raw=data, best_flights=best)
 
+    # --- quota ----------------------------------------------------------
+
+    def check_quota(self) -> dict:
+        """Return the current SearchAPI quota.
+
+        Calls `/api/v1/me`, an undocumented but stable endpoint that
+        returns the account's remaining credits and monthly allowance.
+        The call itself does NOT count against the searches quota.
+
+        Response shape (observed):
+            {
+              "account": {
+                "current_month_usage": 0,
+                "monthly_allowance": 0,
+                "remaining_credits": 67
+              },
+              "api_usage": {"searches_this_hour": 0, "hourly_rate_limit": 200000}
+            }
+
+        Returns a normalized dict: {remaining, limit_total, raw}.
+        Raises SearchApiError on failure.
+        """
+        url = "https://www.searchapi.io/api/v1/me"
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+        try:
+            r = self._session.get(url, headers=headers, timeout=15)
+        except requests.RequestException as exc:
+            raise SearchApiError(0, f"network error: {exc}") from exc
+        if not r.ok:
+            raise SearchApiError(
+                r.status_code, f"/me returned {r.status_code}: {r.text[:200]}"
+            )
+        try:
+            data = r.json()
+        except ValueError as exc:
+            raise SearchApiError(r.status_code, "non-JSON response from /me") from exc
+        acct = (data or {}).get("account") or {}
+        remaining = acct.get("remaining_credits")
+        allowance = acct.get("monthly_allowance") or None  # 0 => unknown
+        # SearchAPI's free tier seems credit-based; total = used + remaining.
+        used = acct.get("current_month_usage") or 0
+        limit_total = allowance or (
+            (used + remaining) if isinstance(remaining, int) else None
+        )
+        return {
+            "remaining": remaining if isinstance(remaining, int) else None,
+            "limit_total": limit_total,
+            "raw": data,
+        }
+
     # --- internals -------------------------------------------------------
 
     def _request(self, params: dict[str, Any]) -> dict:

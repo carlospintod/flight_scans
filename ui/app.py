@@ -23,10 +23,13 @@ if str(REPO) not in sys.path:
 
 from ui._common import (  # noqa: E402
     apply_overrides,
+    latest_quota_for_ui,
     load_route_from_sidebar,
     next_action_hint,
+    quota_state,
     recent_alert_count,
     recent_capture_summary,
+    refresh_searchapi_quota,
     run_all,
     setup_page,
     status_dot_row,
@@ -85,6 +88,52 @@ status_dot_row([
     ("Rows captured (24h)", f"{captured_24h:,}", _capture_state(captured_24h)),
     ("Alerts (7d)", str(alerts_7d), _alert_state(alerts_7d)),
 ])
+
+# ---- API quotas row --------------------------------------------------------
+st.markdown("## API quotas")
+qcol, refresh_col = st.columns([3, 1])
+with refresh_col:
+    if st.button("Refresh SearchAPI quota", help="Calls /me (free, doesn't count against your quota)"):
+        try:
+            refresh_searchapi_quota(conn)
+            st.toast("SearchAPI quota refreshed.")
+        except Exception as exc:  # noqa: BLE001
+            st.error(f"Quota check failed: {exc}")
+
+sa_q = latest_quota_for_ui(conn, "searchapi")
+sky_q = latest_quota_for_ui(conn, "skyscanner")
+
+
+def _q_value(q: dict | None) -> str:
+    if not q or q.get("remaining") is None:
+        return "unknown"
+    rem = q["remaining"]
+    tot = q.get("limit_total")
+    # Only show a denominator if the API reported a separate allowance
+    # (i.e. tot is strictly greater than the current remaining).
+    return f"{rem} / {tot}" if tot and tot > rem else str(rem)
+
+
+def _q_caption(q: dict | None, source_label: str) -> str:
+    if not q:
+        return f"never checked — click Refresh (for SearchAPI) or run a Sky Scrapper call to learn."
+    return f"checked {q['age_hint']}"
+
+
+with qcol:
+    status_dot_row([
+        ("SearchAPI remaining", _q_value(sa_q),
+         quota_state(sa_q["remaining"] if sa_q else None,
+                     sa_q["limit_total"] if sa_q else None)),
+        ("Sky Scrapper remaining", _q_value(sky_q),
+         quota_state(sky_q["remaining"] if sky_q else None,
+                     sky_q["limit_total"] if sky_q else None)),
+    ])
+    st.caption(
+        f"SearchAPI: {_q_caption(sa_q, 'searchapi')}  ·  "
+        f"Sky Scrapper: {_q_caption(sky_q, 'skyscanner')} "
+        "(updates passively from RapidAPI response headers on each Sky Scrapper call)."
+    )
 
 st.info(next_action_hint(conn, base_route))
 
@@ -177,12 +226,26 @@ sa_active = "searchapi" in sources
 sky_active = "skyscanner" in sources
 
 st.markdown("## Run the pipeline")
+
+sa_planned = (n_sa_sweep if sa_active else 0) + (len(candidates) if sa_active else 0)
+sky_planned = n_sky_sweep
+sa_remaining = sa_q["remaining"] if sa_q and sa_q.get("remaining") is not None else None
+sky_remaining = sky_q["remaining"] if sky_q and sky_q.get("remaining") is not None else None
+
+
+def _budget_phrase(planned: int, remaining: int | None) -> str:
+    """Produce a 'will spend / remaining / would leave' phrase."""
+    if remaining is None:
+        return f"`{planned}` planned · remaining unknown"
+    after = remaining - planned
+    return f"`{planned}` planned · `{remaining}` remaining · would leave `{after}`"
+
+
 st.markdown(
-    f"**This run will use approximately:**  "
-    f"`{n_sa_sweep if sa_active else 0}` SearchAPI sweep calls  +  "
-    f"`{len(candidates) if sa_active else 0}` SearchAPI followup calls  +  "
-    f"`{n_sky_sweep}` Sky Scrapper curve calls"
-    f"{' (skyscanner off)' if not sky_active else ''}."
+    "**This run will use approximately:**  \n"
+    f"• SearchAPI: {_budget_phrase(sa_planned, sa_remaining)}  \n"
+    f"• Sky Scrapper: {_budget_phrase(sky_planned, sky_remaining)}"
+    + ("  (skyscanner off in this run)" if not sky_active else "")
 )
 st.caption(
     f"{len(windows)} sweep windows planned · {len(candidates)} followup "
@@ -190,6 +253,23 @@ st.caption(
     f"`{route.search_window.earliest_departure}` → `{route.search_window.latest_return}`, "
     f"stay `{route.stay.min_days}-{route.stay.max_days}d`."
 )
+
+# Warn loudly if planned > remaining for either source.
+warnings: list[str] = []
+if sa_active and sa_remaining is not None and sa_planned > sa_remaining:
+    warnings.append(
+        f"SearchAPI: this run wants {sa_planned} calls but you have only "
+        f"{sa_remaining} remaining. It will run until quota exhausts. "
+        f"Consider lowering Max SearchAPI calls in Advanced settings to "
+        f"≤ {sa_remaining}, or narrow the date window."
+    )
+if sky_active and sky_remaining is not None and sky_planned > sky_remaining:
+    warnings.append(
+        f"Sky Scrapper: this run wants {sky_planned} calls but you have only "
+        f"{sky_remaining} remaining. Untick `skyscanner` in Sources to skip it."
+    )
+for w in warnings:
+    st.warning(w)
 
 # ---- The button ------------------------------------------------------------
 run = st.button(

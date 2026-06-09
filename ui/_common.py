@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from dataclasses import replace as dc_replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+
+LOG = logging.getLogger(__name__)
 
 import altair as alt
 import pandas as pd
@@ -803,6 +806,90 @@ def recent_itinerary_options(
 # --- Status banner helpers --------------------------------------------------
 
 
+def quota_state(remaining: int | None, limit_total: int | None) -> str:
+    """Heuristic for the status dot below a quota number.
+
+    With a known total: percent-based — live ≥30%, degraded 10-30%,
+    blocked <10%. With only `remaining` known: absolute-thresholds —
+    live >20, degraded 5-20, blocked ≤5. Returns 'dim' when remaining
+    is None.
+    """
+    if remaining is None:
+        return "dim"
+    # When the limit equals remaining (the API didn't report a separate
+    # allowance), fall through to the absolute heuristic.
+    if limit_total and limit_total > remaining:
+        pct = remaining / limit_total * 100
+        if pct >= 30:
+            return "live"
+        if pct >= 10:
+            return "degraded"
+        return "blocked"
+    # Absolute fallback.
+    if remaining > 20:
+        return "live"
+    if remaining > 5:
+        return "degraded"
+    return "blocked"
+
+
+def latest_quota_for_ui(conn: sqlite3.Connection, source: str) -> dict | None:
+    """Return latest quota observation for `source`, with a freshness hint.
+
+    Output: {'remaining', 'limit_total', 'checked_at', 'age_hint'} or None.
+    """
+    row = db_mod.latest_quota(conn, source=source)
+    if not row:
+        return None
+    return {
+        "remaining": row["remaining"],
+        "limit_total": row["limit_total"],
+        "checked_at": row["checked_at"],
+        "age_hint": _format_age(row["checked_at"]),
+    }
+
+
+def _format_age(iso: str) -> str:
+    """'2h ago' / '3d ago' from an ISO timestamp; '?' if unparseable."""
+    try:
+        s = iso.replace("Z", "+00:00")
+        ts = datetime.fromisoformat(s)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+    except (ValueError, AttributeError):
+        return "?"
+    delta = datetime.now(timezone.utc) - ts
+    secs = int(delta.total_seconds())
+    if secs < 60:
+        return "just now"
+    if secs < 3600:
+        return f"{secs // 60}m ago"
+    if secs < 86400:
+        return f"{secs // 3600}h ago"
+    return f"{secs // 86400}d ago"
+
+
+def refresh_searchapi_quota(conn: sqlite3.Connection) -> dict | None:
+    """Call SearchAPI's /me to refresh quota, persist a snapshot.
+
+    Returns the normalized quota dict, or None if the key isn't set.
+    Raises on network/auth errors so the UI can surface them.
+    """
+    import json as _json
+    from lib.searchapi_io import SearchApiClient
+    try:
+        client = SearchApiClient.from_env()
+    except RuntimeError:
+        return None  # key not set
+    q = client.check_quota()
+    db_mod.record_quota(
+        conn, source=SEARCHAPI_SOURCE,
+        remaining=q["remaining"], limit_total=q["limit_total"],
+        raw_json=_json.dumps(q.get("raw") or {}),
+    )
+    return q
+
+
 def recent_capture_summary(conn: sqlite3.Connection, route) -> dict[str, int]:
     """Rows captured for this route in the last 24h, per table.
 
@@ -1300,6 +1387,15 @@ def run_all(
                 ),
                 state="complete",
             )
+
+    # Refresh SearchAPI quota now that the calls have completed. This is a
+    # /me call (free, doesn't count against quota). Sky Scrapper's quota is
+    # captured passively from response headers during the run itself.
+    if not dry_run and sa is not None:
+        try:
+            refresh_searchapi_quota(conn)
+        except Exception as exc:  # noqa: BLE001 — quota refresh must never break a run
+            LOG.warning("post-run SearchAPI quota refresh failed: %s", exc)
 
     # --- Step 3: alerts ---
     with st.status("Step 3/3 — Evaluating alerts", expanded=True) as s:

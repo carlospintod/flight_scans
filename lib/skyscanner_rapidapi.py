@@ -106,6 +106,9 @@ class SkyScrapperClient:
         self._timeout_s = timeout_s
         self._db_conn = db_conn
         self._override = override_airports or {}
+        # Latest rate-limit observation from the response headers. Populated
+        # by `_request` after every call. None until the first call returns.
+        self.latest_quota: dict | None = None
 
     @classmethod
     def from_env(cls, var: str = "RAPIDAPI_KEY", **kwargs) -> "SkyScrapperClient":
@@ -219,6 +222,32 @@ class SkyScrapperClient:
             r = self._session.get(url, headers=headers, params=params, timeout=self._timeout_s)
         except requests.RequestException as exc:
             raise SkyScrapperError(0, f"network error: {exc}") from exc
+        # Capture RapidAPI rate-limit headers — they're set on every response,
+        # successful or not. This is our only source of Sky Scrapper quota
+        # info (no /me-style endpoint exists).
+        rem = r.headers.get("x-ratelimit-requests-remaining")
+        tot = r.headers.get("x-ratelimit-requests-limit")
+        if rem is not None or tot is not None:
+            self.latest_quota = {
+                "remaining": int(rem) if rem is not None and rem.isdigit() else None,
+                "limit_total": int(tot) if tot is not None and tot.isdigit() else None,
+                "raw": {k: v for k, v in r.headers.items()
+                        if k.lower().startswith("x-ratelimit")},
+            }
+            # Persist to DB if a connection was provided at construction time.
+            if self._db_conn is not None:
+                try:
+                    from . import db as db_mod
+                    import json as _json
+                    db_mod.record_quota(
+                        self._db_conn,
+                        source=SOURCE_ID,
+                        remaining=self.latest_quota["remaining"],
+                        limit_total=self.latest_quota["limit_total"],
+                        raw_json=_json.dumps(self.latest_quota["raw"]),
+                    )
+                except Exception as exc:  # noqa: BLE001 — tracking failure must not break a sweep
+                    LOG.warning("skyscanner: failed to persist quota snapshot: %s", exc)
         try:
             payload = r.json()
         except ValueError:
