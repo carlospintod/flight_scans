@@ -10,6 +10,7 @@ from pathlib import Path
 import altair as alt
 import pandas as pd
 import streamlit as st
+from dotenv import load_dotenv
 
 from lib import config as config_mod
 from lib import db as db_mod
@@ -19,6 +20,12 @@ from lib.skyscanner_rapidapi import SOURCE_ID as SKYSCANNER_SOURCE
 REPO = Path(__file__).resolve().parents[1]
 ROUTES_DIR = REPO / "routes"
 DEFAULT_DB = REPO / "data" / "tracker.db"
+
+# Load .env once per Streamlit process. Explicit path so this works no
+# matter what cwd Streamlit was launched from. The CLI loads .env
+# from tracker.py; the UI used to load it from each page's deleted
+# Run-jobs file — that import was lost in the 2-page redesign.
+load_dotenv(dotenv_path=REPO / ".env")
 
 
 def setup_page(title: str) -> None:
