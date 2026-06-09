@@ -345,10 +345,27 @@ pre, code, [data-testid="stCodeBlock"] {{
     50% {{ box-shadow: 0 0 16px {GTM99["green"]}; }}
 }}
 
-/* ---- Hide Streamlit's default brand chrome ------------------------ */
-#MainMenu {{ visibility: hidden; }}
-[data-testid="stToolbar"] {{ visibility: hidden; }}
-footer {{ visibility: hidden; }}
+/* ---- Hide Streamlit's "Made with Streamlit" footer, keep toolbar -- */
+/* Note: we deliberately do NOT hide [data-testid="stToolbar"] — when
+   the sidebar is collapsed, the reopen button lives inside it. Hiding
+   the toolbar makes the sidebar unrecoverable without a reload. */
+footer {{ visibility: hidden; height: 0 !important; }}
+[data-testid="stStatusWidget"] [data-testid="stToolbarActions"] {{ visibility: hidden; }}
+
+/* ---- Force the sidebar collapse/expand control to always be visible
+       and readable, even on top of our dark background ------------- */
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseButton"],
+button[kind="header"] {{
+    visibility: visible !important;
+    opacity: 1 !important;
+    color: {GTM99["green"]} !important;
+}}
+[data-testid="collapsedControl"] svg,
+[data-testid="stSidebarCollapseButton"] svg {{
+    fill: {GTM99["green"]} !important;
+    color: {GTM99["green"]} !important;
+}}
 </style>
 """
 
