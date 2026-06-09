@@ -1,0 +1,15 @@
+# Streamlit base theme — GTM99 dark terminal palette.
+#
+# Everything Streamlit's theme API can reach (sidebar, widgets, default
+# button colors, st.metric chrome, alt charts' baseline contrast) is set
+# here. The fine-grained terminal styling (IBM Plex fonts, ALL-CAPS
+# section titles, glow effects, blinking cursor) lives in the CSS
+# injected by ui/_common.apply_theme().
+
+[theme]
+base = "dark"
+primaryColor = "#00ff41"             # matrix green — buttons, focus rings, slider thumbs
+backgroundColor = "#0a0b10"          # --bg
+secondaryBackgroundColor = "#0f1018" # --bg2 (sidebar, expanders, code blocks)
+textColor = "#c8cad8"                # --text
+font = "monospace"

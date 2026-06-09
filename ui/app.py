@@ -29,6 +29,8 @@ from ui._common import (  # noqa: E402
     recent_capture_summary,
     run_all,
     setup_page,
+    status_dot_row,
+    terminal_header,
     _latest_snapshot_age,
 )
 
@@ -36,28 +38,53 @@ setup_page("Run")
 base_route, conn = load_route_from_sidebar()
 ALERTS_LOG = REPO / "data" / "alerts.log"
 
-st.title(f"Flight tracker — {base_route.name}")
 sw = base_route.search_window
-st.caption(
-    f"Origins {', '.join(base_route.origins)} → destinations "
-    f"{', '.join(base_route.destinations)}.  "
-    f"Stay {base_route.stay.min_days}-{base_route.stay.max_days} days.  "
-    f"Search window {sw.earliest_departure} → {sw.latest_return}.  "
-    f"Currency {base_route.currency}."
+terminal_header(
+    f"FLIGHT_TRACKER // {base_route.name}",
+    subtitle=(
+        f"{', '.join(base_route.origins)} → {', '.join(base_route.destinations)}  ·  "
+        f"stay {base_route.stay.min_days}-{base_route.stay.max_days}d  ·  "
+        f"window {sw.earliest_departure} → {sw.latest_return}  ·  "
+        f"{base_route.currency}"
+    ),
 )
 
 # ---- Status banner ----------------------------------------------------------
-st.markdown("## Status")
+st.markdown("## System status")
 
 age = _latest_snapshot_age(conn, base_route) or "never"
 capture = recent_capture_summary(conn, base_route)
+captured_24h = capture["calendar"] + capture["curve"] + capture["point"]
 alerts_7d = recent_alert_count(conn, base_route, days=7)
 
-c1, c2, c3 = st.columns(3)
-c1.metric("Last sweep", age)
-c2.metric("Rows captured (last 24h)",
-          f"{capture['calendar'] + capture['curve'] + capture['point']:,}")
-c3.metric("Alerts fired (last 7d)", str(alerts_7d))
+
+def _age_state(s: str) -> str:
+    if s == "never":
+        return "dim"
+    if "<1h" in s or "h ago" in s:
+        return "live"
+    if "d ago" in s:
+        try:
+            n = int(s.split("d")[0])
+            return "live" if n < 14 else "degraded"
+        except ValueError:
+            return "degraded"
+    return "dim"
+
+
+def _capture_state(n: int) -> str:
+    return "live" if n > 0 else "dim"
+
+
+def _alert_state(n: int) -> str:
+    return "live" if n > 0 else "dim"
+
+
+status_dot_row([
+    ("Last sweep", age, _age_state(age)),
+    ("Rows captured (24h)", f"{captured_24h:,}", _capture_state(captured_24h)),
+    ("Alerts (7d)", str(alerts_7d), _alert_state(alerts_7d)),
+])
 
 st.info(next_action_hint(conn, base_route))
 

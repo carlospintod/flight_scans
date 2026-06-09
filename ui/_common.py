@@ -27,6 +27,383 @@ def setup_page(title: str) -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
+    apply_theme()
+
+
+# ============================================================================
+# GTM99 visual theme (full terminal transformation).
+# ============================================================================
+
+
+# Centralised palette — referenced both in the CSS string below and in the
+# Altair charts in ui/pages/1_Explore.py (kept readable defaults per the
+# user's chart-color decision; this is here for future reference).
+GTM99 = {
+    "bg": "#0a0b10",
+    "bg2": "#0f1018",
+    "bg3": "#151620",
+    "border": "#1e1f32",
+    "border_bright": "#2c2d44",
+    "green": "#00ff41",
+    "green_dim": "#00b830",
+    "green_bg": "rgba(0,255,65,0.07)",
+    "cyan": "#00d4ff",
+    "cyan_bg": "rgba(0,212,255,0.07)",
+    "amber": "#ffcc00",
+    "amber_bg": "rgba(255,204,0,0.07)",
+    "red": "#ff4455",
+    "red_bg": "rgba(255,68,85,0.07)",
+    "text": "#c8cad8",
+    "text_bright": "#e4e6f0",
+    "text_mid": "#8e91a8",
+    "dim": "#585b72",
+    "hint": "#6e7190",
+}
+
+
+_THEME_CSS = f"""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+/* ---- Base font + background ---------------------------------------- */
+html, body, [data-testid="stAppViewContainer"], [data-testid="stAppViewContainer"] * {{
+    font-family: 'IBM Plex Mono', 'Consolas', 'Courier New', monospace !important;
+    -webkit-font-smoothing: antialiased;
+}}
+.stApp {{
+    background-color: {GTM99["bg"]} !important;
+    color: {GTM99["text"]};
+}}
+[data-testid="stSidebar"], [data-testid="stSidebarUserContent"] {{
+    background-color: {GTM99["bg2"]} !important;
+    border-right: 1px solid {GTM99["border"]};
+}}
+[data-testid="stHeader"] {{
+    background: {GTM99["bg2"]} !important;
+    border-bottom: 1px solid {GTM99["border"]};
+}}
+
+/* ---- Markdown headers --------------------------------------------- */
+.stMarkdown h1 {{
+    color: {GTM99["green"]} !important;
+    letter-spacing: 3px;
+    text-shadow: 0 0 14px rgba(0,255,65,0.2);
+    font-weight: 700;
+    font-size: 26px;
+    margin-bottom: 4px;
+}}
+.stMarkdown h2 {{
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    color: {GTM99["green"]} !important;
+    letter-spacing: 2px !important;
+    text-transform: uppercase !important;
+    padding-bottom: 8px !important;
+    border-bottom: 1px solid {GTM99["border"]} !important;
+    margin-bottom: 14px !important;
+    margin-top: 30px !important;
+}}
+.stMarkdown h3 {{
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    color: {GTM99["text_bright"]} !important;
+    letter-spacing: 1px !important;
+    margin-top: 18px !important;
+    margin-bottom: 8px !important;
+}}
+.stMarkdown p, .stMarkdown li {{
+    color: {GTM99["text"]};
+    font-size: 13px;
+}}
+.stMarkdown strong {{ color: {GTM99["text_bright"]}; }}
+.stMarkdown code {{
+    background: {GTM99["bg3"]} !important;
+    border: 1px solid {GTM99["border"]} !important;
+    color: {GTM99["green"]} !important;
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-size: 12px;
+}}
+
+/* ---- Captions (descriptive paragraphs) ---------------------------- */
+[data-testid="stCaptionContainer"],
+.stCaption, .stCaption p {{
+    font-family: 'IBM Plex Sans', system-ui, sans-serif !important;
+    color: {GTM99["hint"]} !important;
+    font-size: 12.5px !important;
+    font-weight: 400 !important;
+    letter-spacing: 0.01em !important;
+    line-height: 1.55;
+}}
+
+/* ---- Buttons ------------------------------------------------------- */
+.stButton > button {{
+    background: transparent !important;
+    border: 1px solid {GTM99["border_bright"]} !important;
+    color: {GTM99["text_mid"]} !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    letter-spacing: 1.5px !important;
+    text-transform: uppercase !important;
+    border-radius: 3px !important;
+    padding: 8px 18px !important;
+    transition: all 0.15s !important;
+}}
+.stButton > button:hover {{
+    border-color: {GTM99["green_dim"]} !important;
+    color: {GTM99["green"]} !important;
+    background: {GTM99["green_bg"]} !important;
+}}
+.stButton > button:focus, .stButton > button:active {{
+    outline: none !important;
+    box-shadow: 0 0 0 1px {GTM99["green_dim"]} !important;
+}}
+.stButton > button[kind="primary"] {{
+    border-color: {GTM99["green_dim"]} !important;
+    color: {GTM99["green"]} !important;
+    text-shadow: 0 0 8px rgba(0,255,65,0.25);
+}}
+.stButton > button[kind="primary"]:hover {{
+    background: {GTM99["green_bg"]} !important;
+    box-shadow: 0 0 16px rgba(0,255,65,0.25) !important;
+}}
+
+/* ---- Metrics ------------------------------------------------------- */
+[data-testid="stMetric"] {{
+    background: {GTM99["bg2"]};
+    border: 1px solid {GTM99["border"]};
+    border-radius: 4px;
+    padding: 14px 18px;
+}}
+[data-testid="stMetricLabel"] p {{
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    color: {GTM99["text_mid"]} !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1.5px !important;
+}}
+[data-testid="stMetricValue"] {{
+    color: {GTM99["text_bright"]} !important;
+    font-weight: 700 !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+}}
+
+/* ---- Alerts (st.info / warning / error / success) ----------------- */
+.stAlert {{
+    font-family: 'IBM Plex Mono', monospace !important;
+    border-radius: 4px !important;
+    font-size: 12.5px !important;
+    line-height: 1.55 !important;
+    border-left-width: 3px !important;
+}}
+[data-testid="stNotificationContentInfo"], div[data-testid*="Info"] {{
+    color: {GTM99["cyan"]} !important;
+}}
+[data-testid="stNotificationContentWarning"], div[data-testid*="Warning"] {{
+    color: {GTM99["amber"]} !important;
+}}
+[data-testid="stNotificationContentError"], div[data-testid*="Error"] {{
+    color: {GTM99["red"]} !important;
+}}
+[data-testid="stNotificationContentSuccess"], div[data-testid*="Success"] {{
+    color: {GTM99["green"]} !important;
+}}
+
+/* ---- Expanders ---------------------------------------------------- */
+[data-testid="stExpander"] details {{
+    background: {GTM99["bg2"]} !important;
+    border: 1px solid {GTM99["border"]} !important;
+    border-radius: 4px !important;
+}}
+[data-testid="stExpander"] summary {{
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    color: {GTM99["text_mid"]} !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1px !important;
+}}
+[data-testid="stExpander"] summary:hover {{
+    color: {GTM99["green"]} !important;
+}}
+
+/* ---- Inputs / widgets --------------------------------------------- */
+.stTextInput input, .stNumberInput input, .stDateInput input,
+.stSelectbox div[data-baseweb="select"], .stMultiSelect div[data-baseweb="select"] {{
+    background: {GTM99["bg3"]} !important;
+    color: {GTM99["text_bright"]} !important;
+    border-color: {GTM99["border"]} !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+}}
+.stCheckbox label, .stRadio label, .stToggle label {{
+    color: {GTM99["text"]} !important;
+}}
+.stSlider [role="slider"] {{
+    background-color: {GTM99["green"]} !important;
+}}
+
+/* ---- Tables / DataFrames ------------------------------------------ */
+[data-testid="stDataFrame"], .stDataFrame {{
+    background: {GTM99["bg2"]} !important;
+    border: 1px solid {GTM99["border"]} !important;
+    border-radius: 4px !important;
+}}
+
+/* ---- Status / progress -------------------------------------------- */
+[data-testid="stStatusWidget"] {{
+    background: {GTM99["bg2"]};
+    border: 1px solid {GTM99["border"]};
+    border-radius: 4px;
+}}
+
+/* ---- Code blocks (logs from run-everything) ----------------------- */
+pre, code, [data-testid="stCodeBlock"] {{
+    background: {GTM99["bg2"]} !important;
+    border: 1px solid {GTM99["border"]} !important;
+    color: {GTM99["text"]} !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 11.5px !important;
+}}
+
+/* ---- Scrollbar ----------------------------------------------------- */
+::-webkit-scrollbar {{ width: 6px; height: 6px; }}
+::-webkit-scrollbar-track {{ background: {GTM99["bg"]}; }}
+::-webkit-scrollbar-thumb {{ background: {GTM99["border_bright"]}; border-radius: 3px; }}
+::-webkit-scrollbar-thumb:hover {{ background: {GTM99["dim"]}; }}
+
+/* ---- Terminal logo header ----------------------------------------- */
+.gtm-logo {{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 26px;
+    font-weight: 700;
+    color: {GTM99["green"]};
+    letter-spacing: 3px;
+    text-shadow: 0 0 14px rgba(0,255,65,0.2);
+    margin-bottom: 0;
+    text-transform: uppercase;
+}}
+.gtm-logo .cur {{
+    animation: gtm-blink 1s step-end infinite;
+}}
+@keyframes gtm-blink {{ 50% {{ opacity: 0; }} }}
+.gtm-sub {{
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    color: {GTM99["hint"]};
+    font-size: 12.5px;
+    margin-top: 4px;
+    letter-spacing: 0.01em;
+}}
+
+/* ---- Status dot metric --------------------------------------------- */
+.gtm-status-row {{
+    display: flex; gap: 24px; align-items: stretch; margin: 12px 0 18px;
+}}
+.gtm-status-card {{
+    flex: 1; background: {GTM99["bg2"]};
+    border: 1px solid {GTM99["border"]};
+    border-radius: 4px;
+    padding: 14px 18px;
+}}
+.gtm-status-label {{
+    font-size: 10px; font-weight: 700; color: {GTM99["text_mid"]};
+    text-transform: uppercase; letter-spacing: 1.5px;
+}}
+.gtm-status-value {{
+    font-size: 22px; font-weight: 700;
+    color: {GTM99["text_bright"]}; margin-top: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+}}
+.gtm-status-dot {{
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; margin-top: 6px;
+}}
+.gtm-status-dot::before {{
+    content: ''; width: 8px; height: 8px; border-radius: 50%;
+    display: inline-block;
+}}
+.gtm-status-dot.live {{ color: {GTM99["green"]}; }}
+.gtm-status-dot.live::before {{
+    background: {GTM99["green"]};
+    box-shadow: 0 0 6px {GTM99["green"]};
+    animation: gtm-pulse-green 2s ease-in-out infinite;
+}}
+.gtm-status-dot.degraded {{ color: {GTM99["amber"]}; }}
+.gtm-status-dot.degraded::before {{
+    background: {GTM99["amber"]}; box-shadow: 0 0 6px {GTM99["amber"]};
+}}
+.gtm-status-dot.blocked {{ color: {GTM99["red"]}; }}
+.gtm-status-dot.blocked::before {{
+    background: {GTM99["red"]}; box-shadow: 0 0 6px {GTM99["red"]};
+}}
+.gtm-status-dot.dim {{ color: {GTM99["dim"]}; }}
+.gtm-status-dot.dim::before {{
+    background: {GTM99["dim"]};
+}}
+@keyframes gtm-pulse-green {{
+    0%, 100% {{ box-shadow: 0 0 6px {GTM99["green"]}; }}
+    50% {{ box-shadow: 0 0 16px {GTM99["green"]}; }}
+}}
+
+/* ---- Hide Streamlit's default brand chrome ------------------------ */
+#MainMenu {{ visibility: hidden; }}
+[data-testid="stToolbar"] {{ visibility: hidden; }}
+footer {{ visibility: hidden; }}
+</style>
+"""
+
+
+def apply_theme() -> None:
+    """Inject the GTM99 theme CSS into the current Streamlit page.
+
+    Called automatically by `setup_page`. Safe to call multiple times —
+    repeated `st.markdown` injections just add identical <style> blocks
+    that the browser deduplicates.
+    """
+    st.markdown(_THEME_CSS, unsafe_allow_html=True)
+
+
+def terminal_header(title: str, subtitle: str | None = None) -> None:
+    """Render a GTM99-style page header with blinking cursor.
+
+    Use instead of `st.title(...)` to get the matrix-green logo treatment
+    plus an optional sans-serif subtitle line.
+    """
+    # Underscores look more terminal than spaces; preserve user-passed
+    # case but uppercase via CSS.
+    safe_title = title.replace("<", "&lt;").replace(">", "&gt;")
+    safe_sub = (subtitle or "").replace("<", "&lt;").replace(">", "&gt;")
+    sub_html = f'<div class="gtm-sub">{safe_sub}</div>' if subtitle else ""
+    st.markdown(
+        f'<div class="gtm-logo">{safe_title}<span class="cur">_</span></div>'
+        f"{sub_html}",
+        unsafe_allow_html=True,
+    )
+
+
+def status_dot_row(items: list[tuple[str, str, str]]) -> None:
+    """Render a row of metric cards with colored status dots.
+
+    `items` is a list of (label, value, state) where state is one of
+    'live', 'degraded', 'blocked', 'dim'. Use 'live' (pulsing green) for
+    fresh / healthy state, 'degraded' (amber) for borderline, 'blocked'
+    (red) for error, 'dim' (grey) for "nothing to see here yet".
+    """
+    cards = []
+    for label, value, state in items:
+        s_label = label.replace("<", "&lt;").replace(">", "&gt;")
+        s_value = str(value).replace("<", "&lt;").replace(">", "&gt;")
+        cards.append(
+            f'<div class="gtm-status-card">'
+            f'<div class="gtm-status-label">{s_label}</div>'
+            f'<div class="gtm-status-value">{s_value}</div>'
+            f'<div class="gtm-status-dot {state}">{state}</div>'
+            f"</div>"
+        )
+    st.markdown(
+        f'<div class="gtm-status-row">{"".join(cards)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def list_routes() -> list[str]:

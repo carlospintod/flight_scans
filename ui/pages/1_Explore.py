@@ -34,16 +34,16 @@ from ui._common import (  # noqa: E402
     load_route_from_sidebar,
     setup_page,
     stops_distribution,
+    terminal_header,
     top_alternatives,
 )
 
 setup_page("Explore")
 route, conn = load_route_from_sidebar()
 
-st.title(f"Explore — {route.name}")
-st.caption(
-    "Slice the data however you want. Every chart respects the sidebar "
-    "filters."
+terminal_header(
+    f"EXPLORE // {route.name}",
+    subtitle="Slice the data however you want. Every chart respects the sidebar filters.",
 )
 
 # ---- Sidebar filters --------------------------------------------------------
