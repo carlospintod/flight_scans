@@ -79,22 +79,31 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stAppViewContainer
 }}
 /* Re-apply Material Symbols to Streamlit's icon elements — without this
    the `*` rule above overrides their icon font and the icon NAMES
-   ('keyboard_double_arrow_left', 'arrow_right', etc.) render as text. */
+   ('keyboard_double_arrow_left', 'arrow_right', 'check' on status,
+   etc.) render as text. */
 [data-testid="stIconMaterial"],
+[data-testid*="Icon"][data-testid*="Material"],
 [class*="material-symbols"],
 [class*="material-icons"],
+[class*="MaterialSymbol"],
+[class*="StyledIcon"],
 .material-symbols-rounded,
 .material-symbols-outlined,
 .material-icons,
 i.material-icons,
 span.material-symbols-rounded,
-span.material-symbols-outlined {{
+span.material-symbols-outlined,
+/* Status widget icon: Streamlit doesn't expose a stable testid for it,
+   so we target the first span inside the status widget header. */
+[data-testid="stStatusWidget"] > details > summary > span:first-child,
+[data-testid="stExpander"] details > summary svg + span {{
     font-family: 'Material Symbols Rounded', 'Material Symbols Outlined',
                  'Material Icons', sans-serif !important;
     font-feature-settings: 'liga' !important;
     -webkit-font-feature-settings: 'liga' !important;
     text-transform: none !important;
     letter-spacing: normal !important;
+    text-rendering: optimizeLegibility !important;
 }}
 .stApp {{
     background-color: {GTM99["bg"]} !important;
@@ -1233,6 +1242,18 @@ def run_all(
             s.update(label=f"Sweep failed: {err}", state="error")
         elif result is None:
             s.update(label="Sweep skipped (no client)", state="error")
+        elif dry_run:
+            # In dry-run, entries_stored is always 0. Surface the plan instead.
+            sky_pairs = (len(route.origins) * len(route.destinations)
+                         if "skyscanner" in sources else 0)
+            s.update(
+                label=(
+                    f"Sweep dry-run — {result.windows_planned} SearchAPI windows "
+                    f"would be called, {sky_pairs} Sky Scrapper curve calls planned. "
+                    f"No data written."
+                ),
+                state="complete",
+            )
         else:
             s.update(
                 label=(
@@ -1263,6 +1284,14 @@ def run_all(
         elif result.candidates == 0:
             s.update(label="No followup candidates — nothing matched the watch threshold.",
                      state="complete")
+        elif dry_run:
+            s.update(
+                label=(
+                    f"Followup dry-run — {result.candidates} candidate itineraries "
+                    f"would be point-queried. No data written."
+                ),
+                state="complete",
+            )
         else:
             s.update(
                 label=(
@@ -1287,7 +1316,12 @@ def run_all(
             s.update(label=f"Alerts failed: {err}", state="error")
         else:
             s.update(
-                label=f"Alerts done — {len(out['alerts'])} fired",
+                label=(
+                    f"Alerts done — {len(out['alerts'])} fired "
+                    "(alerts evaluation is pure SQL — same behavior in dry-run)"
+                    if dry_run else
+                    f"Alerts done — {len(out['alerts'])} fired"
+                ),
                 state="complete",
             )
 

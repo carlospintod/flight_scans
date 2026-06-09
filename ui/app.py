@@ -215,19 +215,32 @@ if run:
     alerts = result.get("alerts") or []
     errors = result.get("errors") or []
     parts: list[str] = []
-    if sw_res:
-        parts.append(
-            f"sweep: SearchAPI {sw_res.calls_made} calls / {sw_res.entries_stored} rows; "
-            f"Sky Scrapper {sw_res.curve_calls_made} calls / "
-            f"{sw_res.curve_entries_stored} curve rows"
-        )
-    if fu_res:
-        parts.append(
-            f"followup: SearchAPI {fu_res.calls_made} calls / "
-            f"Sky Scrapper {fu_res.skyscanner_calls} calls / "
-            f"{fu_res.rows_stored} rows total"
-        )
-    parts.append(f"alerts: {len(alerts)} fired")
+    if dry_run:
+        # Dry-run summary: show what WOULD have happened.
+        sky_pairs = (len(route.origins) * len(route.destinations)
+                     if "skyscanner" in sources else 0)
+        if sw_res:
+            parts.append(
+                f"sweep planned: {sw_res.windows_planned} SearchAPI windows "
+                f"+ {sky_pairs} Sky Scrapper curve calls"
+            )
+        if fu_res:
+            parts.append(f"followup planned: {fu_res.candidates} candidate itineraries")
+        parts.append(f"alerts: {len(alerts)} would fire")
+    else:
+        if sw_res:
+            parts.append(
+                f"sweep: SearchAPI {sw_res.calls_made} calls / {sw_res.entries_stored} rows; "
+                f"Sky Scrapper {sw_res.curve_calls_made} calls / "
+                f"{sw_res.curve_entries_stored} curve rows"
+            )
+        if fu_res:
+            parts.append(
+                f"followup: SearchAPI {fu_res.calls_made} calls / "
+                f"Sky Scrapper {fu_res.skyscanner_calls} calls / "
+                f"{fu_res.rows_stored} rows total"
+            )
+        parts.append(f"alerts: {len(alerts)} fired")
     summary = " · ".join(parts)
 
     if errors:
@@ -236,6 +249,12 @@ if run:
             f"{', '.join(s for s, _ in errors)}. Details in the step logs above."
         )
         st.warning(summary)
+    elif dry_run:
+        st.info(
+            "**Dry run complete — no API calls were made and nothing was written.**\n\n"
+            f"{summary}\n\n"
+            "Untick **Dry run** in Advanced settings to do this for real."
+        )
     else:
         st.success(f"Done. {summary}")
         st.markdown(
