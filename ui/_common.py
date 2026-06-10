@@ -893,17 +893,17 @@ def refresh_searchapi_quota(conn: sqlite3.Connection) -> dict | None:
 def refresh_aviasales_quota(conn: sqlite3.Connection) -> dict | None:
     """Make one cheap Aviasales call to learn the (soft) rate-limit.
 
-    Travelpayouts doesn't expose a /me endpoint and may not return
-    explicit rate-limit headers either. This helper makes a tiny
-    cheap_prices call; whatever the response says (success or 429),
-    the client persists any headers it does get into the DB.
+    Travelpayouts doesn't expose a /me endpoint and (based on the
+    2026-06-10 probe) doesn't return X-RateLimit-* headers either —
+    so this function almost always returns None even on a fully
+    successful call. The caller distinguishes 'token missing' (raises
+    RuntimeError) from 'no headers returned' (returns None) properly.
     """
     import json as _json
     from lib.aviasales_api import AviasalesClient, AviasalesError
-    try:
-        client = AviasalesClient.from_env()
-    except RuntimeError:
-        return None
+    # Propagate RuntimeError so the UI can distinguish missing-token
+    # from successful-but-headerless. Do NOT swallow it.
+    client = AviasalesClient.from_env()
     try:
         client.check_quota()
     except AviasalesError:
@@ -919,13 +919,14 @@ def refresh_aviasales_quota(conn: sqlite3.Connection) -> dict | None:
 
 
 def refresh_kiwi_quota(conn: sqlite3.Connection) -> dict | None:
-    """Make one cheap Kiwi call to capture the RapidAPI rate-limit headers."""
+    """Make one cheap Kiwi call to capture the RapidAPI rate-limit headers.
+
+    Raises RuntimeError if RAPIDAPI_KEY is not set so the UI can
+    distinguish 'key missing' from 'call succeeded but no headers'.
+    """
     from datetime import date as _d
     from lib.kiwi_rapidapi import KiwiClient, KiwiError
-    try:
-        client = KiwiClient.from_env(db_conn=conn)
-    except RuntimeError:
-        return None
+    client = KiwiClient.from_env(db_conn=conn)
     # Use a date safely in the future so Kiwi can answer; the call's
     # response is irrelevant — we just need the headers.
     probe_dep = _d.today().replace(day=1)

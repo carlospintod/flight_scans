@@ -126,19 +126,23 @@ with refresh_col:
     if st.button(
         "Refresh Aviasales quota",
         help=(
-            "Aviasales has no /me endpoint. Costs 1 cheap_prices call to "
-            "the soft-rate-limited /v1/prices/cheap endpoint."
+            "Aviasales has no /me endpoint AND doesn't return rate-limit "
+            "headers either, so this call just confirms the token works. "
+            "Costs 1 cheap_prices call to /v1/prices/cheap."
         ),
         use_container_width=True,
     ):
         try:
             q = refresh_aviasales_quota(conn)
             if q is None:
-                st.warning("TRAVELPAYOUTS_TOKEN is not set in .env.")
-            elif not q.get("remaining") and not q.get("limit_total"):
-                st.toast("Aviasales reachable; provider did not return rate-limit headers.")
+                st.toast(
+                    "Aviasales reachable — provider doesn't expose rate-limit "
+                    "headers, so no number to display. Token is valid."
+                )
             else:
                 st.toast("Aviasales quota refreshed.")
+        except RuntimeError as exc:
+            st.warning(f"Aviasales disabled: {exc}")
         except Exception as exc:  # noqa: BLE001
             st.error(f"Aviasales quota check failed: {exc}")
     if st.button(
@@ -152,9 +156,11 @@ with refresh_col:
         try:
             q = refresh_kiwi_quota(conn)
             if q is None:
-                st.warning("RAPIDAPI_KEY is not set in .env.")
+                st.toast("Kiwi reachable; provider returned no rate-limit headers.")
             else:
                 st.toast("Kiwi quota refreshed.")
+        except RuntimeError as exc:
+            st.warning(f"Kiwi disabled: {exc}")
         except Exception as exc:  # noqa: BLE001
             st.error(f"Kiwi quota check failed: {exc}")
 
