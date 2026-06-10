@@ -1331,24 +1331,30 @@ def _run_aviasales_sweep(conn, av_client, route, *, dry_run: bool) -> int:
     from lib.db import CalendarRow, insert_calendar_rows
     snapshot_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     stored = 0
-    # Cover the next 6 months of departure-month buckets — Aviasales'
-    # latest_prices returns up to `limit` matches per month.
-    sw = route.search_window
-    months = _months_between(sw.earliest_departure, sw.latest_return)[:6]
+    # Per the 2026-06-10 probe, /v2/prices/latest returns empty for
+    # MAD->NBO on most months — Aviasales' cache is sparse on this
+    # corridor. /v1/prices/cheap is more reliable: 1 call returns the
+    # currently-cheapest cached observations per destination, including
+    # carriers Google Flights skips (especially SV/Saudia).
+    #
+    # We call cheap_prices with no date filter and accept whatever the
+    # cache currently knows. This is cheap (1 call per O-D pair) and
+    # broad. We do call it once per route.origin × route.destination —
+    # so 2 origins × 1 destination = 2 calls for spain-nairobi.
     for origin in route.origins:
         for destination in route.destinations:
             month_total = 0
-            for m in months:
+            for m in [None]:  # single pass — no month filter
                 try:
-                    resp = av_client.latest_prices(
+                    resp = av_client.cheap_prices(
                         origin=origin, destination=destination,
-                        depart_date_month=m, currency=route.currency,
-                        limit=30,
+                        depart_date=None, return_date=None,
+                        currency=route.currency,
                     )
                 except AviasalesError as exc:
                     LOG.warning(
-                        "aviasales %s->%s month=%s err=%s",
-                        origin, destination, m, exc,
+                        "aviasales %s->%s err=%s",
+                        origin, destination, exc,
                     )
                     continue
                 rows: list[CalendarRow] = []

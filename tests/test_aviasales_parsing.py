@@ -97,3 +97,50 @@ def test_handles_data_missing_or_non_list():
     assert _parse_quotes({}, "EUR") == []
     assert _parse_quotes({"data": None}, "EUR") == []
     assert _parse_quotes({"data": "not a list"}, "EUR") == []
+
+
+def test_parses_v1_cheap_nested_shape():
+    """Real /v1/prices/cheap shape observed via probe 2026-06-10:
+
+        {
+          "data": {"NBO": {"1": {<quote>}, "2": {<quote>}, ...}},
+          "currency": "eur",
+          "success": true
+        }
+    """
+    payload = {
+        "success": True,
+        "currency": "eur",
+        "data": {
+            "NBO": {
+                "1": {
+                    "airline": "EY",
+                    "departure_at": "2026-09-07T10:45:00+02:00",
+                    "return_at": "2026-09-19T19:00:00+03:00",
+                    "expires_at": "2026-06-10T01:01:47Z",
+                    "price": 558,
+                    "flight_number": 102,
+                    "duration": 3360,
+                },
+                "2": {
+                    "airline": "SV",
+                    "departure_at": "2026-10-15T14:30:00+02:00",
+                    "return_at": "2026-12-10T09:55:00+03:00",
+                    "price": 412,
+                    "flight_number": 212,
+                },
+            },
+        },
+    }
+    quotes = _parse_quotes(payload, "EUR", origin_default="MAD")
+    assert len(quotes) == 2
+    airlines = {q.airline for q in quotes}
+    assert airlines == {"EY", "SV"}
+    # Destination patched in from outer key; origin patched from request.
+    assert all(q.destination == "NBO" for q in quotes)
+    assert all(q.origin == "MAD" for q in quotes)
+
+
+def test_empty_nested_shape_is_handled():
+    payload = {"success": True, "currency": "eur", "data": {"NBO": {}}}
+    assert _parse_quotes(payload, "EUR") == []

@@ -223,68 +223,109 @@ class KiwiClient:
 
 
 def _parse_options(payload: dict, currency: str) -> list[KiwiOption]:
-    """Parse itineraries from a Kiwi response.
+    """Parse `itineraries[]` from a Kiwi round-trip response.
 
-    Kiwi/emir12's response keys can vary by endpoint version. We try
-    `itineraries`, `data`, and `flights` in order to find the array.
-    Inside each item we look for the standard Kiwi field set.
+    Real shape (verified via probe response 2026-06-10):
+        {
+          "__typename": "Itineraries",
+          "metadata": {...},
+          "itineraries": [
+            {
+              "price": {"amount": "1101", "priceBeforeDiscount": "1101"},
+              "priceEur": {"amount": "1101"},
+              "travelHack": {
+                "isVirtualInterlining": true,
+                "isTrueHiddenCity": false,
+                "isThrowawayTicket": false
+              },
+              "outbound": {
+                "duration": 84900,   # seconds
+                "sectorSegments": [
+                  {"segment": {"carrier": {"code": "FR"},
+                               "source": {"localTime": "2026-10-15T12:30:00",
+                                          "station": {"code": "MAD"}},
+                               "destination": {"localTime": "...",
+                                               "station": {"code": "..."}}}},
+                  ... more segments
+                ]
+              },
+              "inbound": { ... same shape ... }
+            }
+          ]
+        }
     """
-    items = (
-        payload.get("itineraries")
-        or payload.get("data")
-        or payload.get("flights")
-        or []
-    )
+    items = payload.get("itineraries")
+    if not isinstance(items, list):
+        # Fallback for older listing variants.
+        items = payload.get("data") or payload.get("flights") or []
     if not isinstance(items, list):
         return []
+
     out: list[KiwiOption] = []
     for it in items:
         if not isinstance(it, dict):
             continue
-        price = (
-            it.get("price")
-            or (it.get("price", {}) or {}).get("amount") if isinstance(it.get("price"), dict)
-            else it.get("price")
+        # Price: prefer EUR-normalized amount; fall back to local price.
+        price_raw = (
+            ((it.get("priceEur") or {}).get("amount"))
+            or ((it.get("price") or {}).get("amount"))
+            or it.get("price")
         )
-        if isinstance(price, dict):
-            price = price.get("amount") or price.get("value")
-        if not isinstance(price, (int, float)) or price <= 0:
+        try:
+            price = int(round(float(price_raw)))
+        except (TypeError, ValueError):
             continue
-        fly_from = it.get("flyFrom") or it.get("fly_from") or it.get("source")
-        fly_to = it.get("flyTo") or it.get("fly_to") or it.get("destination")
+        if price <= 0:
+            continue
+
+        # Legs.
+        outbound = it.get("outbound") or {}
+        inbound = it.get("inbound") or {}
+        ob_segs = outbound.get("sectorSegments") or []
+        ib_segs = inbound.get("sectorSegments") or []
+        if not isinstance(ob_segs, list) or not ob_segs:
+            continue
+
+        # Origin / destination from the first outbound segment + final
+        # outbound segment respectively.
+        first_seg = (ob_segs[0] or {}).get("segment") or {}
+        last_seg = (ob_segs[-1] or {}).get("segment") or {}
+        fly_from = ((first_seg.get("source") or {}).get("station") or {}).get("code")
+        fly_to = ((last_seg.get("destination") or {}).get("station") or {}).get("code")
         if not fly_from or not fly_to:
             continue
-        dep = _date_part(
-            it.get("local_departure")
-            or it.get("localDeparture")
-            or it.get("outboundDepartureDate")
-            or it.get("departure_date")
-        )
-        ret = _date_part(
-            it.get("local_arrival_inbound")
-            or it.get("inboundDepartureDate")
-            or it.get("return_date")
-        )
+
+        # Departure date = first outbound segment's source localTime.
+        # Return date  = first inbound segment's source localTime.
+        dep = _date_part((first_seg.get("source") or {}).get("localTime"))
         if not dep:
             continue
-        # Carriers — Kiwi nests them under `route[]` or `airlines`.
-        carriers = _carriers_from_kiwi(it)
-        total_minutes = it.get("duration")
-        if isinstance(total_minutes, dict):
-            total_minutes = total_minutes.get("total")
-        if not isinstance(total_minutes, int):
-            total_minutes = None
-        # Stop count — Kiwi has `nightsInDest`, `route` length, or
-        # an explicit `stops` count. Fall back to route length - 1.
-        route = it.get("route") or []
-        stops = max(0, len(route) - 1) if isinstance(route, list) else 0
-        is_vi = bool(
-            it.get("virtual_interlining")
-            or it.get("isVirtualInterlining")
-            or it.get("has_airport_change") is False and (it.get("price_dropdown") or {}).get("base_fare")
-        )
+        ret = None
+        if ib_segs:
+            ib_first = (ib_segs[0] or {}).get("segment") or {}
+            ret = _date_part((ib_first.get("source") or {}).get("localTime"))
+
+        # Carriers: dedup across all segments of both legs.
+        carriers = _carriers_from_segments(ob_segs + ib_segs)
+
+        # Stops: total layovers across both legs.
+        # N segments per leg -> N-1 layovers; sum across legs.
+        stops = max(0, len(ob_segs) - 1) + max(0, len(ib_segs) - 1)
+
+        # Total minutes: outbound + inbound duration (seconds -> minutes).
+        secs = 0
+        for leg in (outbound, inbound):
+            d = leg.get("duration")
+            if isinstance(d, (int, float)):
+                secs += int(d)
+        total_minutes = (secs // 60) if secs else None
+
+        # Virtual interlining flag — Kiwi's own marker.
+        travel_hack = it.get("travelHack") or {}
+        is_vi = bool(travel_hack.get("isVirtualInterlining"))
+
         out.append(KiwiOption(
-            price=int(round(float(price))),
+            price=price,
             currency=currency.upper(),
             fly_from=str(fly_from),
             fly_to=str(fly_to),
@@ -299,26 +340,39 @@ def _parse_options(payload: dict, currency: str) -> list[KiwiOption]:
     return out
 
 
+def _carriers_from_segments(segments: list) -> str:
+    """Dedupe carrier codes across a flat list of sectorSegment dicts."""
+    codes: list[str] = []
+    for sg in segments:
+        if not isinstance(sg, dict):
+            continue
+        seg = sg.get("segment") or {}
+        carrier = seg.get("carrier") or {}
+        code = carrier.get("code") if isinstance(carrier, dict) else None
+        if isinstance(code, str) and code and code not in codes:
+            codes.append(code)
+    return " + ".join(codes) if codes else "unknown"
+
+
+# Kept for the legacy parser tests until they're updated to the new shape.
 def _carriers_from_kiwi(itinerary: dict) -> str:
-    """Join unique carrier names/codes from a Kiwi itinerary."""
-    # Try a few shapes Kiwi uses.
-    names: list[str] = []
-    # Shape A: top-level `airlines: ["FR", "KQ"]`
-    al = itinerary.get("airlines")
-    if isinstance(al, list):
-        for code in al:
-            if isinstance(code, str) and code and code not in names:
-                names.append(code)
-    # Shape B: nested `route[]` with `airline` field per segment
-    route = itinerary.get("route") or []
-    if isinstance(route, list):
-        for seg in route:
-            if not isinstance(seg, dict):
-                continue
+    """Back-compat alias; the new code uses _carriers_from_segments."""
+    if "sectorSegments" in (itinerary.get("outbound") or {}):
+        return _carriers_from_segments(
+            (itinerary.get("outbound") or {}).get("sectorSegments", [])
+            + (itinerary.get("inbound") or {}).get("sectorSegments", [])
+        )
+    # Old top-level shape fallback.
+    codes: list[str] = []
+    for code in (itinerary.get("airlines") or []):
+        if isinstance(code, str) and code and code not in codes:
+            codes.append(code)
+    for seg in (itinerary.get("route") or []):
+        if isinstance(seg, dict):
             code = seg.get("airline") or seg.get("airlineCode")
-            if isinstance(code, str) and code and code not in names:
-                names.append(code)
-    return " + ".join(names) if names else "unknown"
+            if isinstance(code, str) and code and code not in codes:
+                codes.append(code)
+    return " + ".join(codes) if codes else "unknown"
 
 
 def _date_part(iso_or_none) -> str | None:

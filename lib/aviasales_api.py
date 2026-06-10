@@ -143,7 +143,13 @@ class AviasalesClient:
         if return_date is not None and not one_way:
             params["return_at"] = return_date.isoformat()
         data = self._request("/aviasales/v3/prices_for_dates", params)
-        return PriceResponse(raw=data, quotes=tuple(_parse_quotes(data, currency)))
+        return PriceResponse(
+            raw=data,
+            quotes=tuple(_parse_quotes(
+                data, currency,
+                origin_default=origin, destination_default=destination,
+            )),
+        )
 
     # --- cheap: lowest current price per (origin, destination) ---------
 
@@ -159,6 +165,8 @@ class AviasalesClient:
         """Cheapest currently-cached round-trip per (origin, destination).
 
         If depart_date is given, restricts to that departure month.
+        Aviasales' response items don't carry origin (it's a request
+        param), so we patch it in before parsing.
         """
         params: dict[str, Any] = {
             "origin": origin,
@@ -170,7 +178,12 @@ class AviasalesClient:
         if return_date is not None:
             params["return_date"] = return_date.strftime("%Y-%m")
         data = self._request("/v1/prices/cheap", params, with_token_header=True)
-        return PriceResponse(raw=data, quotes=tuple(_parse_quotes(data, currency)))
+        return PriceResponse(
+            raw=data,
+            quotes=tuple(_parse_quotes(data, currency,
+                                       origin_default=origin,
+                                       destination_default=destination)),
+        )
 
     # --- latest: broad recent observations across a route --------------
 
@@ -199,7 +212,13 @@ class AviasalesClient:
             params["beginning_of_period"] = depart_date_month.strftime("%Y-%m-%d")
             params["period_type"] = "month"
         data = self._request("/v2/prices/latest", params, with_token_header=True)
-        return PriceResponse(raw=data, quotes=tuple(_parse_quotes(data, currency)))
+        return PriceResponse(
+            raw=data,
+            quotes=tuple(_parse_quotes(
+                data, currency,
+                origin_default=origin, destination_default=destination,
+            )),
+        )
 
     # --- quota: best-effort ---------------------------------------------
 
@@ -277,16 +296,45 @@ class AviasalesClient:
 # --- top-level parsers ------------------------------------------------------
 
 
-def _parse_quotes(payload: dict, currency: str) -> list[PriceQuote]:
-    """Parse data[] from any Aviasales endpoint into PriceQuote rows.
+def _parse_quotes(
+    payload: dict, currency: str,
+    *,
+    origin_default: str | None = None,
+    destination_default: str | None = None,
+) -> list[PriceQuote]:
+    """Parse Aviasales response items into PriceQuote rows.
 
-    Defensive — Aviasales' three endpoints have overlapping but not
-    identical key sets. We coalesce the common ones and gracefully drop
-    anything missing required fields.
+    Three different shapes show up across endpoints:
+
+    A) /v3/prices_for_dates, /v2/prices/latest:
+       data is a FLAT LIST of quote dicts.
+
+    B) /v1/prices/cheap:
+       data is a NESTED dict:
+         {"NBO": {"1": {<quote>}, "2": {<quote>}, ...}, ...}
+       — outer key is the destination IATA, inner keys are numeric
+       string indices.
+
+    We normalize both shapes into a single flat list before parsing
+    individual quote items, then drop anything missing required fields.
     """
-    items = payload.get("data") or []
-    if not isinstance(items, list):
-        return []
+    raw_data = payload.get("data")
+    items: list[dict] = []
+    if isinstance(raw_data, list):
+        items = [x for x in raw_data if isinstance(x, dict)]
+    elif isinstance(raw_data, dict):
+        # Shape B: {destination_iata: {"1": quote, "2": quote}}
+        for dest_key, dest_block in raw_data.items():
+            if not isinstance(dest_block, dict):
+                continue
+            for sub_key, quote in dest_block.items():
+                if not isinstance(quote, dict):
+                    continue
+                # The destination IATA isn't carried inside each quote
+                # in this shape — patch it in from the outer key.
+                if "destination" not in quote:
+                    quote = {**quote, "destination": dest_key}
+                items.append(quote)
     out: list[PriceQuote] = []
     for it in items:
         if not isinstance(it, dict):
@@ -299,8 +347,10 @@ def _parse_quotes(payload: dict, currency: str) -> list[PriceQuote]:
         price = it.get("price") or it.get("value")
         if not dep or not isinstance(price, (int, float)) or price <= 0:
             continue
-        origin = it.get("origin") or it.get("origin_airport")
-        destination = it.get("destination") or it.get("destination_airport")
+        origin = (it.get("origin") or it.get("origin_airport")
+                  or origin_default)
+        destination = (it.get("destination") or it.get("destination_airport")
+                       or destination_default)
         if not origin or not destination:
             continue
         airline = it.get("airline") or it.get("gate") or None
