@@ -4,3 +4,7 @@ PyYAML>=6.0
 streamlit>=1.36
 pandas>=2.2
 altair>=5.3
+# Optional — only needed when deploying with Turso as the DB backend.
+# Locally falls back to sqlite3 if not installed.
+libsql-experimental>=0.0.40
+

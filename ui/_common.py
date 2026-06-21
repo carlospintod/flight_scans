@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 from dataclasses import replace as dc_replace
 from datetime import date, datetime, timedelta, timezone
@@ -38,6 +39,41 @@ def setup_page(title: str) -> None:
         initial_sidebar_state="expanded",
     )
     apply_theme()
+    _password_gate()
+
+
+def _password_gate() -> None:
+    """Block the page until the user enters the right password.
+
+    Active iff the env var `APP_PASSWORD` is set (or `[app] password=`
+    in Streamlit's secrets.toml — Streamlit Cloud's secrets are also
+    available via os.environ when configured under [env]).
+
+    No env var set → gate is bypassed entirely. This means local
+    development is unblocked without configuration; the gate only
+    kicks in on Streamlit Cloud where APP_PASSWORD is set as a secret.
+
+    Uses st.session_state to remember the auth across reruns so the
+    user only types the password once per browser session.
+    """
+    required = (os.environ.get("APP_PASSWORD") or "").strip()
+    if not required:
+        return  # no password configured → bypass
+    if st.session_state.get("_authed"):
+        return  # already authed in this session
+    st.markdown(
+        "<div class='gtm-logo'>FLIGHT_TRACKER<span class='cur'>_</span></div>"
+        "<div class='gtm-sub'>Authentication required.</div>",
+        unsafe_allow_html=True,
+    )
+    pw = st.text_input("Password", type="password", key="_password_input")
+    if pw:
+        if pw == required:
+            st.session_state["_authed"] = True
+            st.rerun()
+        else:
+            st.error("Wrong password.")
+    st.stop()
 
 
 # ============================================================================
@@ -530,10 +566,44 @@ def load_route_from_sidebar() -> tuple[config_mod.RouteConfig, sqlite3.Connectio
 
 
 @st.cache_resource(show_spinner=False)
-def connect_db() -> sqlite3.Connection:
+def connect_db():
     """Per-process DB connection. Streamlit reruns the script on each
-    user action but `cache_resource` keeps this connection alive."""
+    user action but `cache_resource` keeps this connection alive.
+
+    Backend selected by env vars (same logic as lib.db.connect):
+
+    * TURSO_DATABASE_URL + TURSO_AUTH_TOKEN set → libSQL embedded
+      replica syncing to Turso. The local file becomes a cache; writes
+      propagate to remote. Survives Streamlit Cloud container restarts.
+    * Neither set → plain sqlite3 against the local file (local dev).
+    """
     DEFAULT_DB.parent.mkdir(parents=True, exist_ok=True)
+    turso_url = (os.environ.get("TURSO_DATABASE_URL") or "").strip()
+    turso_token = (os.environ.get("TURSO_AUTH_TOKEN") or "").strip()
+    if turso_url and turso_token:
+        try:
+            import libsql_experimental as libsql  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "TURSO_DATABASE_URL is set but libsql_experimental is not "
+                "installed. Add `libsql-experimental` to requirements.txt."
+            ) from exc
+        conn = libsql.connect(
+            str(DEFAULT_DB),
+            sync_url=turso_url,
+            auth_token=turso_token,
+        )
+        try:
+            conn.sync()
+        except Exception:  # noqa: BLE001 — empty remote is fine
+            pass
+        try:
+            conn.row_factory = sqlite3.Row  # type: ignore[assignment]
+        except (AttributeError, TypeError):
+            pass
+        db_mod.ensure_schema(conn)
+        return conn
+
     conn = sqlite3.connect(DEFAULT_DB, isolation_level=None, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
