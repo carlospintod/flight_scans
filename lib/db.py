@@ -242,13 +242,23 @@ def connect(path: str | Path) -> Iterator[sqlite3.Connection]:
     if turso_url and turso_token:
         try:
             import libsql_experimental as libsql  # type: ignore
-        except ImportError as exc:
-            raise RuntimeError(
+        except ImportError:
+            # Graceful fallback: libsql-experimental requires Rust to build
+            # from source on Pythons without a prebuilt wheel (e.g. 3.14
+            # at this writing). Local dev can keep using sqlite3 instead;
+            # Streamlit Cloud (Python 3.11/3.12) has the wheel and uses
+            # Turso. The same code path works both places.
+            LOG.warning(
                 "TURSO_DATABASE_URL is set but libsql_experimental is not "
-                "installed. Run `pip install libsql-experimental` or unset "
-                "the Turso env vars to fall back to local SQLite."
-            ) from exc
-        LOG.info("connecting via libSQL embedded replica → %s", turso_url)
+                "installed (no Python 3.14 wheel). Falling back to local "
+                "SQLite. Run migrate_to_turso.py to push local writes "
+                "to Turso when ready."
+            )
+            turso_url = ""  # disable libsql below
+            turso_token = ""
+        else:
+            LOG.info("connecting via libSQL embedded replica → %s", turso_url)
+    if turso_url and turso_token:
         conn = libsql.connect(
             str(path),
             sync_url=turso_url,

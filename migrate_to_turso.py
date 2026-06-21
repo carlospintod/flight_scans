@@ -1,38 +1,42 @@
-"""One-time migration: copy local data/tracker.db into Turso.
+"""One-time migration: copy local data/tracker.db into Turso via HTTP.
 
-Run from the repo root after:
-  1. Signing up for Turso (https://turso.tech, free).
-  2. Installing the Turso CLI and creating a database:
-       turso db create flight-tracker
-       turso db tokens create flight-tracker
-  3. Adding to your local `.env`:
-       TURSO_DATABASE_URL=libsql://flight-tracker-<your-handle>.turso.io
-       TURSO_AUTH_TOKEN=<token from step 2>
-  4. Installing the Python client:
-       pip install libsql-experimental
+Talks to Turso's HTTP API directly so it works on any Python version
+(including 3.14 where libsql-experimental has no prebuilt wheel yet).
+No extra Python packages needed beyond `requests`.
 
-Then run this script. It will:
-  - Read every row from your existing local SQLite tracker.db.
-  - Write them into the Turso database via libsql.
-  - Idempotent (re-runnable) because it uses INSERT OR REPLACE-style
-    upserts only where there are PKs. Other tables append, so don't
-    run it twice unless you've truncated the remote first.
+Prerequisites:
+  1. Created a Turso DB via the web UI or `turso db create flight-tracker`.
+  2. Added these to .env:
+       TURSO_DATABASE_URL=libsql://flight-tracker-<your-org>.turso.io
+       TURSO_AUTH_TOKEN=<long token>
 
-Safe rollback: keep `data/tracker.db` as is. Until you commit to using
-Turso permanently, your local DB is still authoritative.
+Run:
+    python migrate_to_turso.py
+
+What it does:
+  - Reads every row from local data/tracker.db.
+  - Creates the schema on the remote Turso DB.
+  - Bulk-inserts every row in 200-row batches via Turso's /v2/pipeline
+    HTTP endpoint.
+
+Safe to re-run, but ASSUME you've truncated the remote first if you do —
+otherwise rows will duplicate (no PKs on most tables to dedup against).
 """
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import sys
 from pathlib import Path
 
+import requests
 from dotenv import load_dotenv
 
 REPO = Path(__file__).resolve().parent
 LOCAL_DB = REPO / "data" / "tracker.db"
+BATCH_SIZE = 200
 
 
 def main() -> int:
@@ -40,47 +44,64 @@ def main() -> int:
     turso_url = (os.environ.get("TURSO_DATABASE_URL") or "").strip()
     turso_token = (os.environ.get("TURSO_AUTH_TOKEN") or "").strip()
     if not (turso_url and turso_token):
-        print("Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in .env first.",
+        print("ERROR: Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in .env first.",
               file=sys.stderr)
         return 1
     if not LOCAL_DB.exists():
-        print(f"No local DB at {LOCAL_DB}; nothing to migrate.", file=sys.stderr)
+        print(f"ERROR: No local DB at {LOCAL_DB}.", file=sys.stderr)
         return 1
 
-    try:
-        import libsql_experimental as libsql  # type: ignore
-    except ImportError:
-        print("libsql-experimental is not installed. Run:\n"
-              "  pip install libsql-experimental", file=sys.stderr)
-        return 1
+    # libsql:// → https:// for the HTTP API.
+    http_url = turso_url.replace("libsql://", "https://", 1)
+    pipeline_url = f"{http_url}/v2/pipeline"
+    headers = {
+        "Authorization": f"Bearer {turso_token}",
+        "Content-Type": "application/json",
+    }
 
     print(f"source: {LOCAL_DB}")
-    print(f"target: {turso_url}")
+    print(f"target: {http_url}")
     print()
 
     src = sqlite3.connect(LOCAL_DB)
     src.row_factory = sqlite3.Row
 
-    # Use a temp file for the embedded replica so we don't clobber the
-    # local production DB if anything goes wrong.
-    cache_path = REPO / "data" / "tracker_turso_cache.db"
-    dst = libsql.connect(
-        str(cache_path),
-        sync_url=turso_url,
-        auth_token=turso_token,
-    )
-    print("Initial sync from remote (will be empty on first run)...")
-    try:
-        dst.sync()
-    except Exception as exc:  # noqa: BLE001 — empty remote is fine
-        print(f"  initial sync warning: {exc}")
+    # Quick health check.
+    print("pinging Turso...")
+    r = _post(pipeline_url, headers, [_stmt("SELECT 1")])
+    if r is None:
+        return 1
+    print("  ok")
 
-    # Make sure schema exists on the remote.
-    sys.path.insert(0, str(REPO))
-    from lib.db import ensure_schema
-    print("Ensuring schema on remote...")
-    ensure_schema(dst)
+    # Read the schema from lib/db.py's SCHEMA constant + apply migrations.
+    print("ensuring schema on remote...")
+    from lib.db import SCHEMA, _MIGRATIONS
+    # Split SCHEMA into individual statements (Turso pipeline expects one
+    # statement per request slot). Comments and blank lines are ignored
+    # by the SQL parser server-side; we still strip them client-side to
+    # produce cleaner stmt list.
+    stmts = [s.strip() for s in SCHEMA.split(";") if s.strip()]
+    requests_payload = [_stmt(s) for s in stmts]
+    r = _post(pipeline_url, headers, requests_payload)
+    if r is None:
+        return 1
+    print(f"  applied {len(stmts)} schema statements")
+    # Apply migrations (they're conditional ALTER TABLEs — only run when
+    # the column is missing, mirroring lib.db._apply_migrations).
+    for table, column, ddl in _MIGRATIONS:
+        # Check whether column exists on remote.
+        check = _post(pipeline_url, headers,
+                      [_stmt(f"PRAGMA table_info({table})")])
+        if check is None:
+            return 1
+        cols = _extract_column_names_from_pragma(check)
+        if column not in cols:
+            r = _post(pipeline_url, headers, [_stmt(ddl)])
+            if r is None:
+                return 1
+            print(f"  migration applied: {table}.{column}")
 
+    # Copy each table's rows in batches.
     tables = [
         "routes", "calendar_snapshots", "departure_curves",
         "point_queries", "alerts", "airport_cache", "quota_snapshots",
@@ -96,29 +117,101 @@ def main() -> int:
             print(f"  {t}: 0 rows, skipping")
             continue
 
-        # Discover columns from the source so we don't hard-code them.
         cols = [r[1] for r in src.execute(f"PRAGMA table_info({t})").fetchall()]
         col_csv = ", ".join(cols)
         placeholders = ", ".join("?" * len(cols))
-        sql = f"INSERT INTO {t} ({col_csv}) VALUES ({placeholders})"
-        rows = src.execute(f"SELECT {col_csv} FROM {t}").fetchall()
-        # Insert in batches of 500 to avoid huge round trips.
-        batch = 500
-        for i in range(0, len(rows), batch):
-            chunk = [tuple(r) for r in rows[i:i + batch]]
-            dst.executemany(sql, chunk)
-        print(f"  {t}: copied {count} rows")
+        insert_sql = f"INSERT INTO {t} ({col_csv}) VALUES ({placeholders})"
+
+        rows = list(src.execute(f"SELECT {col_csv} FROM {t}"))
+        print(f"  {t}: copying {len(rows):,} rows", end="", flush=True)
+        for i in range(0, len(rows), BATCH_SIZE):
+            chunk = rows[i:i + BATCH_SIZE]
+            batch_stmts = [
+                _stmt(insert_sql, [_sqlite_value_to_turso(v) for v in row])
+                for row in chunk
+            ]
+            resp = _post(pipeline_url, headers, batch_stmts)
+            if resp is None:
+                print()  # newline before error
+                return 1
+            print(".", end="", flush=True)
+        print(f"  done ({count:,})")
         total += count
 
     print()
-    print(f"Syncing {total} rows to remote...")
-    dst.sync()
-    print("Done.")
-    print()
-    print(f"You can now delete {cache_path} (it was a temp replica).")
-    print("From here on, Streamlit + the CLI will use Turso whenever "
-          "TURSO_* env vars are set.")
+    print(f"Migration complete. {total:,} rows now live on Turso.")
     return 0
+
+
+# --- helpers ---------------------------------------------------------------
+
+
+def _stmt(sql: str, args: list | None = None) -> dict:
+    """Build a single 'execute' request for Turso's pipeline format."""
+    out: dict = {"type": "execute", "stmt": {"sql": sql}}
+    if args is not None:
+        out["stmt"]["args"] = args
+    return out
+
+
+def _sqlite_value_to_turso(v) -> dict:
+    """Convert a Python value to Turso's typed argument format."""
+    if v is None:
+        return {"type": "null"}
+    if isinstance(v, bool):
+        return {"type": "integer", "value": str(int(v))}
+    if isinstance(v, int):
+        return {"type": "integer", "value": str(v)}
+    if isinstance(v, float):
+        return {"type": "float", "value": float(v)}
+    if isinstance(v, (bytes, bytearray)):
+        import base64
+        return {"type": "blob", "base64": base64.b64encode(v).decode("ascii")}
+    return {"type": "text", "value": str(v)}
+
+
+def _post(url: str, headers: dict, requests_payload: list) -> dict | None:
+    """POST a pipeline payload; return parsed JSON or None on failure."""
+    body = {"requests": requests_payload + [{"type": "close"}]}
+    try:
+        r = requests.post(url, headers=headers, data=json.dumps(body), timeout=60)
+    except requests.RequestException as exc:
+        print(f"\nERROR: network: {exc}", file=sys.stderr)
+        return None
+    if not r.ok:
+        print(f"\nERROR: HTTP {r.status_code}: {r.text[:500]}", file=sys.stderr)
+        return None
+    try:
+        data = r.json()
+    except ValueError:
+        print(f"\nERROR: non-JSON response: {r.text[:200]}", file=sys.stderr)
+        return None
+    # Look for per-result errors inside the pipeline response.
+    for i, result in enumerate(data.get("results") or []):
+        if result.get("type") == "error":
+            err = result.get("error") or {}
+            print(f"\nERROR: pipeline step {i}: {err.get('message')}", file=sys.stderr)
+            return None
+    return data
+
+
+def _extract_column_names_from_pragma(pipeline_response: dict) -> set[str]:
+    """Pull column-name strings out of a PRAGMA table_info() response."""
+    out: set[str] = set()
+    results = pipeline_response.get("results") or []
+    if not results:
+        return out
+    first = results[0]
+    if first.get("type") != "ok":
+        return out
+    rows = (first.get("response", {}).get("result", {}).get("rows") or [])
+    # PRAGMA table_info columns: cid, name, type, notnull, dflt_value, pk
+    for row in rows:
+        if isinstance(row, list) and len(row) >= 2:
+            name_cell = row[1]
+            if isinstance(name_cell, dict) and "value" in name_cell:
+                out.add(str(name_cell["value"]))
+    return out
 
 
 if __name__ == "__main__":

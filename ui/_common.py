@@ -583,11 +583,12 @@ def connect_db():
     if turso_url and turso_token:
         try:
             import libsql_experimental as libsql  # type: ignore
-        except ImportError as exc:
-            raise RuntimeError(
-                "TURSO_DATABASE_URL is set but libsql_experimental is not "
-                "installed. Add `libsql-experimental` to requirements.txt."
-            ) from exc
+        except ImportError:
+            # Same graceful fallback as lib/db.py — local Python 3.14
+            # has no prebuilt wheel; Streamlit Cloud Python 3.11/3.12 does.
+            turso_url = ""
+            turso_token = ""
+    if turso_url and turso_token:
         conn = libsql.connect(
             str(DEFAULT_DB),
             sync_url=turso_url,
