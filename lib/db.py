@@ -240,49 +240,13 @@ def connect(path: str | Path) -> Iterator[sqlite3.Connection]:
     turso_url = (os.environ.get("TURSO_DATABASE_URL") or "").strip()
     turso_token = (os.environ.get("TURSO_AUTH_TOKEN") or "").strip()
     if turso_url and turso_token:
-        try:
-            import libsql_experimental as libsql  # type: ignore
-        except ImportError:
-            # Graceful fallback: libsql-experimental requires Rust to build
-            # from source on Pythons without a prebuilt wheel (e.g. 3.14
-            # at this writing). Local dev can keep using sqlite3 instead;
-            # Streamlit Cloud (Python 3.11/3.12) has the wheel and uses
-            # Turso. The same code path works both places.
-            LOG.warning(
-                "TURSO_DATABASE_URL is set but libsql_experimental is not "
-                "installed (no Python 3.14 wheel). Falling back to local "
-                "SQLite. Run migrate_to_turso.py to push local writes "
-                "to Turso when ready."
-            )
-            turso_url = ""  # disable libsql below
-            turso_token = ""
-        else:
-            LOG.info("connecting via libSQL embedded replica → %s", turso_url)
-    if turso_url and turso_token:
-        conn = libsql.connect(
-            str(path),
-            sync_url=turso_url,
-            auth_token=turso_token,
-        )
-        # Pull the latest from remote into the local replica.
-        try:
-            conn.sync()
-        except Exception as exc:  # noqa: BLE001 — first sync may fail on empty remote
-            LOG.warning("libsql initial sync failed (ok if remote is empty): %s", exc)
-        # libsql exposes execute/executemany/executescript like sqlite3.
-        # It does NOT support sqlite3.Row, so callers that do `row["col"]`
-        # work via the connection's row_factory (which libsql supports).
-        try:
-            conn.row_factory = sqlite3.Row  # type: ignore[assignment]
-        except (AttributeError, TypeError):
-            pass
+        LOG.info("connecting via Turso HTTP API → %s", turso_url)
+        from . import turso_http
+        conn = turso_http.connect(turso_url, turso_token)
+        conn.row_factory = sqlite3.Row  # opts into TursoRow (dict + tuple access)
         try:
             yield conn
         finally:
-            try:
-                conn.sync()  # final push of any pending writes
-            except Exception:  # noqa: BLE001
-                pass
             conn.close()
         return
 

@@ -581,27 +581,9 @@ def connect_db():
     turso_url = (os.environ.get("TURSO_DATABASE_URL") or "").strip()
     turso_token = (os.environ.get("TURSO_AUTH_TOKEN") or "").strip()
     if turso_url and turso_token:
-        try:
-            import libsql_experimental as libsql  # type: ignore
-        except ImportError:
-            # Same graceful fallback as lib/db.py — local Python 3.14
-            # has no prebuilt wheel; Streamlit Cloud Python 3.11/3.12 does.
-            turso_url = ""
-            turso_token = ""
-    if turso_url and turso_token:
-        conn = libsql.connect(
-            str(DEFAULT_DB),
-            sync_url=turso_url,
-            auth_token=turso_token,
-        )
-        try:
-            conn.sync()
-        except Exception:  # noqa: BLE001 — empty remote is fine
-            pass
-        try:
-            conn.row_factory = sqlite3.Row  # type: ignore[assignment]
-        except (AttributeError, TypeError):
-            pass
+        from lib import turso_http
+        conn = turso_http.connect(turso_url, turso_token)
+        conn.row_factory = sqlite3.Row
         db_mod.ensure_schema(conn)
         return conn
 
