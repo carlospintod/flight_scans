@@ -32,6 +32,47 @@ DEFAULT_DB = REPO / "data" / "tracker.db"
 load_dotenv(dotenv_path=REPO / ".env")
 
 
+def _bridge_streamlit_secrets_to_env() -> None:
+    """Copy Streamlit Cloud secrets into os.environ.
+
+    Our lib code reads config from os.environ (works with .env locally).
+    On Streamlit Cloud there is no .env — config comes from the app's
+    Secrets. Streamlit only auto-exposes TOP-LEVEL secrets as env vars,
+    NOT ones nested under a [section]. To be robust to either layout we
+    walk st.secrets ourselves:
+
+      * top-level scalar  -> os.environ[KEY] = value
+      * a [section] table -> os.environ[KEY] = value for each key inside
+
+    Local dev (no secrets.toml) makes st.secrets raise; we swallow that.
+    Existing os.environ entries (e.g. from .env) are NOT overwritten, so
+    local .env keeps priority when both are present.
+    """
+    try:
+        secrets = st.secrets
+    except Exception:  # noqa: BLE001 — no secrets file locally is fine
+        return
+    try:
+        items = list(secrets.items())
+    except Exception:  # noqa: BLE001
+        return
+    for key, value in items:
+        # Nested section (e.g. [env]) — Streamlit returns a Mapping.
+        if hasattr(value, "items"):
+            try:
+                for sub_key, sub_val in value.items():
+                    if sub_key not in os.environ and sub_val is not None:
+                        os.environ[str(sub_key)] = str(sub_val)
+            except Exception:  # noqa: BLE001
+                continue
+        else:
+            if key not in os.environ and value is not None:
+                os.environ[str(key)] = str(value)
+
+
+_bridge_streamlit_secrets_to_env()
+
+
 def setup_page(title: str) -> None:
     st.set_page_config(
         page_title=f"Flight tracker — {title}",
