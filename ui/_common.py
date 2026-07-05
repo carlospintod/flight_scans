@@ -600,10 +600,35 @@ def load_route_from_sidebar() -> tuple[config_mod.RouteConfig, sqlite3.Connectio
     with st.sidebar:
         st.markdown("### Route")
         name = st.selectbox("Pick route", routes, index=0, key="route_name")
-        st.caption(f"DB: `{DEFAULT_DB}`")
+        _render_db_backend_badge()
     route = config_mod.load_route(ROUTES_DIR / f"{name}.yaml")
     conn = connect_db()
     return route, conn
+
+
+def _render_db_backend_badge() -> None:
+    """Show which storage backend is live, and warn loudly on the silent
+    ephemeral fallback.
+
+    If TURSO_DATABASE_URL is set, we're on the persistent cloud DB.
+    Otherwise we're on a local SQLite file — which on Streamlit Cloud is
+    EPHEMERAL (wiped on every container restart). That silent fallback
+    is exactly what cost us a run's data, so make it impossible to miss.
+    """
+    turso_url = (os.environ.get("TURSO_DATABASE_URL") or "").strip()
+    on_cloud = bool(os.environ.get("STREAMLIT_RUNTIME_ENV")) or \
+        "/mount/src/" in str(REPO)
+    if turso_url:
+        host = turso_url.replace("libsql://", "").split(".")[0]
+        st.caption(f"DB: Turso `{host}` (persistent)")
+    elif on_cloud:
+        st.error(
+            "DB: **local SQLite — EPHEMERAL**. TURSO_DATABASE_URL is not "
+            "reaching the app, so all data will be lost on the next "
+            "restart. Fix the Turso secrets."
+        )
+    else:
+        st.caption(f"DB: local `{DEFAULT_DB.name}` (dev)")
 
 
 @st.cache_resource(show_spinner=False)
