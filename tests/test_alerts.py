@@ -102,6 +102,29 @@ def test_new_low_fires_with_only_two_observations(tmp_path: Path):
     assert a.drop_pct == 10.0
 
 
+def test_new_low_respects_watch_price_bar(tmp_path: Path):
+    """When followup.watch_below_price is set, a new low ABOVE the bar
+    stays silent — a 900->880 twitch isn't actionable signal.
+
+    Regression for the 403-alert flood of 2026-07-05."""
+    from dataclasses import replace
+    from lib.config import FollowupParams
+    route = replace(ROUTE, followup=FollowupParams(
+        watch_below_price=650, drop_above_price=800))
+    db_path = tmp_path / "t.db"
+    log_path = tmp_path / "alerts.log"
+    today = date(2026, 6, 15)
+    with connect(db_path) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        insert_calendar_rows(conn, [
+            _row(900, datetime(2026, 6, 10)),
+            _row(880, datetime(2026, 6, 14)),  # new low, but above 650 bar
+        ])
+        fired = evaluate(conn=conn, route=route, log_path=log_path, today=today)
+    assert fired == []
+
+
 def test_new_low_does_not_fire_on_equal_or_higher_price(tmp_path: Path):
     db_path = tmp_path / "t.db"
     log_path = tmp_path / "alerts.log"

@@ -11,14 +11,17 @@ flexible-dates corridor by swapping the config file.
 See [`CLAUDE.md`](CLAUDE.md) for the full design doc, data-source notes,
 architecture decisions, and build order.
 
-## Two data sources
+## Data sources (free, sustainable)
 
-| Source | Free tier | Strength |
+| Source | Cost | Role |
 |---|---|---|
-| **SearchAPI.io** (Google Flights wrapper) | 100 calls/mo | (departure × return) rectangle pricing |
-| **Sky Scrapper** (RapidAPI / Skyscanner wrapper) | 100 calls/mo | Year-long departure curve in one call; surfaces virtual interlining via `isSelfTransfer` |
+| **Google Flights direct** (`googleflights`) | FREE, unmetered at polite volume | Primary verification: local headless Chromium renders Google Flights pages, parses aria-labels (price/carrier/stops/duration). Needs `playwright install chromium` locally; auto-disabled on Streamlit Cloud |
+| **Kiwi** (RapidAPI, `kiwi`) | 300/mo, resets ~10th | Discovery engine: one range-search call sweeps a multi-week departure band and returns the cheapest ~50 itineraries with carriers + virtual-interlining flags |
+| **Aviasales** (Travelpayouts, `aviasales`) | soft-unlimited | Bonus signal (Saudia + MENA carriers Google skips); cache sparse on some corridors |
+| **Sky Scrapper** (RapidAPI, `skyscanner`) | 20/mo, resets ~16th | Monthly seasonal departure-price curve |
+| **SearchAPI.io** (`searchapi`) | free credits are ONE-TIME (~100 at signup) | Break-glass verification only — reserve the last credits for booking day |
 
-Both run side-by-side. The DB tags every row with its `source` so per-source baselines, comparisons, and budget tracking work cleanly.
+Every DB row is tagged with its `source`; baselines, alerts, and budget tracking are per-source. Alerts fire on 15% drops vs the 30-day median AND on any **new all-time low** (needs only 2 scans).
 
 ## Quick start
 
@@ -26,10 +29,15 @@ Both run side-by-side. The DB tags every row with its `source` so per-source bas
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1     # PowerShell on Windows
 pip install -r requirements.txt
+playwright install chromium      # for the free googleflights source
 
-cp .env.example .env             # then add both keys to .env:
-                                 #   SEARCHAPI_KEY=<your SearchAPI key>
-                                 #   RAPIDAPI_KEY=<your RapidAPI key>
+cp .env.example .env             # then add keys to .env:
+                                 #   RAPIDAPI_KEY=<RapidAPI key: kiwi + sky scrapper>
+                                 #   TRAVELPAYOUTS_TOKEN=<travelpayouts token>
+                                 #   SEARCHAPI_KEY=<optional, break-glass>
+
+# Recommended: the one-shot scan (plan -> discover -> verify -> alert)
+python run_scan.py --sources googleflights,aviasales,kiwi
 
 # CLI mode
 python tracker.py sweep    --route spain-nairobi

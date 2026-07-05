@@ -1482,13 +1482,15 @@ def alerts_dataframe(
         return pd.DataFrame()
     return pd.DataFrame([{
         "fired_at": r["fired_at"],
+        "type": ("NEW LOW" if (r["alert_type"] if "alert_type" in r.keys()
+                               else "drop") == "new_low" else "drop"),
         "source": r["source"],
         "origin": r["origin"],
         "destination": r["destination"],
         "departure": r["departure_date"],
         "return": r["return_date"],
         "price": f"{r['price']} {r['currency']}",
-        "baseline": r["baseline_median"],
+        "vs": r["baseline_median"],
         "drop %": round(r["drop_pct"], 1),
     } for r in rows])
 

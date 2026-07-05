@@ -27,3 +27,4 @@ venv/
 Thumbs.db
 .vscode/
 .idea/
+response_gf_*

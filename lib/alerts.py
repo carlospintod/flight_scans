@@ -53,10 +53,24 @@ def evaluate(
     latest = latest_calendar_snapshot_per_itinerary(conn, route.name)
     LOG.info("alerts route=%s latest_rows=%d", route.name, len(latest))
 
+    # Alerts must respect the CURRENT search window — the DB keeps
+    # out-of-window history (by design), but a great fare you can't
+    # take is not an alert. Same filter the followup applies.
+    sw = route.search_window
+    latest_dep_allowed = sw.latest_return - timedelta(days=min_stay)
+
     new_alerts: list[AlertRow] = []
     fired_keys: set[tuple] = set()  # itinerary+source fired in THIS pass
     for row in latest:
         if row["stay_days"] < min_stay or row["stay_days"] > max_stay:
+            continue
+        try:
+            dep_d = date.fromisoformat(row["departure_date"])
+            ret_d = date.fromisoformat(row["return_date"])
+        except (ValueError, TypeError):
+            continue
+        if (dep_d < sw.earliest_departure or dep_d > latest_dep_allowed
+                or ret_d > sw.latest_return):
             continue
         src = row["source"]
         itin_key = (src, row["origin"], row["destination"],
@@ -67,17 +81,27 @@ def evaluate(
         # prior observation, so it fires from the second scan onward —
         # the right alert mode for a near-in booking window where the
         # median-drop rule wouldn't accumulate enough history in time.
-        prev_min_row = conn.execute(
-            """
-            SELECT MIN(price) FROM calendar_snapshots
-            WHERE route_id = ? AND source = ?
-              AND origin = ? AND destination = ?
-              AND departure_date = ? AND return_date = ?
-              AND snapshot_at < ?
-            """,
-            (route.name, src, row["origin"], row["destination"],
-             row["departure_date"], row["return_date"], row["snapshot_at"]),
-        ).fetchone()
+        #
+        # Interestingness bar: when the route configures a followup
+        # watch price, only prices AT OR BELOW it can fire a new_low.
+        # Without the bar, a 900->880 twitch is technically a new low
+        # and one sweep of fresh data floods the table (403 alerts in
+        # one pass, observed 2026-07-05).
+        new_low_bar = route.followup.watch_below_price
+        if new_low_bar is not None and row["price"] > new_low_bar:
+            prev_min_row = None
+        else:
+            prev_min_row = conn.execute(
+                """
+                SELECT MIN(price) FROM calendar_snapshots
+                WHERE route_id = ? AND source = ?
+                  AND origin = ? AND destination = ?
+                  AND departure_date = ? AND return_date = ?
+                  AND snapshot_at < ?
+                """,
+                (route.name, src, row["origin"], row["destination"],
+                 row["departure_date"], row["return_date"], row["snapshot_at"]),
+            ).fetchone()
         prev_min = prev_min_row[0] if prev_min_row else None
         if prev_min is not None and row["price"] < prev_min:
             if not _already_alerted(
