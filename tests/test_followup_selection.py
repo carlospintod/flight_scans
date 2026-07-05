@@ -98,6 +98,37 @@ def test_price_mode_handles_single_observation(tmp_path: Path):
     assert len(candidates) == 1
 
 
+def test_candidates_round_robin_across_departure_months(tmp_path: Path):
+    """Candidates must interleave departure months, not sort purely by price.
+
+    Regression for the flat-fare monopoly: one carrier pricing 555 across
+    all of Nov-Feb made the 20 cheapest candidates all-November clones,
+    so a capped followup spent its whole budget learning one fact. With
+    round-robin, budget spreads across the window.
+    """
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, _route())
+        insert_calendar_rows(conn, [
+            # September itineraries (cheapest month overall)
+            _row(datetime(2026, 6, 1), "2026-09-05", "2026-11-08", 64, 500),
+            _row(datetime(2026, 6, 1), "2026-09-10", "2026-11-15", 66, 510),
+            # November itineraries (more expensive, would lose a pure
+            # price sort entirely until Sep exhausted)
+            _row(datetime(2026, 6, 1), "2026-11-05", "2027-01-08", 64, 550),
+            _row(datetime(2026, 6, 1), "2026-11-10", "2027-01-15", 66, 560),
+        ])
+        candidates = select_candidates(conn, _route(), today=date(2026, 6, 15))
+
+    months = [c["departure_date"][:7] for c in candidates]
+    prices = [c["snapshot_price"] for c in candidates]
+    # Global cheapest still first; then months alternate.
+    assert prices[0] == 500
+    assert months == ["2026-09", "2026-11", "2026-09", "2026-11"]
+    assert prices == [500, 550, 510, 560]
+
+
 def test_legacy_mode_when_thresholds_unset(tmp_path: Path):
     db = tmp_path / "t.db"
     route = _route(watch=None, drop=None)

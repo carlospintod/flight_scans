@@ -55,6 +55,7 @@ class FollowupResult:
     rows_stored: int            # rows across both sources
     skyscanner_calls: int = 0
     skyscanner_rows: int = 0
+    empty_results: int = 0      # SearchAPI queries that returned no flights
 
 
 def select_candidates(conn, route: RouteConfig, *, today: date | None = None) -> list[dict]:
@@ -143,9 +144,29 @@ def select_candidates(conn, route: RouteConfig, *, today: date | None = None) ->
             "trigger": "baseline",
         })
 
-    # Sort cheapest-first so when capped by max_calls we keep the best signals.
+    # Diversify across departure months instead of plain cheapest-first.
+    #
+    # With a global cheapest-first sort, a flat fare (e.g. one carrier
+    # pricing 555 EUR across all of Nov-Feb) fills the entire capped
+    # followup budget with near-identical itineraries of a single
+    # carrier — 20 calls spent learning one fact. Round-robin across
+    # months keeps "cheapest first" *within* each month while spreading
+    # the budget over the whole search window, so the price-over-time
+    # series covers every month and the carrier detail shows variety.
+    #
+    # Month queues are ordered by their cheapest candidate, so the
+    # single globally-cheapest itinerary is still queried first.
     out.sort(key=lambda c: c["snapshot_price"])
-    return out
+    by_month: dict[str, list[dict]] = {}
+    for c in out:
+        by_month.setdefault(c["departure_date"][:7], []).append(c)
+    queues = sorted(by_month.values(), key=lambda q: q[0]["snapshot_price"])
+    interleaved: list[dict] = []
+    while any(queues):
+        for q in queues:
+            if q:
+                interleaved.append(q.pop(0))
+    return interleaved
 
 
 def run_followup(
@@ -192,6 +213,7 @@ def run_followup(
     sa_calls = 0
     sa_queried = 0
     sa_rows = 0
+    sa_empty = 0
     sky_calls = 0
     sky_rows = 0
     snapshot_at = _now_iso()
@@ -233,11 +255,23 @@ def run_followup(
                 ]
                 sa_rows += insert_point_rows(conn, rows)
                 sa_queried += 1
-                LOG.info(
-                    "followup searchapi %s->%s dep=%s ret=%s ranks=%d",
-                    c["origin"], c["destination"],
-                    c["departure_date"], c["return_date"], len(rows),
-                )
+                if not rows:
+                    # API answered but returned zero flights (e.g. "Google
+                    # Flights API returned no results"). Burned a call,
+                    # stored nothing — surface it instead of hiding it.
+                    sa_empty += 1
+                    LOG.warning(
+                        "followup searchapi NO FLIGHTS %s->%s dep=%s ret=%s "
+                        "(call spent, nothing stored)",
+                        c["origin"], c["destination"],
+                        c["departure_date"], c["return_date"],
+                    )
+                else:
+                    LOG.info(
+                        "followup searchapi %s->%s dep=%s ret=%s ranks=%d",
+                        c["origin"], c["destination"],
+                        c["departure_date"], c["return_date"], len(rows),
+                    )
             except SearchApiError as exc:
                 LOG.error(
                     "searchapi point_query failed %s->%s dep=%s ret=%s err=%s",
@@ -311,6 +345,7 @@ def run_followup(
         rows_stored=sa_rows + sky_rows,
         skyscanner_calls=sky_calls,
         skyscanner_rows=sky_rows,
+        empty_results=sa_empty,
     )
 
 

@@ -1536,12 +1536,19 @@ def _run_aviasales_sweep(conn, av_client, route, *, dry_run: bool) -> int:
     return stored
 
 
-def _run_kiwi_followup(conn, kw_client, route, *, dry_run: bool) -> int:
+def _run_kiwi_followup(conn, kw_client, route, *, dry_run: bool,
+                       max_calls: int = 20) -> int:
     """For each follow-up candidate, run one Kiwi round-trip search.
 
     Stores top results in `point_queries` tagged source='kiwi', with
     `is_self_transfer` set to True when Kiwi flagged virtual interlining.
     Returns rows stored.
+
+    `max_calls` caps the Kiwi spend per run. Without it, a candidate
+    list of 179 itineraries would fire 179 Kiwi calls in one click —
+    more than half the 300/month free tier. Candidates arrive from
+    select_candidates() already diversified across departure months,
+    so the first `max_calls` give broad coverage, not 20 clones.
     """
     if dry_run or kw_client is None:
         return 0
@@ -1550,6 +1557,12 @@ def _run_kiwi_followup(conn, kw_client, route, *, dry_run: bool) -> int:
     from lib.followup import select_candidates
     from lib.kiwi_rapidapi import KiwiError, SOURCE_ID as KW_SOURCE
     candidates = select_candidates(conn, route)
+    if len(candidates) > max_calls:
+        LOG.info(
+            "kiwi followup capping %d candidates to %d calls",
+            len(candidates), max_calls,
+        )
+        candidates = candidates[:max_calls]
     snapshot_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     stored = 0
     MAX_RANKS = 3
@@ -1815,10 +1828,16 @@ def run_all(
                 state="complete",
             )
         else:
+            empty_note = (
+                f" · {result.empty_results} returned NO flights (calls spent, "
+                f"nothing stored — usually dates past Google's ~330-day horizon)"
+                if getattr(result, "empty_results", 0) else ""
+            )
             s.update(
                 label=(
                     f"Followup done — {result.itineraries_queried} "
                     f"itineraries point-queried, {result.rows_stored} rows stored"
+                    f"{empty_note}"
                 ),
                 state="complete",
             )
