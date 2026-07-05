@@ -1,24 +1,31 @@
-"""Tier 1: sliding-window calendar sweeps.
+"""Tier 1: calendar sweeps with full stay-range coverage.
 
-Plans a set of (outbound_window x return_window) rectangles that together
-cover the configured search window, with overlap between adjacent windows
-so we don't miss prices that sit on a boundary.
+Geometry (the important part). The calendar API caps at 200
+(departure x return) combinations per call. We want every stay length
+in [min_stay, max_stay] covered for every departure day in the search
+window, using as few calls as possible.
 
-Key design decisions (see CLAUDE.md):
+For a rectangle with outbound width W_o (days d0..d0+W_o-1), covering
+all stays [s1, s2] requires the return window to span
+[d0 + s1, (d0+W_o-1) + s2] — width W_o + span - 1 where span = s2-s1+1.
+The combo count is W_o * (W_o + span - 1), which must be <= 200:
 
-* The calendar API caps at 200 combos/call; window planner validates
-  the rectangle size against that cap.
-* Stay length is NOT applied here. We let the calendar engine return
-  whatever combinations exist inside the rectangle; analysis layer filters.
-* Outbound and return windows slide in lockstep with the same cadence,
-  but the return window stays aligned with the outbound window via the
-  stay range: return_window starts at outbound_start + min_stay (clipped
-  to the search window) and continues for `return_window_days`.
+    W_o = floor( (-(span-1) + sqrt((span-1)^2 + 800)) / 2 )
+
+For span=31 (stay 60-90) that gives W_o=5 (5*35=175 combos). Rectangles
+tile the departure axis with NO overlap (step = W_o), so each departure
+day lands in exactly one rectangle and no combo is queried twice.
+`sweep.overlap_days` is obsolete under this scheme.
+
+Windows are clamped to today (no past departures) and to Google's ~330
+day booking horizon (queries past it return no flights and waste calls).
+Each clamp emits a human-readable note.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Iterable, Iterator
@@ -59,55 +66,108 @@ class SweepResult:
     curve_entries_stored: int = 0 # Sky Scrapper curve rows stored
 
 
-def plan_windows(route: RouteConfig) -> list[SweepWindow]:
-    """Generate the sliding rectangles to call for one sweep run.
+GOOGLE_HORIZON_DAYS = 330
+COMBO_CAP = 200
 
-    For each (origin, destination) pair we step the outbound start by
-    `outbound_window_days - overlap_days` until the window passes the
-    latest possible return. The return window for a given outbound is
-    anchored at `outbound_start + min_stay` and extends for
-    `return_window_days`, clipped to the search window.
+
+def outbound_width_for_span(span: int, *, cap: int = COMBO_CAP) -> int:
+    """Largest outbound width W_o with W_o*(W_o + span - 1) <= cap.
+
+    Solves the quadratic W_o^2 + (span-1)*W_o - cap <= 0. Returns at
+    least 1. When span alone exceeds the cap (W_o would be 0), returns
+    1 and the caller must chunk the stay range instead.
     """
-    sw = route.search_window
-    sweep = route.sweep
-    min_stay = route.stay.min_days
+    a = span - 1
+    w = math.floor((-a + math.sqrt(a * a + 4 * cap)) / 2)
+    return max(1, w)
 
-    step = sweep.outbound_window_days - sweep.overlap_days
-    if step <= 0:
-        raise ValueError("sweep.outbound_window_days must exceed sweep.overlap_days")
+
+def _stay_chunks(min_stay: int, max_stay: int, *, cap: int = COMBO_CAP) -> list[tuple[int, int]]:
+    """Split [min_stay, max_stay] into sub-ranges each with span <= cap.
+
+    Only needed in the degenerate case span > cap (a >300-day-wide stay
+    range). With W_o pinned at 1, each rectangle covers one departure day
+    and up to `cap` stay values, so we chunk the stay axis.
+    """
+    span = max_stay - min_stay + 1
+    if span <= cap:
+        return [(min_stay, max_stay)]
+    chunks: list[tuple[int, int]] = []
+    lo = min_stay
+    while lo <= max_stay:
+        hi = min(lo + cap - 1, max_stay)
+        chunks.append((lo, hi))
+        lo = hi + 1
+    return chunks
+
+
+def plan_windows(
+    route: RouteConfig, *, today: date | None = None,
+) -> tuple[list[SweepWindow], list[str]]:
+    """Plan the calendar rectangles covering the whole search window.
+
+    Returns (windows, notes). Each rectangle covers every stay length in
+    [min_stay, max_stay] for the departure days it spans, stays under the
+    200-combo cap, and tiles the departure axis with no overlap. Windows
+    are clamped to `today` (no past departures) and Google's ~330-day
+    booking horizon; each clamp adds a note.
+    """
+    today = today or date.today()
+    sw = route.search_window
+    min_stay = route.stay.min_days
+    max_stay = route.stay.max_days
+
+    notes: list[str] = []
+
+    # --- horizon + past clamps on the departure axis ---
+    earliest_dep = sw.earliest_departure
+    if earliest_dep < today:
+        skipped = (today - earliest_dep).days
+        earliest_dep = today
+        notes.append(
+            f"{skipped} days before today excluded (can't book the past)"
+        )
+    horizon = today + timedelta(days=GOOGLE_HORIZON_DAYS)
+    # A departure needs at least min_stay days before latest_return.
+    latest_dep = sw.latest_return - timedelta(days=min_stay)
+    if latest_dep > horizon:
+        dropped_days = (latest_dep - horizon).days
+        latest_dep = horizon
+        notes.append(
+            f"departures past {horizon.isoformat()} excluded "
+            f"(~{dropped_days}d beyond Google's {GOOGLE_HORIZON_DAYS}-day horizon)"
+        )
 
     out: list[SweepWindow] = []
-    for origin in route.origins:
-        for destination in route.destinations:
-            outbound_start = sw.earliest_departure
-            # Stop once the entire outbound rectangle is past the latest
-            # plausible departure (latest_return - min_stay).
-            latest_outbound_start = sw.latest_return - timedelta(days=min_stay)
-            while outbound_start <= latest_outbound_start:
-                outbound_end = min(
-                    outbound_start + timedelta(days=sweep.outbound_window_days - 1),
-                    latest_outbound_start,
-                )
-                return_start = max(
-                    sw.earliest_departure + timedelta(days=min_stay),
-                    outbound_start + timedelta(days=min_stay),
-                )
-                return_end = min(
-                    return_start + timedelta(days=sweep.return_window_days - 1),
-                    sw.latest_return,
-                )
-                if return_end < return_start or outbound_end < outbound_start:
-                    break
-                out.append(SweepWindow(
-                    origin=origin,
-                    destination=destination,
-                    outbound_start=outbound_start,
-                    outbound_end=outbound_end,
-                    return_start=return_start,
-                    return_end=return_end,
-                ))
-                outbound_start = outbound_start + timedelta(days=step)
-    return out
+    if latest_dep < earliest_dep:
+        notes.append("no departures in range after clamps — nothing to sweep")
+        return out, notes
+
+    chunks = _stay_chunks(min_stay, max_stay)
+    for s1, s2 in chunks:
+        span = s2 - s1 + 1
+        w_o = outbound_width_for_span(span)
+        for origin in route.origins:
+            for destination in route.destinations:
+                ob_start = earliest_dep
+                while ob_start <= latest_dep:
+                    ob_end = min(ob_start + timedelta(days=w_o - 1), latest_dep)
+                    return_start = ob_start + timedelta(days=s1)
+                    return_end = min(ob_end + timedelta(days=s2), sw.latest_return)
+                    # Clamp return_end to horizon+max reasonable — a return
+                    # can legitimately be past the horizon since we only
+                    # book the outbound within horizon; leave as-is.
+                    if return_end >= return_start:
+                        out.append(SweepWindow(
+                            origin=origin,
+                            destination=destination,
+                            outbound_start=ob_start,
+                            outbound_end=ob_end,
+                            return_start=return_start,
+                            return_end=return_end,
+                        ))
+                    ob_start = ob_end + timedelta(days=1)
+    return out, notes
 
 
 def run_sweep(
@@ -120,19 +180,32 @@ def run_sweep(
     today: date | None = None,
     skyscanner_client: SkyScrapperClient | None = None,
     skyscanner_planned: bool = False,
+    windows: list[SweepWindow] | None = None,
 ) -> SweepResult:
     """Run the full sweep: Sky Scrapper curve + SearchAPI grid.
 
     Sky Scrapper runs first (cheap: 1 call per origin-destination pair).
-    SearchAPI runs second across all planned windows, applying smart-skip
-    based on prior snapshots.
+    SearchAPI runs second across the planned windows.
+
+    `windows`: when None (CLI path), plan them here and apply smart-skip
+    per window. When provided (RunPlan path), execute EXACTLY that list —
+    no re-planning, no skip re-evaluation, since the planner already made
+    those decisions. This guarantees quote == execution.
 
     `skyscanner_planned` controls the dry-run preview when no real client
     is available: pass True to log the planned Sky Scrapper calls.
     """
     today = today or date.today()
-    windows = plan_windows(route)
-    LOG.info("sweep route=%s windows=%d", route.name, len(windows))
+    precomputed = windows is not None
+    if precomputed:
+        window_list = list(windows)
+    else:
+        window_list, plan_notes = plan_windows(route, today=today)
+        for n in plan_notes:
+            LOG.info("sweep plan note: %s", n)
+    windows = window_list
+    LOG.info("sweep route=%s windows=%d precomputed=%s",
+             route.name, len(windows), precomputed)
 
     # ----- Sky Scrapper curve pass -----
     curve_calls = 0
@@ -155,7 +228,10 @@ def run_sweep(
 
     if dry_run:
         for w in windows:
-            skip, reason = _should_skip_window(conn, route, w, today)
+            if precomputed:
+                skip, reason = False, ""
+            else:
+                skip, reason = _should_skip_window(conn, route, w, today)
             tag = f" SKIP({reason})" if skip else ""
             LOG.info(
                 "plan origin=%s dst=%s ob=%s..%s ret=%s..%s combos=%d%s",
@@ -188,14 +264,18 @@ def run_sweep(
         if max_calls is not None and calls >= max_calls:
             LOG.info("sweep stopping at max_calls=%d", max_calls)
             break
-        skip, reason = _should_skip_window(conn, route, w, today)
-        if skip:
-            skipped += 1
-            LOG.info(
-                "sweep skip origin=%s dst=%s ob=%s..%s reason=%s",
-                w.origin, w.destination, w.outbound_start, w.outbound_end, reason,
-            )
-            continue
+        # When windows are precomputed by the planner, smart-skip was
+        # already applied there — don't re-evaluate (that would drift
+        # execution from the quote).
+        if not precomputed:
+            skip, reason = _should_skip_window(conn, route, w, today)
+            if skip:
+                skipped += 1
+                LOG.info(
+                    "sweep skip origin=%s dst=%s ob=%s..%s reason=%s",
+                    w.origin, w.destination, w.outbound_start, w.outbound_end, reason,
+                )
+                continue
         try:
             resp = client.calendar(
                 origin=w.origin,

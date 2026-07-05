@@ -35,10 +35,14 @@ class StayPreferences:
 
 @dataclass(frozen=True)
 class SweepParams:
-    outbound_window_days: int
-    return_window_days: int
-    overlap_days: int
-    cadence_days: int
+    # LEGACY, ignored by the planner: window geometry is now derived from
+    # the stay range (see lib/sweep.plan_windows). Kept as fields with
+    # defaults so existing YAML files and SweepParams(14, 14, 3, 14)
+    # constructions keep working.
+    outbound_window_days: int = 14
+    return_window_days: int = 14
+    overlap_days: int = 3
+    cadence_days: int = 14
     # Smart-skip: if not None, a window will be skipped in subsequent
     # sweeps when its most recent snapshot had no prices at or below
     # this threshold, provided its earliest outbound is more than
@@ -120,23 +124,23 @@ def _from_dict(raw: dict[str, Any]) -> RouteConfig:
     if len(currency) != 3 or not currency.isalpha() or currency != currency.upper():
         raise ConfigError("currency must be a 3-letter uppercase code (e.g. EUR)")
 
-    sweep_raw = _require_mapping(raw, "sweep")
-    outbound = _require_positive_int(sweep_raw, "outbound_window_days", path="sweep.outbound_window_days")
-    ret = _require_positive_int(sweep_raw, "return_window_days", path="sweep.return_window_days")
-    overlap = _require_nonneg_int(sweep_raw, "overlap_days", path="sweep.overlap_days")
-    cadence = _require_positive_int(sweep_raw, "cadence_days", path="sweep.cadence_days")
+    # `sweep` block: window-size keys are LEGACY (geometry is derived from
+    # the stay range in lib/sweep.plan_windows). They're parsed leniently
+    # if present so old YAML files load, but not validated against the
+    # 200-combo cap — the planner guarantees that internally.
+    sweep_raw = raw.get("sweep") or {}
+    if not isinstance(sweep_raw, dict):
+        raise ConfigError("sweep: must be a mapping when present")
+    outbound = sweep_raw.get("outbound_window_days") or 14
+    ret = sweep_raw.get("return_window_days") or 14
+    overlap = sweep_raw.get("overlap_days")
+    overlap = overlap if isinstance(overlap, int) and not isinstance(overlap, bool) else 3
+    cadence = _require_positive_int(sweep_raw, "cadence_days", path="sweep.cadence_days") \
+        if "cadence_days" in sweep_raw else 14
     skip_if_min_above = _optional_positive_int(
         sweep_raw, "skip_if_min_above", path="sweep.skip_if_min_above")
     skip_grace_days = _optional_nonneg_int(
         sweep_raw, "skip_grace_days", path="sweep.skip_grace_days")
-    # 200-combo API cap on the calendar engine.
-    if outbound * ret > 200:
-        raise ConfigError(
-            f"sweep window {outbound}x{ret}={outbound*ret} exceeds the 200-combo "
-            "calendar API cap"
-        )
-    if overlap >= outbound:
-        raise ConfigError("sweep.overlap_days must be < outbound_window_days")
 
     # `followup` block is optional. When omitted, thresholds are None and
     # the legacy candidate-selection rule applies.
@@ -183,6 +187,80 @@ def _from_dict(raw: dict[str, Any]) -> RouteConfig:
             min_observations=min_obs,
         ),
     )
+
+
+# --- write-back -----------------------------------------------------------
+
+
+def route_to_yaml_dict(route: RouteConfig) -> dict[str, Any]:
+    """Build the YAML-serialisable dict for a RouteConfig.
+
+    Deliberately omits the LEGACY sweep window-size keys
+    (outbound_window_days / return_window_days / overlap_days) — geometry
+    is derived from the stay range now, so writing them back would be
+    misleading. `cadence_days` and the smart-skip keys are preserved.
+    """
+    sweep: dict[str, Any] = {"cadence_days": route.sweep.cadence_days}
+    if route.sweep.skip_if_min_above is not None:
+        sweep["skip_if_min_above"] = route.sweep.skip_if_min_above
+    if route.sweep.skip_grace_days is not None:
+        sweep["skip_grace_days"] = route.sweep.skip_grace_days
+
+    followup: dict[str, Any] = {}
+    if route.followup.watch_below_price is not None:
+        followup["watch_below_price"] = route.followup.watch_below_price
+    if route.followup.drop_above_price is not None:
+        followup["drop_above_price"] = route.followup.drop_above_price
+
+    out: dict[str, Any] = {
+        "route": {
+            "name": route.name,
+            "origins": list(route.origins),
+            "destinations": list(route.destinations),
+        },
+        "search_window": {
+            "earliest_departure": route.search_window.earliest_departure.isoformat(),
+            "latest_return": route.search_window.latest_return.isoformat(),
+        },
+        "stay_preferences": {
+            "min_days": route.stay.min_days,
+            "max_days": route.stay.max_days,
+        },
+        "currency": route.currency,
+        "sweep": sweep,
+        "alerts": {
+            "drop_threshold_pct": route.alerts.drop_threshold_pct,
+            "baseline_window_days": route.alerts.baseline_window_days,
+            "min_observations": route.alerts.min_observations,
+        },
+    }
+    if followup:
+        out["followup"] = followup
+    return out
+
+
+def save_route(path: str | Path, route: RouteConfig) -> None:
+    """Atomically write `route` back to its YAML file.
+
+    Validates by round-tripping through `_from_dict` BEFORE touching the
+    file, so a bad config can never overwrite a good one. The write is
+    atomic (temp file + os.replace). NOTE: YAML comments in the original
+    file are lost — this is accepted; the file is treated as data, not a
+    hand-maintained document once the UI owns it.
+    """
+    import os
+
+    payload = route_to_yaml_dict(route)
+    # Round-trip validation: the dict we're about to write must parse back
+    # into an equivalent RouteConfig.
+    _from_dict(payload)  # raises ConfigError on any problem
+
+    path = Path(path)
+    text = yaml.safe_dump(payload, sort_keys=False, default_flow_style=False,
+                          allow_unicode=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
 
 
 # --- helpers --------------------------------------------------------------

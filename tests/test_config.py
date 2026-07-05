@@ -33,8 +33,11 @@ def test_loads_first_run_yaml():
     assert cfg.search_window.latest_return.year == 2027
 
 
-def test_rejects_oversized_calendar_rectangle(tmp_path):
-    p = tmp_path / "bad.yaml"
+def test_legacy_oversized_window_keys_no_longer_rejected(tmp_path):
+    """The 200-combo validation on window-size keys is gone — geometry is
+    now derived from the stay range by the planner, so a legacy YAML with
+    an 'oversized' 20x14 window must load fine."""
+    p = tmp_path / "legacy.yaml"
     p.write_text(
         "route:\n  name: x\n  origins: [MAD]\n  destinations: [NBO]\n"
         "search_window:\n  earliest_departure: 2026-06-01\n  latest_return: 2027-05-31\n"
@@ -43,8 +46,8 @@ def test_rejects_oversized_calendar_rectangle(tmp_path):
         "sweep: {outbound_window_days: 20, return_window_days: 14, overlap_days: 3, cadence_days: 14}\n"
         "alerts: {drop_threshold_pct: 15, baseline_window_days: 30, min_observations: 4}\n"
     )
-    with pytest.raises(ConfigError, match="200-combo"):
-        load_route(p)
+    cfg = load_route(p)  # must not raise
+    assert cfg.stay.min_days == 30
 
 
 def test_rejects_bad_iata_code(tmp_path):
