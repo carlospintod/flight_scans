@@ -121,7 +121,8 @@ CREATE TABLE IF NOT EXISTS alerts (
     price            INTEGER NOT NULL,
     currency         TEXT NOT NULL,
     baseline_median  INTEGER NOT NULL,
-    drop_pct         REAL NOT NULL
+    drop_pct         REAL NOT NULL,
+    alert_type       TEXT NOT NULL DEFAULT 'drop'
 );
 """
 
@@ -140,6 +141,8 @@ _MIGRATIONS: tuple[tuple[str, str, str], ...] = (
      "ALTER TABLE point_queries ADD COLUMN is_self_transfer INTEGER NOT NULL DEFAULT 0"),
     ("alerts", "source",
      "ALTER TABLE alerts ADD COLUMN source TEXT NOT NULL DEFAULT 'searchapi'"),
+    ("alerts", "alert_type",
+     "ALTER TABLE alerts ADD COLUMN alert_type TEXT NOT NULL DEFAULT 'drop'"),
 )
 
 
@@ -214,6 +217,10 @@ class AlertRow:
     currency: str
     baseline_median: int
     drop_pct: float
+    # 'drop' = below trailing median by threshold (needs >=4 obs);
+    # 'new_low' = below previous all-time min (needs only 2 obs —
+    # the alert mode that fits a near-in booking window).
+    alert_type: str = "drop"
 
 
 @contextmanager
@@ -366,6 +373,7 @@ def insert_alert_rows(conn: sqlite3.Connection, rows: Iterable[AlertRow]) -> int
             r.fired_at, r.route_id, r.source, r.origin, r.destination,
             r.departure_date, r.return_date,
             r.price, r.currency, r.baseline_median, r.drop_pct,
+            r.alert_type,
         )
         for r in rows
     ]
@@ -376,8 +384,8 @@ def insert_alert_rows(conn: sqlite3.Connection, rows: Iterable[AlertRow]) -> int
         INSERT INTO alerts
             (fired_at, route_id, source, origin, destination,
              departure_date, return_date,
-             price, currency, baseline_median, drop_pct)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             price, currency, baseline_median, drop_pct, alert_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         payload,
     )

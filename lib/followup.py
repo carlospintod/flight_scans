@@ -270,8 +270,10 @@ def run_followup(
         outbound = date.fromisoformat(c["departure_date"])
         return_ = date.fromisoformat(c["return_date"])
 
-        # ---- SearchAPI ----
+        # ---- Primary point-query client (SearchAPI, or any duck-typed
+        # client exposing point_query + source_id, e.g. GoogleFlights) ----
         if client is not None:
+            client_source = getattr(client, "source_id", SEARCHAPI_SOURCE)
             try:
                 resp = client.point_query(
                     origin=c["origin"],
@@ -284,7 +286,7 @@ def run_followup(
                     PointRow(
                         snapshot_at=snapshot_at,
                         route_id=route.name,
-                        source=SEARCHAPI_SOURCE,
+                        source=client_source,
                         origin=c["origin"],
                         destination=c["destination"],
                         departure_date=c["departure_date"],
@@ -318,10 +320,12 @@ def run_followup(
                         c["origin"], c["destination"],
                         c["departure_date"], c["return_date"], len(rows),
                     )
-            except SearchApiError as exc:
+            except Exception as exc:  # noqa: BLE001 — client-specific error types
+                # (SearchApiError, GoogleFlightsError, ...) all mean the
+                # same thing here: this candidate produced nothing; move on.
                 LOG.error(
-                    "searchapi point_query failed %s->%s dep=%s ret=%s err=%s",
-                    c["origin"], c["destination"],
+                    "%s point_query failed %s->%s dep=%s ret=%s err=%s",
+                    client_source, c["origin"], c["destination"],
                     c["departure_date"], c["return_date"], exc,
                 )
             sa_calls += 1

@@ -141,6 +141,51 @@ class KiwiClient:
         data = self._request("/round-trip", params)
         return KiwiResponse(raw=data, options=tuple(_parse_options(data, currency)))
 
+    # --- range search: multi-week discovery in ONE call ------------------
+
+    def range_search(
+        self,
+        *,
+        origin: str,
+        destination: str,
+        outbound_start: date,
+        outbound_end: date,
+        inbound_start: date,
+        inbound_end: date,
+        currency: str,
+        adults: int = 1,
+        limit: int = 50,
+    ) -> KiwiResponse:
+        """Discovery search across WIDE date ranges in a single call.
+
+        Kiwi's endpoint natively accepts arbitrary date ranges for both
+        legs; with sortBy=PRICE and a high limit, one call returns the
+        cheapest ~50 itineraries across the whole band — price, exact
+        dates, carriers, and the virtual-interlining flag included.
+        This makes Kiwi a grid-discovery engine at 1 call per band
+        (vs. 1 call per date-pair for point-query APIs).
+
+        Callers derive the inbound band from the stay range:
+        inbound_start = outbound_start + min_stay,
+        inbound_end   = outbound_end + max_stay.
+        Out-of-stay-range results are filtered downstream (same
+        store-everything philosophy as the SearchAPI grid).
+        """
+        params: dict[str, Any] = {
+            "source": origin,
+            "destination": destination,
+            "currency": currency.upper(),
+            "outboundDepartureDateStart": f"{outbound_start.isoformat()}T00:00:00",
+            "outboundDepartureDateEnd": f"{outbound_end.isoformat()}T23:59:59",
+            "inboundDepartureDateStart": f"{inbound_start.isoformat()}T00:00:00",
+            "inboundDepartureDateEnd": f"{inbound_end.isoformat()}T23:59:59",
+            "adults": str(adults),
+            "limit": str(limit),
+            "sortBy": "PRICE",
+        }
+        data = self._request("/round-trip", params)
+        return KiwiResponse(raw=data, options=tuple(_parse_options(data, currency)))
+
     # --- one-way (cheap, useful for discovery) --------------------------
 
     def one_way_search(

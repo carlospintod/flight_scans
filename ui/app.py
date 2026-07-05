@@ -61,7 +61,7 @@ ss.setdefault("q_earliest", sw.earliest_departure)
 ss.setdefault("q_latest", sw.latest_return)
 ss.setdefault("q_stay_min", base_route.stay.min_days)
 ss.setdefault("q_stay_max", base_route.stay.max_days)
-ss.setdefault("q_sources", ["searchapi", "aviasales"])
+ss.setdefault("q_sources", ["googleflights", "kiwi", "aviasales"])
 ss.setdefault("q_cap_sweep", 40)
 ss.setdefault("q_cap_followup", 15)
 ss.setdefault("q_cap_kiwi", 20)
@@ -81,12 +81,16 @@ with st.container(border=True):
         st.number_input("Max stay (days)", min_value=1, max_value=365, key="q_stay_max")
     with c3:
         st.multiselect(
-            "Data sources", ["searchapi", "skyscanner", "aviasales", "kiwi"],
+            "Data sources",
+            ["googleflights", "kiwi", "aviasales", "skyscanner", "searchapi"],
             key="q_sources",
             help=(
-                "SearchAPI (Google Flights) + Aviasales (Saudia/MENA) are the "
-                "default. Sky Scrapper's 20/mo tier exhausts fast; Kiwi adds "
-                "virtual-interlining bundles."
+                "googleflights = direct Google Flights via local browser — "
+                "FREE and unlimited (needs playwright locally). "
+                "kiwi = discovery bands + virtual interlining (300/mo, "
+                "resets ~10th). skyscanner = seasonal curve (20/mo, resets "
+                "~16th). searchapi = 2 credits left, reserve for booking-day "
+                "verification. aviasales = free bonus signal."
             ),
         )
         st.checkbox("Dry run (quote only, no API calls)", key="q_dry_run")
@@ -149,7 +153,9 @@ if route_valid and sources:
         st.error(f"Could not build a plan: {exc}")
 
 _SRC_LABEL = {"searchapi": "SearchAPI", "skyscanner": "Sky Scrapper",
-              "aviasales": "Aviasales", "kiwi": "Kiwi"}
+              "aviasales": "Aviasales", "kiwi": "Kiwi",
+              "googleflights": "Google Flights (direct)"}
+_UNMETERED = {"googleflights", "aviasales"}  # no quota to burn
 
 
 def _remaining(src: str) -> int | None:
@@ -164,6 +170,14 @@ else:
     rows = []
     for src in sources:
         planned = plan.calls_by_source.get(src, 0)
+        if src in _UNMETERED:
+            rows.append({
+                "source": _SRC_LABEL.get(src, src),
+                "planned": planned,
+                "remaining": "∞ (free)",
+                "after run": "∞",
+            })
+            continue
         rem = _remaining(src)
         after = (rem - planned) if rem is not None else None
         if rem is not None and planned > rem:

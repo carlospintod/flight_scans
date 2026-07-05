@@ -186,12 +186,66 @@ def test_plan_kiwi_capped_and_sources_scoped(tmp_path: Path):
             conn, route, sources=["kiwi"],
             caps=Caps(kiwi=5), today=TODAY,
         )
-    # kiwi-only source: no sweep windows, no searchapi followups.
+    # kiwi-only source: no sweep windows, no searchapi followups —
+    # but kiwi DISCOVERY BANDS are planned (range-search calls), plus
+    # point candidates within whatever budget the bands leave.
     assert plan.sweep_windows == ()
     assert plan.followup_candidates == ()
-    assert len(plan.kiwi_candidates) <= 5
+    assert len(plan.kiwi_bands) > 0
+    # Bands tile the departure window: Sep 1 -> latest_dep (Dec 20 - 60d
+    # = Oct 21) is 51 days -> 3 bands of <=21 days for the single origin.
+    assert len(plan.kiwi_bands) == 3
+    assert len(plan.kiwi_candidates) <= max(0, 5 - len(plan.kiwi_bands))
     assert plan.calls_by_source["searchapi"] == 0
-    assert plan.calls_by_source["kiwi"] == len(plan.kiwi_candidates)
+    assert plan.calls_by_source["kiwi"] == (
+        len(plan.kiwi_bands) + len(plan.kiwi_candidates)
+    )
+
+
+def test_plan_kiwi_bands_cover_departure_window(tmp_path: Path):
+    """Band tiling: contiguous, non-overlapping, exactly spanning
+    [earliest_departure, latest_return - min_stay]."""
+    from datetime import timedelta
+    db = tmp_path / "t.db"
+    route = _route(origins=("MAD",))
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        plan = build_run_plan(conn, route, sources=["kiwi"],
+                              caps=Caps(), today=TODAY)
+    bands = sorted(plan.kiwi_bands, key=lambda b: b.outbound_start)
+    sw = route.search_window
+    latest_dep = sw.latest_return - timedelta(days=route.stay.min_days)
+    assert bands[0].outbound_start == max(sw.earliest_departure, TODAY)
+    assert bands[-1].outbound_end == latest_dep
+    for a, b in zip(bands, bands[1:]):
+        assert b.outbound_start == a.outbound_end + timedelta(days=1)
+    for b in bands:
+        # Inbound band derives from the stay range.
+        assert b.inbound_start == b.outbound_start + timedelta(days=route.stay.min_days)
+        assert b.inbound_end <= sw.latest_return
+
+
+def test_plan_googleflights_takes_followup_role(tmp_path: Path):
+    """When googleflights is enabled, followups are assigned to it (free)
+    and searchapi plans zero followup calls."""
+    db = tmp_path / "t.db"
+    route = _route(origins=("MAD",))
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        insert_calendar_rows(conn, [
+            _cal_row("2026-09-15", "2026-11-15", 61, 540),
+            _cal_row("2026-10-01", "2026-12-05", 65, 590),
+        ])
+        plan = build_run_plan(
+            conn, route, sources=["googleflights", "searchapi"],
+            caps=Caps(searchapi_sweep=0, googleflights=30), today=TODAY,
+        )
+    assert plan.followup_source == "googleflights"
+    assert len(plan.followup_candidates) == 2
+    assert plan.calls_by_source["googleflights"] == 2
+    assert plan.calls_by_source["searchapi"] == 0
 
 
 def test_plan_aviasales_and_skyscanner_pair_counts(tmp_path: Path):

@@ -54,10 +54,55 @@ def evaluate(
     LOG.info("alerts route=%s latest_rows=%d", route.name, len(latest))
 
     new_alerts: list[AlertRow] = []
+    fired_keys: set[tuple] = set()  # itinerary+source fired in THIS pass
     for row in latest:
         if row["stay_days"] < min_stay or row["stay_days"] > max_stay:
             continue
         src = row["source"]
+        itin_key = (src, row["origin"], row["destination"],
+                    row["departure_date"], row["return_date"])
+
+        # --- NEW-LOW alert: latest price strictly below the previous
+        # all-time minimum for this itinerary+source. Needs only ONE
+        # prior observation, so it fires from the second scan onward —
+        # the right alert mode for a near-in booking window where the
+        # median-drop rule wouldn't accumulate enough history in time.
+        prev_min_row = conn.execute(
+            """
+            SELECT MIN(price) FROM calendar_snapshots
+            WHERE route_id = ? AND source = ?
+              AND origin = ? AND destination = ?
+              AND departure_date = ? AND return_date = ?
+              AND snapshot_at < ?
+            """,
+            (route.name, src, row["origin"], row["destination"],
+             row["departure_date"], row["return_date"], row["snapshot_at"]),
+        ).fetchone()
+        prev_min = prev_min_row[0] if prev_min_row else None
+        if prev_min is not None and row["price"] < prev_min:
+            if not _already_alerted(
+                conn, route.name, src,
+                row["origin"], row["destination"],
+                row["departure_date"], row["return_date"],
+                price=row["price"], since=baseline_since,
+            ):
+                new_alerts.append(AlertRow(
+                    fired_at=fired_at,
+                    route_id=route.name,
+                    source=src,
+                    origin=row["origin"],
+                    destination=row["destination"],
+                    departure_date=row["departure_date"],
+                    return_date=row["return_date"],
+                    price=row["price"],
+                    currency=row["currency"],
+                    baseline_median=int(prev_min),
+                    drop_pct=round(
+                        (prev_min - row["price"]) / prev_min * 100.0, 2
+                    ) if prev_min > 0 else 0.0,
+                    alert_type="new_low",
+                ))
+                fired_keys.add(itin_key)
         history = calendar_history_for_itinerary(
             conn,
             route.name,
@@ -75,11 +120,13 @@ def evaluate(
         drop = (median - row["price"]) / median * 100.0
         if drop < drop_pct:
             continue
-        # Dedup: don't re-fire if we've already alerted on this exact
-        # itinerary+source at this price (or lower) within the baseline
-        # window. Without this, every evaluate() run re-appends an alert
-        # for any itinerary still meeting the condition, so repeated runs
-        # pile up dozens of duplicate rows for the same signal.
+        # Dedup: skip if this itinerary already fired in THIS pass (as a
+        # new_low), or if a prior run alerted at this price or lower
+        # inside the baseline window. Without the DB check, every
+        # evaluate() re-appended an alert for any itinerary still meeting
+        # the condition — 76 duplicate rows from 3 signals, once.
+        if itin_key in fired_keys:
+            continue
         if _already_alerted(
             conn, route.name, src,
             row["origin"], row["destination"],
@@ -99,16 +146,19 @@ def evaluate(
             currency=row["currency"],
             baseline_median=int(round(median)),
             drop_pct=round(drop, 2),
+            alert_type="drop",
         ))
+        fired_keys.add(itin_key)
 
     if new_alerts:
         insert_alert_rows(conn, new_alerts)
         _append_log(log_path, new_alerts)
         for a in new_alerts:
             print(
-                f"ALERT {a.fired_at} [{a.source}] {a.origin}->{a.destination} "
+                f"ALERT[{a.alert_type}] {a.fired_at} [{a.source}] "
+                f"{a.origin}->{a.destination} "
                 f"{a.departure_date}..{a.return_date} "
-                f"{a.price} {a.currency} (median={a.baseline_median}, "
+                f"{a.price} {a.currency} (ref={a.baseline_median}, "
                 f"-{a.drop_pct:.1f}%)"
             )
     return new_alerts

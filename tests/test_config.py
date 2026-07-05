@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -16,21 +17,19 @@ def test_loads_first_run_yaml():
     assert cfg.currency == "EUR"
     assert cfg.stay.min_days == 60
     assert cfg.stay.max_days == 90
-    assert cfg.sweep.outbound_window_days == 14
-    assert cfg.sweep.return_window_days == 14
-    assert cfg.sweep.overlap_days == 3
-    assert cfg.sweep.cadence_days == 14
+    # Window-size keys are legacy; the real-trip YAML omits them and the
+    # loader falls back to the harmless defaults.
+    assert cfg.sweep.cadence_days == 3
     assert cfg.sweep.skip_if_min_above == 800
     assert cfg.sweep.skip_grace_days == 60
-    assert cfg.followup.watch_below_price == 600
+    assert cfg.followup.watch_below_price == 650
     assert cfg.followup.drop_above_price == 800
     assert cfg.alerts.drop_threshold_pct == 15
     assert cfg.alerts.baseline_window_days == 30
     assert cfg.alerts.min_observations == 4
-    # search_window dates are dates, not strings
-    assert cfg.search_window.earliest_departure.year == 2026
-    assert cfg.search_window.earliest_departure.month == 9
-    assert cfg.search_window.latest_return.year == 2027
+    # The REAL trip window: mid-Sep departures, returns through mid-Jan.
+    assert cfg.search_window.earliest_departure == date(2026, 9, 12)
+    assert cfg.search_window.latest_return == date(2027, 1, 15)
 
 
 def test_legacy_oversized_window_keys_no_longer_rejected(tmp_path):

@@ -1564,6 +1564,72 @@ def _run_aviasales_sweep(conn, av_client, route, *, dry_run: bool,
     return stored
 
 
+def _run_kiwi_discovery(conn, kw_client, route, *, bands, dry_run: bool) -> int:
+    """Execute the plan's Kiwi range-search bands; persist all results.
+
+    Each band = ONE Kiwi call returning the cheapest ~50 itineraries
+    across a multi-week departure window — price + exact dates + carriers
+    + virtual-interlining flag. Results land in BOTH calendar_snapshots
+    (grid discovery) and point_queries (carrier detail), tagged 'kiwi'.
+    Returns rows stored.
+    """
+    if dry_run or kw_client is None or not bands:
+        return 0
+    from datetime import date as _d
+    from lib.db import CalendarRow, PointRow, insert_calendar_rows, insert_point_rows
+    from lib.kiwi_rapidapi import KiwiError, SOURCE_ID as KW_SOURCE
+    snapshot_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    stored = 0
+    for b in bands:
+        try:
+            resp = kw_client.range_search(
+                origin=b.origin, destination=b.destination,
+                outbound_start=b.outbound_start, outbound_end=b.outbound_end,
+                inbound_start=b.inbound_start, inbound_end=b.inbound_end,
+                currency=route.currency, limit=50,
+            )
+        except KiwiError as exc:
+            LOG.error("kiwi band failed %s->%s %s..%s err=%s",
+                      b.origin, b.destination, b.outbound_start,
+                      b.outbound_end, exc)
+            continue
+        cal_rows, pq_rows = [], []
+        for opt in resp.options:
+            if not opt.return_date:
+                continue
+            try:
+                dep_d = _d.fromisoformat(opt.depart_date)
+                ret_d = _d.fromisoformat(opt.return_date)
+            except ValueError:
+                continue
+            stay = (ret_d - dep_d).days
+            if stay <= 0:
+                continue
+            cal_rows.append(CalendarRow(
+                snapshot_at=snapshot_at, route_id=route.name, source=KW_SOURCE,
+                origin=b.origin, destination=b.destination,
+                departure_date=opt.depart_date, return_date=opt.return_date,
+                stay_days=stay, price=opt.price,
+                currency=opt.currency or route.currency,
+                is_lowest_price=False,
+            ))
+            pq_rows.append(PointRow(
+                snapshot_at=snapshot_at, route_id=route.name, source=KW_SOURCE,
+                origin=b.origin, destination=b.destination,
+                departure_date=opt.depart_date, return_date=opt.return_date,
+                rank=0, price=opt.price,
+                currency=opt.currency or route.currency,
+                carriers=opt.carriers, total_minutes=opt.total_minutes,
+                stops=opt.stops, is_self_transfer=opt.is_virtual_interlining,
+            ))
+        stored += insert_calendar_rows(conn, cal_rows)
+        insert_point_rows(conn, pq_rows)
+        LOG.info("kiwi band %s->%s %s..%s: %d itineraries",
+                 b.origin, b.destination, b.outbound_start, b.outbound_end,
+                 len(cal_rows))
+    return stored
+
+
 def _run_kiwi_followup(conn, kw_client, route, *, dry_run: bool,
                        max_calls: int = 20, candidates: list | None = None) -> int:
     """For each follow-up candidate, run one Kiwi round-trip search.
@@ -1688,6 +1754,12 @@ def _make_clients(sources: list[str], dry_run: bool, conn: sqlite3.Connection):
             out["kiwi"] = KiwiClient.from_env(db_conn=conn)
         except RuntimeError as exc:
             st.warning(f"Kiwi disabled: {exc}")
+    if "googleflights" in sources:
+        from lib.googleflights_direct import GoogleFlightsClient
+        try:
+            out["googleflights"] = GoogleFlightsClient.from_env()
+        except RuntimeError as exc:
+            st.warning(f"Google Flights (direct) disabled: {exc}")
     return out
 
 
@@ -1725,13 +1797,18 @@ def run_all(
     plan_aviasales_pairs = list(plan.aviasales_pairs) if plan is not None else None
 
     out: dict = {"sweep": None, "followup": None, "alerts": [],
-                 "aviasales_rows": 0, "kiwi_rows": 0,
+                 "aviasales_rows": 0, "kiwi_rows": 0, "kiwi_band_rows": 0,
                  "errors": [], "logs": {}}
     clients = _make_clients(sources, dry_run, conn)
     sa = clients["searchapi"]
     sky = clients["skyscanner"]
     av = clients["aviasales"]
     kw = clients["kiwi"]
+    gf = clients.get("googleflights")
+    # The followup verifier: free googleflights when the plan says so.
+    followup_client = sa
+    if plan is not None and plan.followup_source == "googleflights":
+        followup_client = gf
     if all(c is None for c in clients.values()) and not dry_run:
         st.error(
             "No API clients available. Either tick **Dry run** in Advanced "
@@ -1838,11 +1915,40 @@ def run_all(
                     state="complete",
                 )
 
+    # --- Sub-step: Kiwi range-search discovery bands ---
+    if plan is not None and plan.kiwi_bands and (kw is not None or dry_run):
+        with st.status(
+            "Step 1c — Kiwi discovery (range bands)", expanded=True,
+        ) as s:
+            def _kw_disc():
+                return _run_kiwi_discovery(
+                    conn, kw, route, bands=list(plan.kiwi_bands),
+                    dry_run=dry_run)
+            result, err, log = _capture(_kw_disc)
+            out["kiwi_band_rows"] = result or 0
+            out["logs"]["kiwi_discovery"] = log
+            st.code(log or "(no output)")
+            if err:
+                out["errors"].append(("kiwi_discovery", err))
+                s.update(label=f"Kiwi discovery failed: {err}", state="error")
+            elif dry_run:
+                s.update(
+                    label=(f"Kiwi discovery dry-run — {len(plan.kiwi_bands)} "
+                           "range calls planned. No data written."),
+                    state="complete",
+                )
+            else:
+                s.update(
+                    label=(f"Kiwi discovery done — {result or 0} itineraries "
+                           f"from {len(plan.kiwi_bands)} band calls"),
+                    state="complete",
+                )
+
     # --- Step 2: followup ---
     with st.status("Step 2/3 — Following up on candidates", expanded=True) as s:
         def _follow():
             return followup_mod.run_followup(
-                conn=conn, client=sa, route=route,
+                conn=conn, client=followup_client, route=route,
                 max_calls=None if plan is not None else (searchapi_cap or None),
                 dry_run=dry_run,
                 skyscanner_client=sky,
@@ -1946,5 +2052,12 @@ def run_all(
                 ),
                 state="complete",
             )
+
+    # Release the headless browser if the googleflights client ran.
+    if gf is not None:
+        try:
+            gf.close()
+        except Exception:  # noqa: BLE001
+            pass
 
     return out

@@ -3,9 +3,11 @@ route:
   origins: [MAD, BCN]
   destinations: [NBO]
 
+# The REAL trip: departures mid-September to mid-October 2026,
+# 60-90 day stays -> returns mid-November 2026 to mid-January 2027.
 search_window:
-  earliest_departure: 2026-09-01
-  latest_return: 2027-05-31
+  earliest_departure: 2026-09-12
+  latest_return: 2027-01-15
 
 stay_preferences:
   min_days: 60
@@ -14,10 +16,7 @@ stay_preferences:
 currency: EUR
 
 sweep:
-  outbound_window_days: 14
-  return_window_days: 14
-  overlap_days: 3
-  cadence_days: 14   # biweekly
+  cadence_days: 3   # scan 2-3x per week now that discovery is free/cheap
   # Smart skip: in subsequent sweeps, skip a window if its most recent
   # snapshot showed no prices at or below `skip_if_min_above`, AND the
   # window's earliest outbound is more than `skip_grace_days` away.
@@ -30,7 +29,7 @@ followup:
   # below `watch_below_price` at some point in its history AND its most
   # recent observed price is at or below `drop_above_price`.
   # If both are null, fall back to the legacy alert-baseline trigger.
-  watch_below_price: 600
+  watch_below_price: 650
   drop_above_price: 800
 
 alerts:

@@ -74,6 +74,8 @@ class PointResponse:
 class SearchApiClient:
     """Thin wrapper. Construct with the key, or `from_env()` to read it."""
 
+    source_id = SOURCE_ID  # rows produced by this client get this tag
+
     def __init__(self, api_key: str, *, session: requests.Session | None = None,
                  timeout_s: int = DEFAULT_TIMEOUT_S):
         if not api_key:

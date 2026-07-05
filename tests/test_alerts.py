@@ -79,6 +79,67 @@ def test_alert_fires_when_drop_exceeds_threshold(tmp_path: Path):
     assert "MAD->NBO" in log_path.read_text(encoding="utf-8")
 
 
+def test_new_low_fires_with_only_two_observations(tmp_path: Path):
+    """The new_low alert needs just 1 prior snapshot — fires from the
+    second scan, unlike the median-drop rule (>=4 obs). Critical for a
+    near-in booking window."""
+    db_path = tmp_path / "t.db"
+    log_path = tmp_path / "alerts.log"
+    today = date(2026, 6, 15)
+    with connect(db_path) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, ROUTE)
+        insert_calendar_rows(conn, [
+            _row(600, datetime(2026, 6, 10)),
+            _row(540, datetime(2026, 6, 14)),  # below prev min 600 -> new_low
+        ])
+        fired = evaluate(conn=conn, route=ROUTE, log_path=log_path, today=today)
+    assert len(fired) == 1
+    a = fired[0]
+    assert a.alert_type == "new_low"
+    assert a.price == 540
+    assert a.baseline_median == 600  # reference = previous all-time min
+    assert a.drop_pct == 10.0
+
+
+def test_new_low_does_not_fire_on_equal_or_higher_price(tmp_path: Path):
+    db_path = tmp_path / "t.db"
+    log_path = tmp_path / "alerts.log"
+    today = date(2026, 6, 15)
+    with connect(db_path) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, ROUTE)
+        insert_calendar_rows(conn, [
+            _row(600, datetime(2026, 6, 10)),
+            _row(600, datetime(2026, 6, 14)),  # equal, not below
+        ])
+        fired = evaluate(conn=conn, route=ROUTE, log_path=log_path, today=today)
+    assert fired == []
+
+
+def test_new_low_and_drop_do_not_double_fire_same_pass(tmp_path: Path):
+    """An itinerary meeting BOTH rules gets exactly one alert per pass."""
+    db_path = tmp_path / "t.db"
+    log_path = tmp_path / "alerts.log"
+    today = date(2026, 6, 15)
+    with connect(db_path) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, ROUTE)
+        insert_calendar_rows(conn, [
+            _row(600, datetime(2026, 5, 25)),
+            _row(610, datetime(2026, 5, 30)),
+            _row(590, datetime(2026, 6, 5)),
+            _row(595, datetime(2026, 6, 10)),
+            # 465 is BOTH a new all-time low AND >15% below median 597.5
+            _row(465, datetime(2026, 6, 14)),
+        ])
+        fired = evaluate(conn=conn, route=ROUTE, log_path=log_path, today=today)
+        n_rows = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+    assert len(fired) == 1
+    assert n_rows == 1
+    assert fired[0].alert_type == "new_low"  # new_low evaluates first
+
+
 def test_alert_does_not_refire_on_repeated_evaluate(tmp_path: Path):
     """Running evaluate() twice on the same data must NOT double the alerts.
 
@@ -138,17 +199,19 @@ def test_alert_refires_on_a_further_drop(tmp_path: Path):
         assert second[0].price == 410
 
 
-def test_no_alert_below_min_observations(tmp_path: Path):
+def test_no_drop_alert_below_min_observations(tmp_path: Path):
+    """The median-DROP rule needs >=4 priors. With only 3, no 'drop'
+    alert fires — but the price IS a new all-time low, so a new_low
+    alert legitimately fires instead (that's its whole purpose)."""
     db_path = tmp_path / "t.db"
     log_path = tmp_path / "alerts.log"
 
     today = date(2026, 6, 15)
-    # Only 3 priors -> below min_observations=4.
     rows = [
         _row(600, datetime(2026, 5, 25)),
         _row(610, datetime(2026, 5, 30)),
         _row(595, datetime(2026, 6, 10)),
-        _row(400, datetime(2026, 6, 14)),  # huge drop, but ignored
+        _row(400, datetime(2026, 6, 14)),
     ]
     with connect(db_path) as conn:
         ensure_schema(conn)
@@ -156,8 +219,10 @@ def test_no_alert_below_min_observations(tmp_path: Path):
         insert_calendar_rows(conn, rows)
         fired = evaluate(conn=conn, route=ROUTE, log_path=log_path, today=today)
 
-    assert fired == []
-    assert not log_path.exists()
+    drop_alerts = [a for a in fired if a.alert_type == "drop"]
+    new_lows = [a for a in fired if a.alert_type == "new_low"]
+    assert drop_alerts == []
+    assert len(new_lows) == 1 and new_lows[0].price == 400
 
 
 def test_no_alert_outside_stay_range(tmp_path: Path):
@@ -206,4 +271,7 @@ def test_baseline_window_excludes_old_observations(tmp_path: Path):
         insert_calendar_rows(conn, rows)
         fired = evaluate(conn=conn, route=ROUTE, log_path=log_path, today=today)
 
-    assert fired == []
+    # No median-DROP alert (baseline window excludes the old priors).
+    # 465 < all-time min 600 though, so a new_low fires — expected.
+    assert [a for a in fired if a.alert_type == "drop"] == []
+    assert len([a for a in fired if a.alert_type == "new_low"]) == 1

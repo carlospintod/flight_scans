@@ -36,6 +36,19 @@ class Caps:
     searchapi_followup: int | None = None
     skyscanner: int | None = None
     kiwi: int | None = DEFAULT_KIWI_CAP
+    googleflights: int | None = 30   # free but polite — page renders
+
+
+@dataclass(frozen=True)
+class KiwiBand:
+    """One Kiwi range-search call: a departure band with the inbound
+    band derived from the stay range."""
+    origin: str
+    destination: str
+    outbound_start: date
+    outbound_end: date
+    inbound_start: date
+    inbound_end: date
 
 
 @dataclass(frozen=True)
@@ -50,6 +63,11 @@ class RunPlan:
     skyscanner_pairs: tuple[tuple[str, str], ...]
     calls_by_source: dict[str, int] = field(default_factory=dict)
     notes: tuple[str, ...] = ()
+    # Which source verifies the followup candidates. Free ladder:
+    # googleflights when enabled, else searchapi.
+    followup_source: str = "searchapi"
+    # Kiwi discovery: one range-search call per band (max ~3-week bands).
+    kiwi_bands: tuple[KiwiBand, ...] = ()
 
 
 def build_run_plan(
@@ -95,26 +113,67 @@ def build_run_plan(
             kept = kept[: caps.searchapi_sweep]
         sweep_windows = kept
 
-    # ---- Followup candidates (SearchAPI point queries) ----
+    # ---- Followup verification: free ladder ----
+    # googleflights (free, local browser) takes the followup role when
+    # enabled; searchapi only when explicitly selected without it.
+    followup_source = "searchapi"
+    followup_cap = caps.searchapi_followup
+    if "googleflights" in src:
+        followup_source = "googleflights"
+        followup_cap = caps.googleflights
     followup_candidates: list[dict] = []
-    if "searchapi" in src:
+    if followup_source in src:
         cands = select_candidates(conn, route, today=today)
-        if caps.searchapi_followup is not None and len(cands) > caps.searchapi_followup:
+        if followup_cap is not None and len(cands) > followup_cap:
             notes.append(
-                f"followup capped to {caps.searchapi_followup} of {len(cands)} "
-                "candidates"
+                f"followup ({followup_source}) capped to {followup_cap} of "
+                f"{len(cands)} candidates"
             )
-            cands = cands[: caps.searchapi_followup]
+            cands = cands[:followup_cap]
         followup_candidates = cands
 
-    # ---- Kiwi candidates (same selection, own cap) ----
-    kiwi_candidates: list[dict] = []
+    # ---- Kiwi discovery bands (range-search, 1 call per band) ----
+    kiwi_bands: list[KiwiBand] = []
     if "kiwi" in src:
+        from datetime import timedelta
+        sw = route.search_window
+        band_days = 21
+        earliest = max(sw.earliest_departure, today)
+        latest_dep = sw.latest_return - timedelta(days=route.stay.min_days)
+        for origin in route.origins:
+            for destination in route.destinations:
+                start = earliest
+                while start <= latest_dep:
+                    end = min(start + timedelta(days=band_days - 1), latest_dep)
+                    kiwi_bands.append(KiwiBand(
+                        origin=origin, destination=destination,
+                        outbound_start=start, outbound_end=end,
+                        inbound_start=start + timedelta(days=route.stay.min_days),
+                        inbound_end=min(
+                            end + timedelta(days=route.stay.max_days),
+                            sw.latest_return,
+                        ),
+                    ))
+                    start = end + timedelta(days=1)
+        if kiwi_bands:
+            notes.append(
+                f"kiwi discovery: {len(kiwi_bands)} range bands "
+                f"(~{band_days}d each, cheapest ~50 itineraries per band)"
+            )
+
+    # ---- Kiwi point candidates (only when kiwi is the followup fallback,
+    # i.e. selected WITHOUT googleflights) ----
+    kiwi_candidates: list[dict] = []
+    if "kiwi" in src and "googleflights" not in src:
         kc = select_candidates(conn, route, today=today)
         kiwi_cap = caps.kiwi if caps.kiwi is not None else DEFAULT_KIWI_CAP
-        if len(kc) > kiwi_cap:
-            notes.append(f"kiwi capped to {kiwi_cap} of {len(kc)} candidates")
-            kc = kc[:kiwi_cap]
+        # Bands consume budget too; leave room.
+        kiwi_point_cap = max(0, kiwi_cap - len(kiwi_bands))
+        if len(kc) > kiwi_point_cap:
+            notes.append(
+                f"kiwi point-followup capped to {kiwi_point_cap} of {len(kc)}"
+            )
+            kc = kc[:kiwi_point_cap]
         kiwi_candidates = kc
 
     # ---- Aviasales pairs (1 cheap_prices call per origin-destination) ----
@@ -147,9 +206,14 @@ def build_run_plan(
     # they're bounded by caps.skyscanner and surfaced only if skyscanner
     # is an active followup source. For the quote we count curve + lookups.
     calls = {
-        "searchapi": len(sweep_windows) + len(followup_candidates),
+        "searchapi": len(sweep_windows) + (
+            len(followup_candidates) if followup_source == "searchapi" else 0
+        ),
+        "googleflights": (
+            len(followup_candidates) if followup_source == "googleflights" else 0
+        ),
         "aviasales": len(aviasales_pairs),
-        "kiwi": len(kiwi_candidates),
+        "kiwi": len(kiwi_bands) + len(kiwi_candidates),
         "skyscanner": len(skyscanner_pairs) + skyscanner_lookups,
     }
     if skyscanner_lookups:
@@ -169,6 +233,8 @@ def build_run_plan(
         skyscanner_pairs=tuple(skyscanner_pairs),
         calls_by_source=calls,
         notes=tuple(notes),
+        followup_source=followup_source,
+        kiwi_bands=tuple(kiwi_bands),
     )
 
 
