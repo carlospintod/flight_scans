@@ -80,6 +80,27 @@ def select_candidates(conn, route: RouteConfig, *, today: date | None = None) ->
     # can't complete even the shortest acceptable trip inside the window.
     latest_dep = sw.latest_return - timedelta(days=min_stay)
 
+    # Price mode only needs each itinerary's all-time minimum, which we
+    # can fetch for EVERY itinerary in one GROUP BY — instead of one
+    # history query per row. On the Turso HTTP backend each query is a
+    # network round trip; with ~180 itineraries the per-row version made
+    # quote recomputation take ~20s.
+    min_by_itin: dict[tuple, int] = {}
+    if price_mode:
+        for r in conn.execute(
+            """
+            SELECT origin, destination, departure_date, return_date,
+                   MIN(price) AS min_price
+            FROM calendar_snapshots
+            WHERE route_id = ? AND source = ?
+            GROUP BY origin, destination, departure_date, return_date
+            """,
+            (route.name, SEARCHAPI_SOURCE),
+        ).fetchall():
+            key = (r["origin"], r["destination"],
+                   r["departure_date"], r["return_date"])
+            min_by_itin[key] = r["min_price"]
+
     out: list[dict] = []
     # Source-filter to SearchAPI: those are the rows with both dep & ret.
     for row in latest_calendar_snapshot_per_itinerary(
@@ -102,21 +123,12 @@ def select_candidates(conn, route: RouteConfig, *, today: date | None = None) ->
                 or ret_d > sw.latest_return):
             continue
 
-        # Full history (we need the all-time min for the price-mode check
-        # and the trailing baseline for the legacy check). Filter to
-        # the SearchAPI source — same reason as above.
-        history = calendar_history_for_itinerary(
-            conn,
-            route.name,
-            row["origin"], row["destination"],
-            row["departure_date"], row["return_date"],
-            source=SEARCHAPI_SOURCE,
-        )
-        all_prices = [r["price"] for r in history]
-        all_time_min = min(all_prices) if all_prices else None
-
         if price_mode:
-            # Price-threshold candidate selection.
+            # Price-threshold candidate selection — uses the batched
+            # per-itinerary minimum instead of a per-row history query.
+            key = (row["origin"], row["destination"],
+                   row["departure_date"], row["return_date"])
+            all_time_min = min_by_itin.get(key)
             if all_time_min is None or all_time_min > watch_below:
                 continue
             if row["price"] > drop_above:
@@ -133,6 +145,16 @@ def select_candidates(conn, route: RouteConfig, *, today: date | None = None) ->
             continue
 
         # --- legacy baseline-trigger mode -----------------------------
+        # This mode needs the trailing price history for THIS itinerary;
+        # fetch it per-row (only reached when price thresholds are unset,
+        # which the current spain-nairobi config never hits).
+        history = calendar_history_for_itinerary(
+            conn,
+            route.name,
+            row["origin"], row["destination"],
+            row["departure_date"], row["return_date"],
+            source=SEARCHAPI_SOURCE,
+        )
         drop_pct = route.alerts.drop_threshold_pct
         min_obs = route.alerts.min_observations
         baseline_since = today - timedelta(days=route.alerts.baseline_window_days)

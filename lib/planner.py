@@ -23,7 +23,7 @@ from datetime import date
 
 from .config import RouteConfig
 from .followup import select_candidates
-from .sweep import SweepWindow, _should_skip_window, plan_windows
+from .sweep import SweepWindow, plan_windows
 
 # Default per-run cap on Kiwi (300/mo tier; keep one run modest).
 DEFAULT_KIWI_CAP = 20
@@ -70,11 +70,15 @@ def build_run_plan(
     if "searchapi" in src:
         planned, geo_notes = plan_windows(route, today=today)
         notes.extend(geo_notes)
-        # Apply smart-skip exactly as run_sweep would.
+        # Apply smart-skip exactly as run_sweep would — but batched:
+        # one DB query for all windows instead of one per window. On the
+        # Turso HTTP backend each query is a network round trip, and the
+        # quote recomputes on every UI interaction; 86 sequential round
+        # trips would make the page unusable.
+        skip_flags = _batched_skip_decisions(conn, route, planned, today)
         kept: list[SweepWindow] = []
         skipped = 0
-        for w in planned:
-            skip, _reason = _should_skip_window(conn, route, w, today)
+        for w, skip in zip(planned, skip_flags):
             if skip:
                 skipped += 1
             else:
@@ -166,3 +170,57 @@ def build_run_plan(
         calls_by_source=calls,
         notes=tuple(notes),
     )
+
+
+def _batched_skip_decisions(
+    conn, route: RouteConfig, windows: list[SweepWindow], today: date,
+) -> list[bool]:
+    """Smart-skip decisions for all windows via ONE DB query.
+
+    Mirrors lib.sweep._should_skip_window exactly:
+      skip iff skip_if_min_above and skip_grace_days are configured,
+      the window's outbound_start is more than grace days out,
+      the window box has at least one prior snapshot,
+      and the most recent snapshot's min price exceeds the threshold.
+
+    The per-window version runs 1 query per window — fine for the CLI,
+    unusable through the Turso HTTP backend at quote time (86 round
+    trips per rerun). This pulls the relevant rows once and evaluates
+    in Python.
+    """
+    threshold = route.sweep.skip_if_min_above
+    grace = route.sweep.skip_grace_days
+    if threshold is None or grace is None or not windows:
+        return [False] * len(windows)
+
+    rows = conn.execute(
+        """
+        SELECT origin, destination, departure_date, return_date,
+               price, snapshot_at
+        FROM calendar_snapshots
+        WHERE route_id = ? AND source = 'searchapi'
+        """,
+        (route.name,),
+    ).fetchall()
+
+    decisions: list[bool] = []
+    for w in windows:
+        if (w.outbound_start - today).days <= grace:
+            decisions.append(False)
+            continue
+        ob_lo, ob_hi = w.outbound_start.isoformat(), w.outbound_end.isoformat()
+        rt_lo, rt_hi = w.return_start.isoformat(), w.return_end.isoformat()
+        in_box = [
+            r for r in rows
+            if r["origin"] == w.origin and r["destination"] == w.destination
+            and ob_lo <= r["departure_date"] <= ob_hi
+            and rt_lo <= r["return_date"] <= rt_hi
+        ]
+        if not in_box:
+            decisions.append(False)  # never scanned -> always scan
+            continue
+        latest_snap = max(r["snapshot_at"] for r in in_box)
+        min_price = min(r["price"] for r in in_box
+                        if r["snapshot_at"] == latest_snap)
+        decisions.append(min_price > threshold)
+    return decisions

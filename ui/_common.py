@@ -1184,13 +1184,26 @@ def latest_grid_for_heatmap(
     source: str,
     min_stay: int,
     max_stay: int,
+    earliest: str | None = None,
+    latest: str | None = None,
 ) -> pd.DataFrame:
     """One row per (departure_date, stay_days) with the cheapest most-recent
     price from `calendar_snapshots`. Sky Scrapper has no return_date, so this
     helper is meaningful only for `source='searchapi'`.
+
+    `earliest`/`latest` (YYYY-MM-DD) restrict to the current search window
+    so results don't include stale out-of-window snapshots.
     """
+    date_pred = ""
+    extra: list = []
+    if earliest is not None:
+        date_pred += " AND cs.departure_date >= ?"
+        extra.append(earliest)
+    if latest is not None:
+        date_pred += " AND cs.return_date <= ?"
+        extra.append(latest)
     rows = conn.execute(
-        """
+        f"""
         SELECT cs.departure_date, cs.stay_days, MIN(cs.price) AS price
         FROM calendar_snapshots cs
         JOIN (
@@ -1206,12 +1219,12 @@ def latest_grid_for_heatmap(
          AND m.return_date = cs.return_date
          AND m.latest = cs.snapshot_at
         WHERE cs.route_id = ? AND cs.source = ? AND cs.origin = ?
-          AND cs.stay_days BETWEEN ? AND ?
+          AND cs.stay_days BETWEEN ? AND ?{date_pred}
         GROUP BY cs.departure_date, cs.stay_days
         ORDER BY cs.departure_date ASC, cs.stay_days ASC
         """,
         (route.name, source, origin,
-         route.name, source, origin, min_stay, max_stay),
+         route.name, source, origin, min_stay, max_stay, *extra),
     ).fetchall()
     if not rows:
         return pd.DataFrame(columns=["departure_date", "stay_days", "price"])
@@ -1228,6 +1241,8 @@ def top_alternatives(
     origin: str | None = None,
     limit: int = 20,
     collapse_by_departure: bool = True,
+    earliest: str | None = None,
+    latest: str | None = None,
 ) -> pd.DataFrame:
     """Cheapest most-recent itineraries within the stay range.
 
@@ -1284,6 +1299,12 @@ def top_alternatives(
         bind.append(origin)
     where_extra.append("AND cs.stay_days BETWEEN ? AND ?")
     bind.extend([min_stay, max_stay])
+    if earliest is not None:
+        where_extra.append("AND cs.departure_date >= ?")
+        bind.append(earliest)
+    if latest is not None:
+        where_extra.append("AND cs.return_date <= ?")
+        bind.append(latest)
     # Fetch a wider pool than `limit` so the post-fetch collapse still
     # yields `limit` distinct departure days.
     fetch_limit = limit * 12 if collapse_by_departure else limit
@@ -1351,17 +1372,32 @@ def top_alternatives(
     return df
 
 
+def _pq_window_preds(earliest, latest) -> tuple[str, list]:
+    """Build the shared cs date predicates for the EXISTS subquery."""
+    pred = ""
+    extra: list = []
+    if earliest is not None:
+        pred += " AND cs.departure_date >= ?"
+        extra.append(earliest)
+    if latest is not None:
+        pred += " AND cs.return_date <= ?"
+        extra.append(latest)
+    return pred, extra
+
+
 def carrier_mix(
     conn: sqlite3.Connection, route, *, source: str | None,
     min_stay: int, max_stay: int,
+    earliest: str | None = None, latest: str | None = None,
 ) -> pd.DataFrame:
     """Count of best-flight (rank=0) point queries grouped by carrier string.
 
     Each carrier string is preserved verbatim ('KLM + Kenya Airways' is
     its own bucket — multi-carrier itineraries are a distinct signal).
     """
+    date_pred, date_extra = _pq_window_preds(earliest, latest)
     where_extra = ["AND pq.rank = 0"]
-    bind: list = [route.name, route.name, min_stay, max_stay]
+    bind: list = [route.name, route.name, min_stay, max_stay, *date_extra]
     if source:
         where_extra.append("AND pq.source = ?")
         bind.append(source)
@@ -1378,7 +1414,7 @@ def carrier_mix(
                 AND cs.origin = pq.origin AND cs.destination = pq.destination
                 AND cs.departure_date = pq.departure_date
                 AND cs.return_date = pq.return_date
-                AND cs.stay_days BETWEEN ? AND ?
+                AND cs.stay_days BETWEEN ? AND ?{date_pred}
           )
           {' '.join(where_extra)}
         GROUP BY pq.carriers
@@ -1394,10 +1430,12 @@ def carrier_mix(
 def stops_distribution(
     conn: sqlite3.Connection, route, *, source: str | None,
     min_stay: int, max_stay: int,
+    earliest: str | None = None, latest: str | None = None,
 ) -> pd.DataFrame:
     """Histogram of stops across best-flight (rank=0) point queries."""
+    date_pred, date_extra = _pq_window_preds(earliest, latest)
     where_extra = ["AND pq.rank = 0"]
-    bind: list = [route.name, route.name, min_stay, max_stay]
+    bind: list = [route.name, route.name, min_stay, max_stay, *date_extra]
     if source:
         where_extra.append("AND pq.source = ?")
         bind.append(source)
@@ -1412,7 +1450,7 @@ def stops_distribution(
                 AND cs.origin = pq.origin AND cs.destination = pq.destination
                 AND cs.departure_date = pq.departure_date
                 AND cs.return_date = pq.return_date
-                AND cs.stay_days BETWEEN ? AND ?
+                AND cs.stay_days BETWEEN ? AND ?{date_pred}
           )
           {' '.join(where_extra)}
         GROUP BY pq.stops
