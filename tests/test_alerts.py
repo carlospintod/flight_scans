@@ -79,6 +79,65 @@ def test_alert_fires_when_drop_exceeds_threshold(tmp_path: Path):
     assert "MAD->NBO" in log_path.read_text(encoding="utf-8")
 
 
+def test_alert_does_not_refire_on_repeated_evaluate(tmp_path: Path):
+    """Running evaluate() twice on the same data must NOT double the alerts.
+
+    Regression for the dedup bug where every evaluate() re-appended an
+    alert for any itinerary still meeting the condition, so repeated
+    runs piled up dozens of duplicate rows for one signal.
+    """
+    db_path = tmp_path / "t.db"
+    log_path = tmp_path / "alerts.log"
+    today = date(2026, 6, 15)
+    rows = [
+        _row(600, datetime(2026, 5, 25)),
+        _row(610, datetime(2026, 5, 30)),
+        _row(590, datetime(2026, 6, 5)),
+        _row(595, datetime(2026, 6, 10)),
+        _row(465, datetime(2026, 6, 14)),
+    ]
+    with connect(db_path) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, ROUTE)
+        insert_calendar_rows(conn, rows)
+
+        first = evaluate(conn=conn, route=ROUTE, log_path=log_path, today=today)
+        assert len(first) == 1
+
+        # Second run over identical data must fire nothing new.
+        second = evaluate(conn=conn, route=ROUTE, log_path=log_path, today=today)
+        assert second == []
+
+        # Exactly one alert row persisted, not two.
+        n = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+        assert n == 1
+
+
+def test_alert_refires_on_a_further_drop(tmp_path: Path):
+    """A genuinely lower price on the same itinerary IS new signal and fires."""
+    db_path = tmp_path / "t.db"
+    log_path = tmp_path / "alerts.log"
+    today = date(2026, 6, 15)
+    with connect(db_path) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, ROUTE)
+        insert_calendar_rows(conn, [
+            _row(600, datetime(2026, 5, 25)),
+            _row(610, datetime(2026, 5, 30)),
+            _row(590, datetime(2026, 6, 5)),
+            _row(595, datetime(2026, 6, 10)),
+            _row(465, datetime(2026, 6, 13)),
+        ])
+        first = evaluate(conn=conn, route=ROUTE, log_path=log_path, today=today)
+        assert len(first) == 1
+
+        # A new, lower snapshot arrives — should fire again.
+        insert_calendar_rows(conn, [_row(410, datetime(2026, 6, 14))])
+        second = evaluate(conn=conn, route=ROUTE, log_path=log_path, today=today)
+        assert len(second) == 1
+        assert second[0].price == 410
+
+
 def test_no_alert_below_min_observations(tmp_path: Path):
     db_path = tmp_path / "t.db"
     log_path = tmp_path / "alerts.log"

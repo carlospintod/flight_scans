@@ -75,6 +75,18 @@ def evaluate(
         drop = (median - row["price"]) / median * 100.0
         if drop < drop_pct:
             continue
+        # Dedup: don't re-fire if we've already alerted on this exact
+        # itinerary+source at this price (or lower) within the baseline
+        # window. Without this, every evaluate() run re-appends an alert
+        # for any itinerary still meeting the condition, so repeated runs
+        # pile up dozens of duplicate rows for the same signal.
+        if _already_alerted(
+            conn, route.name, src,
+            row["origin"], row["destination"],
+            row["departure_date"], row["return_date"],
+            price=row["price"], since=baseline_since,
+        ):
+            continue
         new_alerts.append(AlertRow(
             fired_at=fired_at,
             route_id=route.name,
@@ -100,6 +112,35 @@ def evaluate(
                 f"-{a.drop_pct:.1f}%)"
             )
     return new_alerts
+
+
+def _already_alerted(
+    conn, route_id: str, source: str,
+    origin: str, destination: str,
+    departure_date: str, return_date: str,
+    *, price: int, since: date,
+) -> bool:
+    """True if an alert already fired for this itinerary at <= this price
+    within the baseline window. Prevents duplicate alerts on re-runs.
+
+    We compare on price <= current so a genuine *further* drop still
+    fires (it's new signal), but a flat or higher price on the same
+    itinerary stays quiet.
+    """
+    row = conn.execute(
+        """
+        SELECT 1 FROM alerts
+        WHERE route_id = ? AND source = ?
+          AND origin = ? AND destination = ?
+          AND departure_date = ? AND return_date = ?
+          AND price <= ?
+          AND fired_at >= ?
+        LIMIT 1
+        """,
+        (route_id, source, origin, destination,
+         departure_date, return_date, price, since.isoformat()),
+    ).fetchone()
+    return row is not None
 
 
 def _append_log(log_path: Path, alerts: Iterable[AlertRow]) -> None:

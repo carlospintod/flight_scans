@@ -1202,12 +1202,21 @@ def top_alternatives(
     max_stay: int,
     origin: str | None = None,
     limit: int = 20,
+    collapse_by_departure: bool = True,
 ) -> pd.DataFrame:
     """Cheapest most-recent itineraries within the stay range.
 
     `source`: 'searchapi' | 'skyscanner' | None (both). Sky Scrapper has no
     return_date so its rows only show up when source='skyscanner' AND we
     fall back to departure_curves.
+
+    `collapse_by_departure`: when True (default), keep only the single
+    cheapest itinerary per (origin, departure_date). Without this the
+    table fills with 10+ near-identical rows that share a departure day
+    and price but differ only by return date — technically distinct,
+    useless to scan. Collapsing surfaces variety across departure days
+    (the flexible dimension the user actually cares about). The full
+    2D (departure x return) picture still lives in the heatmap.
     """
     if source == SKYSCANNER_SOURCE:
         # Curve-only: no return date, just departure + price
@@ -1250,6 +1259,9 @@ def top_alternatives(
         bind.append(origin)
     where_extra.append("AND cs.stay_days BETWEEN ? AND ?")
     bind.extend([min_stay, max_stay])
+    # Fetch a wider pool than `limit` so the post-fetch collapse still
+    # yields `limit` distinct departure days.
+    fetch_limit = limit * 12 if collapse_by_departure else limit
     rows = conn.execute(
         f"""
         SELECT cs.origin, cs.destination, cs.departure_date, cs.return_date,
@@ -1295,11 +1307,23 @@ def top_alternatives(
         ORDER BY cs.price ASC
         LIMIT ?
         """,
-        bind + [limit],
+        bind + [fetch_limit],
     ).fetchall()
     if not rows:
         return pd.DataFrame()
-    return pd.DataFrame([dict(r) for r in rows])
+    df = pd.DataFrame([dict(r) for r in rows])
+    if collapse_by_departure and not df.empty:
+        # Keep the cheapest row per (origin, departure_date). Rows are
+        # already price-ascending, so the first occurrence is cheapest.
+        df = (
+            df.sort_values("price", kind="stable")
+              .drop_duplicates(subset=["origin", "departure_date"], keep="first")
+              .head(limit)
+              .reset_index(drop=True)
+        )
+    else:
+        df = df.head(limit).reset_index(drop=True)
+    return df
 
 
 def carrier_mix(
