@@ -1458,14 +1458,12 @@ def alerts_dataframe(
 # --- Run orchestration ------------------------------------------------------
 
 
-def _run_aviasales_sweep(conn, av_client, route, *, dry_run: bool) -> int:
-    """One latest_prices call per (origin, destination); persist rows.
+def _run_aviasales_sweep(conn, av_client, route, *, dry_run: bool,
+                         pairs: list | None = None) -> int:
+    """One cheap_prices call per (origin, destination); persist rows.
 
-    Aviasales' /v2/prices/latest returns the cheapest recently-cached
-    prices on a route, including carriers Google Flights skips
-    (especially Saudia). We persist each returned itinerary as a
-    `calendar_snapshots` row tagged source='aviasales' — same shape
-    as SearchAPI calendar entries, just from a different aggregator.
+    `pairs`: explicit (origin, destination) list from the RunPlan. When
+    None, defaults to the full route cross-product (legacy behavior).
 
     Returns the number of rows stored (0 in dry-run).
     """
@@ -1475,18 +1473,10 @@ def _run_aviasales_sweep(conn, av_client, route, *, dry_run: bool) -> int:
     from lib.db import CalendarRow, insert_calendar_rows
     snapshot_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     stored = 0
-    # Per the 2026-06-10 probe, /v2/prices/latest returns empty for
-    # MAD->NBO on most months — Aviasales' cache is sparse on this
-    # corridor. /v1/prices/cheap is more reliable: 1 call returns the
-    # currently-cheapest cached observations per destination, including
-    # carriers Google Flights skips (especially SV/Saudia).
-    #
-    # We call cheap_prices with no date filter and accept whatever the
-    # cache currently knows. This is cheap (1 call per O-D pair) and
-    # broad. We do call it once per route.origin × route.destination —
-    # so 2 origins × 1 destination = 2 calls for spain-nairobi.
-    for origin in route.origins:
-        for destination in route.destinations:
+    if pairs is None:
+        pairs = [(o, d) for o in route.origins for d in route.destinations]
+    for origin, destination in pairs:
+        if True:
             month_total = 0
             for m in [None]:  # single pass — no month filter
                 try:
@@ -1537,18 +1527,16 @@ def _run_aviasales_sweep(conn, av_client, route, *, dry_run: bool) -> int:
 
 
 def _run_kiwi_followup(conn, kw_client, route, *, dry_run: bool,
-                       max_calls: int = 20) -> int:
+                       max_calls: int = 20, candidates: list | None = None) -> int:
     """For each follow-up candidate, run one Kiwi round-trip search.
 
     Stores top results in `point_queries` tagged source='kiwi', with
     `is_self_transfer` set to True when Kiwi flagged virtual interlining.
     Returns rows stored.
 
-    `max_calls` caps the Kiwi spend per run. Without it, a candidate
-    list of 179 itineraries would fire 179 Kiwi calls in one click —
-    more than half the 300/month free tier. Candidates arrive from
-    select_candidates() already diversified across departure months,
-    so the first `max_calls` give broad coverage, not 20 clones.
+    `candidates`: explicit list from the RunPlan (already window-filtered,
+    diversified, and capped). When None, self-selects and applies the
+    `max_calls` cap (legacy behavior).
     """
     if dry_run or kw_client is None:
         return 0
@@ -1556,13 +1544,14 @@ def _run_kiwi_followup(conn, kw_client, route, *, dry_run: bool,
     from lib.db import PointRow, insert_point_rows
     from lib.followup import select_candidates
     from lib.kiwi_rapidapi import KiwiError, SOURCE_ID as KW_SOURCE
-    candidates = select_candidates(conn, route)
-    if len(candidates) > max_calls:
-        LOG.info(
-            "kiwi followup capping %d candidates to %d calls",
-            len(candidates), max_calls,
-        )
-        candidates = candidates[:max_calls]
+    if candidates is None:
+        candidates = select_candidates(conn, route)
+        if len(candidates) > max_calls:
+            LOG.info(
+                "kiwi followup capping %d candidates to %d calls",
+                len(candidates), max_calls,
+            )
+            candidates = candidates[:max_calls]
     snapshot_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     stored = 0
     MAX_RANKS = 3
@@ -1673,11 +1662,16 @@ def run_all(
     skyscanner_cap: int,
     dry_run: bool,
     alerts_log: Path,
+    plan=None,
 ) -> dict:
     """Sweep → followup → alerts in sequence.
 
     Each step is independent — failure in one does NOT block the next.
     Returns a dict with per-step results, errors, and captured logs.
+
+    `plan`: a lib.planner.RunPlan. When provided, every step executes the
+    plan's precomputed lists verbatim (windows, candidates, pairs) so what
+    ran equals what the quote showed. When None, steps self-plan (legacy).
     """
     import io
     import logging
@@ -1686,6 +1680,11 @@ def run_all(
     from lib import alerts as alerts_mod
     from lib import followup as followup_mod
     from lib import sweep as sweep_mod
+
+    plan_windows_arg = list(plan.sweep_windows) if plan is not None else None
+    plan_followup_arg = list(plan.followup_candidates) if plan is not None else None
+    plan_kiwi_arg = list(plan.kiwi_candidates) if plan is not None else None
+    plan_aviasales_pairs = list(plan.aviasales_pairs) if plan is not None else None
 
     out: dict = {"sweep": None, "followup": None, "alerts": [],
                  "aviasales_rows": 0, "kiwi_rows": 0,
@@ -1734,10 +1733,12 @@ def run_all(
         def _sweep():
             return sweep_mod.run_sweep(
                 conn=conn, client=sa, route=route,
-                max_calls=searchapi_cap or None,
+                # Plan already applied smart-skip + cap → no extra cap.
+                max_calls=None if plan is not None else (searchapi_cap or None),
                 dry_run=dry_run,
                 skyscanner_client=sky,
                 skyscanner_planned="skyscanner" in sources,
+                windows=plan_windows_arg,
             )
         result, err, log = _capture(_sweep)
         out["sweep"] = result
@@ -1775,7 +1776,8 @@ def run_all(
             "Step 1b — Aviasales (Saudia + MENA coverage)", expanded=True,
         ) as s:
             def _av_sweep():
-                return _run_aviasales_sweep(conn, av, route, dry_run=dry_run)
+                return _run_aviasales_sweep(
+                    conn, av, route, dry_run=dry_run, pairs=plan_aviasales_pairs)
             result, err, log = _capture(_av_sweep)
             out["aviasales_rows"] = result or 0
             out["logs"]["aviasales"] = log
@@ -1803,9 +1805,10 @@ def run_all(
         def _follow():
             return followup_mod.run_followup(
                 conn=conn, client=sa, route=route,
-                max_calls=searchapi_cap or None,
+                max_calls=None if plan is not None else (searchapi_cap or None),
                 dry_run=dry_run,
                 skyscanner_client=sky,
+                candidates=plan_followup_arg,
             )
         result, err, log = _capture(_follow)
         out["followup"] = result
@@ -1848,7 +1851,8 @@ def run_all(
             "Step 2b — Kiwi (virtual interlining bundles)", expanded=True,
         ) as s:
             def _kw_sweep():
-                return _run_kiwi_followup(conn, kw, route, dry_run=dry_run)
+                return _run_kiwi_followup(
+                    conn, kw, route, dry_run=dry_run, candidates=plan_kiwi_arg)
             result, err, log = _capture(_kw_sweep)
             out["kiwi_rows"] = result or 0
             out["logs"]["kiwi"] = log

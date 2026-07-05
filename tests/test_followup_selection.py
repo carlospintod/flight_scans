@@ -98,6 +98,46 @@ def test_price_mode_handles_single_observation(tmp_path: Path):
     assert len(candidates) == 1
 
 
+def test_out_of_window_itineraries_excluded(tmp_path: Path):
+    """Itineraries departing before earliest or after latest-feasible, or
+    returning after latest_return, are excluded even if price/stay match.
+
+    Regression for the narrowed-window surprise: old snapshots persisted
+    after the user shrank the window and were still point-queried.
+    """
+    db = tmp_path / "t.db"
+    # Window Sep 1 2026 -> Dec 20 2026; min_stay 60 -> latest feasible
+    # departure = Dec 20 - 60 = Oct 21 2026.
+    route = _route(min_stay=60, max_stay=90)
+    from dataclasses import replace
+    route = replace(route, search_window=SearchWindow(
+        earliest_departure=date(2026, 9, 1),
+        latest_return=date(2026, 12, 20),
+    ))
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        insert_calendar_rows(conn, [
+            # In window: dep Sep 5, ret Nov 8 (64d) -> KEEP
+            _row(datetime(2026, 6, 1), "2026-09-05", "2026-11-08", 64, 500),
+            # Departs before window start -> DROP
+            _row(datetime(2026, 6, 1), "2026-08-20", "2026-10-25", 66, 480),
+            # Departs after latest-feasible (Nov 5 + 60 = past Dec 20) -> DROP
+            _row(datetime(2026, 6, 1), "2026-11-05", "2027-01-08", 64, 470),
+            # Returns after latest_return -> DROP (dep Oct 15 in range but
+            # ret Dec 25 > Dec 20)
+            _row(datetime(2026, 6, 1), "2026-10-15", "2026-12-25", 71, 460),
+        ])
+        candidates = select_candidates(conn, route, today=date(2026, 6, 15))
+
+    keys = {(c["departure_date"], c["return_date"]) for c in candidates}
+    assert ("2026-09-05", "2026-11-08") in keys
+    assert ("2026-08-20", "2026-10-25") not in keys
+    assert ("2026-11-05", "2027-01-08") not in keys
+    assert ("2026-10-15", "2026-12-25") not in keys
+    assert len(candidates) == 1
+
+
 def test_candidates_round_robin_across_departure_months(tmp_path: Path):
     """Candidates must interleave departure months, not sort purely by price.
 

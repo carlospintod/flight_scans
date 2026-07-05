@@ -70,11 +70,15 @@ def select_candidates(conn, route: RouteConfig, *, today: date | None = None) ->
     set, otherwise legacy baseline-trigger.
     """
     today = today or date.today()
+    sw = route.search_window
     min_stay = route.stay.min_days
     max_stay = route.stay.max_days
     watch_below = route.followup.watch_below_price
     drop_above = route.followup.drop_above_price
     price_mode = watch_below is not None and drop_above is not None
+    # Latest feasible departure = latest_return - min_stay. Anything later
+    # can't complete even the shortest acceptable trip inside the window.
+    latest_dep = sw.latest_return - timedelta(days=min_stay)
 
     out: list[dict] = []
     # Source-filter to SearchAPI: those are the rows with both dep & ret.
@@ -83,6 +87,19 @@ def select_candidates(conn, route: RouteConfig, *, today: date | None = None) ->
     ):
         stay = row["stay_days"]
         if stay < min_stay or stay > max_stay:
+            continue
+
+        # Search-window date filter: skip itineraries whose dates fall
+        # outside the CURRENT window. Old snapshots persist in the DB
+        # after the window is narrowed; without this filter they'd still
+        # be point-queried (the "179 candidates" surprise).
+        try:
+            dep_d = date.fromisoformat(row["departure_date"])
+            ret_d = date.fromisoformat(row["return_date"])
+        except (ValueError, TypeError):
+            continue
+        if (dep_d < sw.earliest_departure or dep_d > latest_dep
+                or ret_d > sw.latest_return):
             continue
 
         # Full history (we need the all-time min for the price-mode check
@@ -178,6 +195,7 @@ def run_followup(
     dry_run: bool = False,
     skyscanner_client: SkyScrapperClient | None = None,
     skyscanner_max_calls: int | None = None,
+    candidates: list[dict] | None = None,
 ) -> FollowupResult:
     """For each candidate itinerary, point-query both sources.
 
@@ -186,10 +204,16 @@ def run_followup(
     polling). Pass either as None to disable that source's cap;
     pass 0 to disable that source entirely for this run.
 
+    `candidates`: when None (CLI path), self-selects + diversifies via
+    select_candidates. When provided (RunPlan path), uses that exact list
+    — the planner already selected, window-filtered, diversified, and
+    capped it, so quote == execution.
+
     Candidates are processed cheapest-first, so a cap keeps the most
     promising itineraries and drops the marginal ones.
     """
-    candidates = select_candidates(conn, route)
+    if candidates is None:
+        candidates = select_candidates(conn, route)
     LOG.info("followup route=%s candidates=%d", route.name, len(candidates))
 
     if dry_run:
