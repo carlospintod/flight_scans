@@ -37,6 +37,9 @@ class Caps:
     skyscanner: int | None = None
     kiwi: int | None = DEFAULT_KIWI_CAP
     googleflights: int | None = 30   # free but polite — page renders
+    # 100 renewing searches/month; 13 scheduled runs x 7 ~= 91 keeps a
+    # margin for manual dispatches.
+    serpapi: int | None = 7
 
 
 @dataclass(frozen=True)
@@ -114,13 +117,20 @@ def build_run_plan(
         sweep_windows = kept
 
     # ---- Followup verification: free ladder ----
-    # googleflights (free, local browser) takes the followup role when
-    # enabled; searchapi only when explicitly selected without it.
+    # First enabled source wins: googleflights (free, needs a local
+    # browser) > serpapi (managed, 100/mo renewing) > searchapi
+    # (one-time credits, break-glass).
     followup_source = "searchapi"
     followup_cap = caps.searchapi_followup
-    if "googleflights" in src:
-        followup_source = "googleflights"
-        followup_cap = caps.googleflights
+    for cand_source, cand_cap in (
+        ("googleflights", caps.googleflights),
+        ("serpapi", caps.serpapi),
+        ("searchapi", caps.searchapi_followup),
+    ):
+        if cand_source in src:
+            followup_source = cand_source
+            followup_cap = cand_cap
+            break
     followup_candidates: list[dict] = []
     if followup_source in src:
         cands = select_candidates(conn, route, today=today)
@@ -211,6 +221,9 @@ def build_run_plan(
         ),
         "googleflights": (
             len(followup_candidates) if followup_source == "googleflights" else 0
+        ),
+        "serpapi": (
+            len(followup_candidates) if followup_source == "serpapi" else 0
         ),
         "aviasales": len(aviasales_pairs),
         "kiwi": len(kiwi_bands) + len(kiwi_candidates),

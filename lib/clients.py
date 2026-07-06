@@ -55,9 +55,14 @@ def make_clients(
         from .googleflights_direct import GoogleFlightsClient
         return GoogleFlightsClient.from_env()
 
+    def _build_serpapi():
+        from .serpapi_io import SerpApiClient
+        return SerpApiClient.from_env()
+
     _try("searchapi", "SearchAPI", _build_searchapi)
     _try("skyscanner", "Sky Scrapper", _build_skyscanner)
     _try("aviasales", "Aviasales", _build_aviasales)
     _try("kiwi", "Kiwi", _build_kiwi)
     _try("googleflights", "Google Flights (direct)", _build_googleflights)
+    _try("serpapi", "SerpAPI", _build_serpapi)
     return out, warnings

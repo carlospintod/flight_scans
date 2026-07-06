@@ -248,6 +248,55 @@ def test_plan_googleflights_takes_followup_role(tmp_path: Path):
     assert plan.calls_by_source["searchapi"] == 0
 
 
+def test_plan_followup_ladder_serpapi_beats_searchapi(tmp_path: Path):
+    """Ladder: googleflights > serpapi > searchapi. Without googleflights,
+    serpapi takes the followup role (managed + renewing beats one-time
+    break-glass credits); searchapi plans zero followups."""
+    db = tmp_path / "t.db"
+    route = _route(origins=("MAD",))
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        insert_calendar_rows(conn, [
+            _cal_row("2026-09-15", "2026-11-15", 61, 540),
+            _cal_row("2026-10-01", "2026-12-05", 65, 590),
+        ])
+        plan = build_run_plan(
+            conn, route, sources=["serpapi", "searchapi"],
+            caps=Caps(searchapi_sweep=0, serpapi=7), today=TODAY,
+        )
+        # And with googleflights present, it still outranks serpapi.
+        plan_gf = build_run_plan(
+            conn, route, sources=["googleflights", "serpapi"],
+            caps=Caps(searchapi_sweep=0), today=TODAY,
+        )
+    assert plan.followup_source == "serpapi"
+    assert plan.calls_by_source["serpapi"] == 2
+    assert plan.calls_by_source["searchapi"] == 0
+    assert plan_gf.followup_source == "googleflights"
+    assert plan_gf.calls_by_source["serpapi"] == 0
+
+
+def test_plan_serpapi_cap_limits_candidates(tmp_path: Path):
+    """Caps.serpapi bounds the followup list (91/mo budget at 13 runs)."""
+    db = tmp_path / "t.db"
+    route = _route(origins=("MAD",))
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        insert_calendar_rows(conn, [
+            _cal_row(f"2026-09-{d:02d}", f"2026-11-{d:02d}", 61, 540)
+            for d in range(10, 20)
+        ])
+        plan = build_run_plan(
+            conn, route, sources=["serpapi"],
+            caps=Caps(searchapi_sweep=0, serpapi=7), today=TODAY,
+        )
+    assert plan.followup_source == "serpapi"
+    assert len(plan.followup_candidates) == 7
+    assert any("capped to 7 of 10" in n for n in plan.notes)
+
+
 def test_plan_aviasales_and_skyscanner_pair_counts(tmp_path: Path):
     db = tmp_path / "t.db"
     route = _route()  # 2 origins x 1 destination

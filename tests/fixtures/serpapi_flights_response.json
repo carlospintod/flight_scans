@@ -1,0 +1,111 @@
+{
+  "search_metadata": {
+    "id": "fixture",
+    "status": "Success",
+    "created_at": "2026-07-06 00:00:00 UTC"
+  },
+  "search_parameters": {
+    "engine": "google_flights",
+    "departure_id": "MAD",
+    "arrival_id": "NBO",
+    "outbound_date": "2026-09-15",
+    "return_date": "2026-11-18",
+    "type": "1",
+    "currency": "EUR"
+  },
+  "best_flights": [
+    {
+      "flights": [
+        {
+          "departure_airport": {"name": "Adolfo Suárez Madrid–Barajas Airport", "id": "MAD", "time": "2026-09-15 15:10"},
+          "arrival_airport": {"name": "Zayed International Airport", "id": "AUH", "time": "2026-09-16 00:25"},
+          "duration": 435,
+          "airplane": "Boeing 787",
+          "airline": "Etihad",
+          "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/EY.png",
+          "travel_class": "Economy",
+          "flight_number": "EY 76",
+          "legroom": "31 in",
+          "extensions": ["Average legroom (31 in)"]
+        },
+        {
+          "departure_airport": {"name": "Zayed International Airport", "id": "AUH", "time": "2026-09-16 03:05"},
+          "arrival_airport": {"name": "Jomo Kenyatta International Airport", "id": "NBO", "time": "2026-09-16 07:10"},
+          "duration": 305,
+          "airplane": "Boeing 787",
+          "airline": "Etihad",
+          "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/EY.png",
+          "travel_class": "Economy",
+          "flight_number": "EY 641",
+          "legroom": "32 in",
+          "extensions": ["Above average legroom (32 in)"]
+        }
+      ],
+      "layovers": [
+        {"duration": 160, "name": "Zayed International Airport", "id": "AUH"}
+      ],
+      "total_duration": 900,
+      "price": 567,
+      "type": "Round trip",
+      "departure_token": "fixture-token-1"
+    },
+    {
+      "flights": [
+        {
+          "departure_airport": {"name": "Adolfo Suárez Madrid–Barajas Airport", "id": "MAD", "time": "2026-09-15 10:35"},
+          "arrival_airport": {"name": "Istanbul Airport", "id": "IST", "time": "2026-09-15 16:05"},
+          "duration": 270,
+          "airline": "Turkish Airlines",
+          "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/TK.png",
+          "travel_class": "Economy",
+          "flight_number": "TK 1858"
+        },
+        {
+          "departure_airport": {"name": "Istanbul Airport", "id": "IST", "time": "2026-09-15 18:50"},
+          "arrival_airport": {"name": "Jomo Kenyatta International Airport", "id": "NBO", "time": "2026-09-16 01:45"},
+          "duration": 415,
+          "airline": "Turkish Airlines",
+          "airline_logo": "https://www.gstatic.com/flights/airline_logos/70px/TK.png",
+          "travel_class": "Economy",
+          "flight_number": "TK 607"
+        }
+      ],
+      "layovers": [
+        {"duration": 165, "name": "Istanbul Airport", "id": "IST"}
+      ],
+      "total_duration": 850,
+      "price": 641,
+      "type": "Round trip",
+      "departure_token": "fixture-token-2"
+    }
+  ],
+  "other_flights": [
+    {
+      "flights": [
+        {
+          "departure_airport": {"name": "Adolfo Suárez Madrid–Barajas Airport", "id": "MAD", "time": "2026-09-15 11:50"},
+          "arrival_airport": {"name": "Cairo International Airport", "id": "CAI", "time": "2026-09-15 17:20"},
+          "duration": 270,
+          "airline": "EgyptAir",
+          "travel_class": "Economy",
+          "flight_number": "MS 754"
+        },
+        {
+          "departure_airport": {"name": "Cairo International Airport", "id": "CAI", "time": "2026-09-15 20:20"},
+          "arrival_airport": {"name": "Jomo Kenyatta International Airport", "id": "NBO", "time": "2026-09-16 01:20"},
+          "duration": 240,
+          "airline": "EgyptAir",
+          "travel_class": "Economy",
+          "flight_number": "MS 849"
+        }
+      ],
+      "layovers": [
+        {"duration": 180, "name": "Cairo International Airport", "id": "CAI"}
+      ],
+      "total_duration": 690,
+      "price": 689,
+      "type": "Round trip",
+      "departure_token": "fixture-token-3"
+    }
+  ]
+}
