@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+/* GTM99-accent design tokens — ported from ui/_common.py's terminal
+   theme. Matrix green is an ACCENT (status, hero price, section rules),
+   never body text. Dark is the only theme. */
+@theme {
+  --color-bg: #0a0b10;
+  --color-bg-2: #0f1018;
+  --color-bg-3: #151620;
+  --color-line: #1e1f32;
+  --color-line-bright: #2c2d44;
+  --color-matrix: #00ff41;
+  --color-matrix-dim: #00b830;
+  --color-cyan: #00d4ff;
+  --color-amber: #ffcc00;
+  --color-danger: #ff4455;
+  --color-fg: #c8cad8;
+  --color-fg-bright: #e4e6f0;
+  --color-fg-mid: #8e91a8;
+  --color-fg-dim: #585b72;
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --radius-card: 4px;
+  --shadow-glow: 0 0 14px rgb(0 255 65 / 0.18);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+}
+
+/* Terminal cursor for the brand mark. */
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.cursor-blink::after {
+  content: "_";
+  color: var(--color-matrix);
+  animation: blink 1.1s step-end infinite;
+}
+
+::selection {
+  background: rgb(0 255 65 / 0.25);
+}
+
+/* Thin dark scrollbars for overflow containers (heatmap, tables). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-bright) var(--color-bg-2);
+}
