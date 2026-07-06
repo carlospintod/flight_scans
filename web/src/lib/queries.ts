@@ -363,6 +363,88 @@ export async function getItineraryAlerts(
   }));
 }
 
+export interface QuotaCard {
+  source: string;
+  remaining: number | null;
+  limitTotal: number | null;
+  checkedAt: string;
+  resetsAt: string | null;
+}
+
+/** Mirrors lib/db.latest_quota per source; Kiwi/RapidAPI reset date is
+ *  derived from the X-RateLimit-*-Reset header (seconds-to-reset at
+ *  capture time) stored in raw_json. */
+export async function getQuotas(): Promise<QuotaCard[]> {
+  const sources = ["serpapi", "kiwi", "aviasales", "skyscanner", "searchapi"];
+  const out: QuotaCard[] = [];
+  for (const source of sources) {
+    const rs = await db().execute({
+      sql: `SELECT checked_at, remaining, limit_total, raw_json
+            FROM quota_snapshots WHERE source = ?
+            ORDER BY checked_at DESC LIMIT 1`,
+      args: [source],
+    });
+    const r = rs.rows[0];
+    if (!r) continue;
+    let resetsAt: string | null = null;
+    try {
+      const raw = JSON.parse(String(r["raw_json"] ?? "{}"));
+      const seconds = findResetSeconds(raw);
+      if (seconds !== null) {
+        resetsAt = new Date(
+          Date.parse(String(r["checked_at"])) + seconds * 1000,
+        ).toISOString();
+      }
+    } catch {
+      /* raw_json unparseable -> no reset info */
+    }
+    out.push({
+      source,
+      remaining: r["remaining"] === null ? null : Number(r["remaining"]),
+      limitTotal: r["limit_total"] === null ? null : Number(r["limit_total"]),
+      checkedAt: String(r["checked_at"]),
+      resetsAt,
+    });
+  }
+  return out;
+}
+
+function findResetSeconds(obj: unknown): number | null {
+  if (!obj || typeof obj !== "object") return null;
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+    if (/reset/i.test(k)) {
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0 && n < 45 * 86_400) return n;
+    }
+    const nested = findResetSeconds(v);
+    if (nested !== null) return nested;
+  }
+  return null;
+}
+
+/** Last N scan_runs rows for the ops history table. */
+export async function getScanHistory(
+  routeId: string = DEFAULT_ROUTE,
+  limit = 10,
+): Promise<ScanRun[]> {
+  const rs = await db().execute({
+    sql: `SELECT started_at, finished_at, trigger, sources, rows_stored,
+                 alerts_fired, status
+          FROM scan_runs WHERE route_id = ?
+          ORDER BY started_at DESC LIMIT ?`,
+    args: [routeId, limit],
+  });
+  return rs.rows.map((r) => ({
+    startedAt: String(r["started_at"]),
+    finishedAt: r["finished_at"] ? String(r["finished_at"]) : null,
+    trigger: String(r["trigger"]),
+    sources: String(r["sources"]),
+    rowsStored: Number(r["rows_stored"]),
+    alertsFired: Number(r["alerts_fired"]),
+    status: String(r["status"]),
+  }));
+}
+
 /** Mirrors ui/_common.itinerary_history_chart's query. */
 export async function getItineraryHistory(
   routeId: string,

@@ -97,6 +97,21 @@ jobs:
           JOB_STATUS: ${{ job.status }}
         run: python scripts/notify_ntfy.py summary.json
 
+      # Regenerate the web radar within seconds of fresh data (its ISR
+      # would otherwise take up to 6h). Skips quietly until WEB_URL
+      # (repo variable) + REVALIDATE_SECRET (secret) are configured.
+      - name: Refresh web radar
+        if: always()
+        env:
+          WEB_URL: ${{ vars.WEB_URL }}
+          REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET }}
+        run: |
+          if [ -n "$WEB_URL" ] && [ -n "$REVALIDATE_SECRET" ]; then
+            curl -fsS -X POST "$WEB_URL/api/revalidate?secret=$REVALIDATE_SECRET" || true
+          else
+            echo "WEB_URL / REVALIDATE_SECRET not configured - skipping"
+          fi
+
       # GitHub disables scheduled workflows after 60 days without repo
       # activity; re-enabling resets that timer so the tracker keeps
       # scanning even when development goes quiet.

@@ -26,11 +26,25 @@ CI_SECRETS = [
     "TRAVELPAYOUTS_TOKEN",
     "SERPAPI_KEY",
     "NTFY_TOPIC",
+    "REVALIDATE_SECRET",
 ]
+
+
+def _ensure_generated(env: dict, name: str) -> dict:
+    """Generate-and-persist a random secret in .env when missing."""
+    if (env.get(name) or "").strip():
+        return env
+    import secrets as pysecrets
+    value = pysecrets.token_hex(24)
+    with open(REPO / ".env", "a", encoding="utf-8") as f:
+        f.write(f"\n{name}={value}\n")
+    print(f"{name}: generated into .env")
+    return dotenv_values(REPO / ".env")
 
 
 def main() -> int:
     env = dotenv_values(REPO / ".env")
+    env = _ensure_generated(env, "REVALIDATE_SECRET")
     failures = 0
     for name in CI_SECRETS:
         value = (env.get(name) or "").strip()
