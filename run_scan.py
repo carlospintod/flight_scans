@@ -69,10 +69,10 @@ def main() -> int:
         # --- Kiwi discovery bands (fails gracefully while quota is 0) ---
         if plan.kiwi_bands and "kiwi" in sources:
             from lib.kiwi_rapidapi import KiwiClient
-            from ui._common import _run_kiwi_discovery
+            from lib.scanops import run_kiwi_discovery
             try:
                 kw = KiwiClient.from_env(db_conn=conn)
-                stored = _run_kiwi_discovery(
+                stored = run_kiwi_discovery(
                     conn, kw, route, bands=list(plan.kiwi_bands), dry_run=False)
                 print(f"\nkiwi discovery: {stored} itineraries stored")
             except Exception as exc:  # noqa: BLE001
@@ -94,10 +94,10 @@ def main() -> int:
         # --- Aviasales bonus signal ---
         if plan.aviasales_pairs:
             from lib.aviasales_api import AviasalesClient
-            from ui._common import _run_aviasales_sweep
+            from lib.scanops import run_aviasales_sweep
             try:
                 av = AviasalesClient.from_env()
-                stored = _run_aviasales_sweep(
+                stored = run_aviasales_sweep(
                     conn, av, route, dry_run=False,
                     pairs=list(plan.aviasales_pairs))
                 print(f"aviasales: {stored} rows stored")

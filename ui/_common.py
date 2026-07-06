@@ -1512,220 +1512,13 @@ def alerts_dataframe(
 # --- Run orchestration ------------------------------------------------------
 
 
-def _run_aviasales_sweep(conn, av_client, route, *, dry_run: bool,
-                         pairs: list | None = None) -> int:
-    """One cheap_prices call per (origin, destination); persist rows.
-
-    `pairs`: explicit (origin, destination) list from the RunPlan. When
-    None, defaults to the full route cross-product (legacy behavior).
-
-    Returns the number of rows stored (0 in dry-run).
-    """
-    if dry_run or av_client is None:
-        return 0
-    from lib.aviasales_api import AviasalesError, SOURCE_ID as AV_SOURCE
-    from lib.db import CalendarRow, insert_calendar_rows
-    snapshot_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    stored = 0
-    if pairs is None:
-        pairs = [(o, d) for o in route.origins for d in route.destinations]
-    for origin, destination in pairs:
-        if True:
-            month_total = 0
-            for m in [None]:  # single pass — no month filter
-                try:
-                    resp = av_client.cheap_prices(
-                        origin=origin, destination=destination,
-                        depart_date=None, return_date=None,
-                        currency=route.currency,
-                    )
-                except AviasalesError as exc:
-                    LOG.warning(
-                        "aviasales %s->%s err=%s",
-                        origin, destination, exc,
-                    )
-                    continue
-                rows: list[CalendarRow] = []
-                for q in resp.quotes:
-                    if not q.return_date:
-                        continue  # need round-trip for calendar_snapshots
-                    try:
-                        from datetime import date as _d
-                        d_dep = _d.fromisoformat(q.departure_date)
-                        d_ret = _d.fromisoformat(q.return_date)
-                    except ValueError:
-                        continue
-                    stay_days = (d_ret - d_dep).days
-                    if stay_days <= 0:
-                        continue
-                    rows.append(CalendarRow(
-                        snapshot_at=snapshot_at,
-                        route_id=route.name,
-                        source=AV_SOURCE,
-                        origin=q.origin or origin,
-                        destination=q.destination or destination,
-                        departure_date=q.departure_date,
-                        return_date=q.return_date,
-                        stay_days=stay_days,
-                        price=q.price,
-                        currency=q.currency or route.currency,
-                        is_lowest_price=False,
-                    ))
-                stored += insert_calendar_rows(conn, rows)
-                month_total += len(rows)
-            LOG.info(
-                "aviasales sweep %s->%s rows=%d",
-                origin, destination, month_total,
-            )
-    return stored
-
-
-def _run_kiwi_discovery(conn, kw_client, route, *, bands, dry_run: bool) -> int:
-    """Execute the plan's Kiwi range-search bands; persist all results.
-
-    Each band = ONE Kiwi call returning the cheapest ~50 itineraries
-    across a multi-week departure window — price + exact dates + carriers
-    + virtual-interlining flag. Results land in BOTH calendar_snapshots
-    (grid discovery) and point_queries (carrier detail), tagged 'kiwi'.
-    Returns rows stored.
-    """
-    if dry_run or kw_client is None or not bands:
-        return 0
-    from datetime import date as _d
-    from lib.db import CalendarRow, PointRow, insert_calendar_rows, insert_point_rows
-    from lib.kiwi_rapidapi import KiwiError, SOURCE_ID as KW_SOURCE
-    snapshot_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    stored = 0
-    for b in bands:
-        try:
-            resp = kw_client.range_search(
-                origin=b.origin, destination=b.destination,
-                outbound_start=b.outbound_start, outbound_end=b.outbound_end,
-                inbound_start=b.inbound_start, inbound_end=b.inbound_end,
-                currency=route.currency, limit=50,
-            )
-        except KiwiError as exc:
-            # A monthly-quota 429 fails identically for every band —
-            # one clear line, stop the discovery pass (observed
-            # 2026-07-06: 8 bands -> 8 error stanzas for one fact).
-            if "MONTHLY quota" in str(exc) or "429" in str(exc):
-                LOG.warning(
-                    "kiwi monthly quota exhausted — skipping discovery "
-                    "(resets ~10th); %d band(s) not attempted",
-                    len(bands) - bands.index(b) - 1,
-                )
-                break
-            LOG.error("kiwi band failed %s->%s %s..%s err=%s",
-                      b.origin, b.destination, b.outbound_start,
-                      b.outbound_end, exc)
-            continue
-        cal_rows, pq_rows = [], []
-        for opt in resp.options:
-            if not opt.return_date:
-                continue
-            try:
-                dep_d = _d.fromisoformat(opt.depart_date)
-                ret_d = _d.fromisoformat(opt.return_date)
-            except ValueError:
-                continue
-            stay = (ret_d - dep_d).days
-            if stay <= 0:
-                continue
-            cal_rows.append(CalendarRow(
-                snapshot_at=snapshot_at, route_id=route.name, source=KW_SOURCE,
-                origin=b.origin, destination=b.destination,
-                departure_date=opt.depart_date, return_date=opt.return_date,
-                stay_days=stay, price=opt.price,
-                currency=opt.currency or route.currency,
-                is_lowest_price=False,
-            ))
-            pq_rows.append(PointRow(
-                snapshot_at=snapshot_at, route_id=route.name, source=KW_SOURCE,
-                origin=b.origin, destination=b.destination,
-                departure_date=opt.depart_date, return_date=opt.return_date,
-                rank=0, price=opt.price,
-                currency=opt.currency or route.currency,
-                carriers=opt.carriers, total_minutes=opt.total_minutes,
-                stops=opt.stops, is_self_transfer=opt.is_virtual_interlining,
-            ))
-        stored += insert_calendar_rows(conn, cal_rows)
-        insert_point_rows(conn, pq_rows)
-        LOG.info("kiwi band %s->%s %s..%s: %d itineraries",
-                 b.origin, b.destination, b.outbound_start, b.outbound_end,
-                 len(cal_rows))
-    return stored
-
-
-def _run_kiwi_followup(conn, kw_client, route, *, dry_run: bool,
-                       max_calls: int = 20, candidates: list | None = None) -> int:
-    """For each follow-up candidate, run one Kiwi round-trip search.
-
-    Stores top results in `point_queries` tagged source='kiwi', with
-    `is_self_transfer` set to True when Kiwi flagged virtual interlining.
-    Returns rows stored.
-
-    `candidates`: explicit list from the RunPlan (already window-filtered,
-    diversified, and capped). When None, self-selects and applies the
-    `max_calls` cap (legacy behavior).
-    """
-    if dry_run or kw_client is None:
-        return 0
-    from datetime import date as _d
-    from lib.db import PointRow, insert_point_rows
-    from lib.followup import select_candidates
-    from lib.kiwi_rapidapi import KiwiError, SOURCE_ID as KW_SOURCE
-    if candidates is None:
-        candidates = select_candidates(conn, route)
-        if len(candidates) > max_calls:
-            LOG.info(
-                "kiwi followup capping %d candidates to %d calls",
-                len(candidates), max_calls,
-            )
-            candidates = candidates[:max_calls]
-    snapshot_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    stored = 0
-    MAX_RANKS = 3
-    for c in candidates:
-        try:
-            resp = kw_client.round_trip_search(
-                origin=c["origin"], destination=c["destination"],
-                depart_date=_d.fromisoformat(c["departure_date"]),
-                return_date=_d.fromisoformat(c["return_date"]),
-                currency=route.currency,
-            )
-        except KiwiError as exc:
-            LOG.warning(
-                "kiwi %s->%s dep=%s ret=%s err=%s",
-                c["origin"], c["destination"],
-                c["departure_date"], c["return_date"], exc,
-            )
-            continue
-        rows: list[PointRow] = []
-        for i, opt in enumerate(resp.options[:MAX_RANKS]):
-            rows.append(PointRow(
-                snapshot_at=snapshot_at,
-                route_id=route.name,
-                source=KW_SOURCE,
-                origin=c["origin"],
-                destination=c["destination"],
-                departure_date=c["departure_date"],
-                return_date=c["return_date"],
-                rank=i,
-                price=opt.price,
-                currency=opt.currency or route.currency,
-                carriers=opt.carriers,
-                total_minutes=opt.total_minutes,
-                stops=opt.stops,
-                is_self_transfer=opt.is_virtual_interlining,
-            ))
-        stored += insert_point_rows(conn, rows)
-        LOG.info(
-            "kiwi point %s->%s dep=%s ret=%s ranks=%d vi=%s",
-            c["origin"], c["destination"],
-            c["departure_date"], c["return_date"], len(rows),
-            any(r.is_self_transfer for r in rows),
-        )
-    return stored
+# Execution steps live in lib.scanops (no Streamlit) so run_scan.py and CI
+# can use them; the old underscore names stay valid for run_all below.
+from lib.scanops import (  # noqa: E402
+    run_aviasales_sweep as _run_aviasales_sweep,
+    run_kiwi_discovery as _run_kiwi_discovery,
+    run_kiwi_followup as _run_kiwi_followup,
+)
 
 
 def _months_between(start, end) -> list:
@@ -1744,48 +1537,15 @@ def _months_between(start, end) -> list:
 
 
 def _make_clients(sources: list[str], dry_run: bool, conn: sqlite3.Connection):
-    """Build API clients per the source list.
+    """Build API clients per the source list (st.warning on each skip).
 
-    Returns dict {source_id: client_or_None}. A None entry means the key
-    isn't set in .env (st.warning emitted) — caller skips that source.
-    In dry_run all entries are None.
+    Thin wrapper over lib.clients.make_clients — the construction logic
+    is shared with run_scan.py/CI; only the warning rendering is UI.
     """
-    out: dict[str, object | None] = {
-        "searchapi": None, "skyscanner": None,
-        "aviasales": None, "kiwi": None,
-    }
-    if dry_run:
-        return out
-    if "searchapi" in sources:
-        from lib.searchapi_io import SearchApiClient
-        try:
-            out["searchapi"] = SearchApiClient.from_env()
-        except RuntimeError as exc:
-            st.warning(f"SearchAPI disabled: {exc}")
-    if "skyscanner" in sources:
-        from lib.skyscanner_rapidapi import SkyScrapperClient
-        try:
-            out["skyscanner"] = SkyScrapperClient.from_env(db_conn=conn)
-        except RuntimeError as exc:
-            st.warning(f"Sky Scrapper disabled: {exc}")
-    if "aviasales" in sources:
-        from lib.aviasales_api import AviasalesClient
-        try:
-            out["aviasales"] = AviasalesClient.from_env()
-        except RuntimeError as exc:
-            st.warning(f"Aviasales disabled: {exc}")
-    if "kiwi" in sources:
-        from lib.kiwi_rapidapi import KiwiClient
-        try:
-            out["kiwi"] = KiwiClient.from_env(db_conn=conn)
-        except RuntimeError as exc:
-            st.warning(f"Kiwi disabled: {exc}")
-    if "googleflights" in sources:
-        from lib.googleflights_direct import GoogleFlightsClient
-        try:
-            out["googleflights"] = GoogleFlightsClient.from_env()
-        except RuntimeError as exc:
-            st.warning(f"Google Flights (direct) disabled: {exc}")
+    from lib.clients import make_clients
+    out, warnings = make_clients(sources, conn, dry_run=dry_run)
+    for w in warnings:
+        st.warning(w)
     return out
 
 
