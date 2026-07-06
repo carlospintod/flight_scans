@@ -52,6 +52,13 @@ export default function RootLayout({
               >
                 GITHUB
               </a>
+              <Link
+                href="/ops"
+                className="text-fg-dim hover:text-matrix"
+                title="Operator console (login required)"
+              >
+                OPS
+              </Link>
             </div>
           </nav>
         </header>
