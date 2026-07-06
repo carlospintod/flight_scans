@@ -786,6 +786,8 @@ def cheapest_recent_per_source(
             max_stay=route.stay.max_days,
             source=SEARCHAPI_SOURCE,
             limit=limit,
+            earliest_departure=route.search_window.earliest_departure,
+            latest_return=route.search_window.latest_return,
         )
         if not rows:
             return pd.DataFrame()

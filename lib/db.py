@@ -124,6 +124,24 @@ CREATE TABLE IF NOT EXISTS alerts (
     drop_pct         REAL NOT NULL,
     alert_type       TEXT NOT NULL DEFAULT 'drop'
 );
+
+-- One row per scan run (any trigger). This is the ops heartbeat: the
+-- web app's stale-data badge and run history read from here. A bare
+-- MAX(snapshot_at) can't tell "no scan ran" from "scan ran, stored 0".
+CREATE TABLE IF NOT EXISTS scan_runs (
+    started_at    TEXT NOT NULL,
+    finished_at   TEXT,
+    route_id      TEXT NOT NULL,
+    trigger       TEXT NOT NULL,           -- 'cron' | 'dispatch' | 'local'
+    sources       TEXT NOT NULL,           -- comma-joined as requested
+    rows_stored   INTEGER NOT NULL DEFAULT 0,
+    alerts_fired  INTEGER NOT NULL DEFAULT 0,
+    status        TEXT NOT NULL,           -- 'ok' | 'degraded' | 'failed'
+    summary_json  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_scan_runs_route
+    ON scan_runs (route_id, started_at);
 """
 
 
@@ -456,6 +474,44 @@ def latest_quota(
     ).fetchone()
 
 
+def insert_scan_run(
+    conn: sqlite3.Connection, *,
+    started_at: str,
+    finished_at: str | None,
+    route_id: str,
+    trigger: str,
+    sources: str,
+    rows_stored: int,
+    alerts_fired: int,
+    status: str,
+    summary_json: str | None = None,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO scan_runs (started_at, finished_at, route_id, trigger,
+                               sources, rows_stored, alerts_fired, status,
+                               summary_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (started_at, finished_at, route_id, trigger, sources,
+         rows_stored, alerts_fired, status, summary_json),
+    )
+
+
+def latest_scan_run(
+    conn: sqlite3.Connection, route_id: str,
+) -> sqlite3.Row | None:
+    return conn.execute(
+        """
+        SELECT * FROM scan_runs
+        WHERE route_id = ?
+        ORDER BY started_at DESC
+        LIMIT 1
+        """,
+        (route_id,),
+    ).fetchone()
+
+
 def latest_calendar_snapshot_per_itinerary(
     conn: sqlite3.Connection, route_id: str, *, source: str | None = None,
 ) -> list[sqlite3.Row]:
@@ -556,8 +612,16 @@ def cheapest_recent_itineraries(
     since: date | None = None,
     limit: int = 20,
     source: str | None = None,
+    earliest_departure: date | None = None,
+    latest_return: date | None = None,
 ) -> list[sqlite3.Row]:
-    """Cheapest most-recent prices, filtered by stay range. Optional source filter."""
+    """Cheapest most-recent prices, filtered by stay range.
+
+    Pass the route's `earliest_departure`/`latest_return` to keep results
+    inside the CURRENT search window — the DB keeps out-of-window history
+    by design, and a "cheapest" the user can't book is noise (a Sep 1
+    departure topped the summary of a Sep 12+ window, 2026-07-06).
+    """
     sql = (
         "SELECT cs.* FROM calendar_snapshots cs "
         "JOIN (SELECT source, origin, destination, departure_date, return_date, "
@@ -578,6 +642,12 @@ def cheapest_recent_itineraries(
     if since is not None:
         sql += " AND cs.snapshot_at >= ?"
         params.append(since.isoformat())
+    if earliest_departure is not None:
+        sql += " AND cs.departure_date >= ?"
+        params.append(earliest_departure.isoformat())
+    if latest_return is not None:
+        sql += " AND cs.return_date <= ?"
+        params.append(latest_return.isoformat())
     sql += " ORDER BY cs.price ASC LIMIT ?"
     params.append(limit)
     return list(conn.execute(sql, params))
