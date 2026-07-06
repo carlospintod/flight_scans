@@ -40,15 +40,18 @@ def main() -> int:
 
     from lib import alerts as alerts_mod
     from lib import db as db_mod
-    from lib.config import load_route
+    from lib import route_store
     from lib.followup import run_followup
     from lib.planner import Caps, build_run_plan
 
-    route = load_route(REPO / "routes" / f"{args.route}.yaml")
-
     with db_mod.connect(REPO / "data" / "tracker.db") as conn:
         db_mod.ensure_schema(conn)
-        db_mod.upsert_route(conn, route)
+        # DB config wins (edits saved in the deployed UI apply here);
+        # the YAML only seeds a fresh DB. Never re-upsert unconditionally —
+        # that would clobber operator edits made since the last YAML touch.
+        route, cfg_source = route_store.load_effective_route(
+            conn, args.route, REPO / "routes")
+        LOG.info("route %s config source: %s", args.route, cfg_source)
 
         plan = build_run_plan(
             conn, route, sources=sources,

@@ -9,7 +9,7 @@ route-specific input.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -79,14 +79,15 @@ class RouteConfig:
     alerts: AlertParams
 
     def to_json(self) -> str:
-        """Stable JSON snapshot for persisting to the routes table."""
-        return json.dumps(asdict(self), sort_keys=True, default=_default)
+        """Stable JSON snapshot for persisting to the routes table.
 
-
-def _default(value: Any) -> Any:
-    if isinstance(value, date):
-        return value.isoformat()
-    raise TypeError(f"unserializable type: {type(value).__name__}")
+        Serializes the CANONICAL config shape (`route_to_yaml_dict`) —
+        the same mapping the YAML files hold and `_from_dict` validates.
+        One persisted shape everywhere; `route_from_json` reads it back.
+        (Legacy sweep window-size keys are deliberately dropped, same as
+        the YAML write-back.)
+        """
+        return json.dumps(route_to_yaml_dict(self), sort_keys=True)
 
 
 def load_route(path: str | Path) -> RouteConfig:
@@ -100,6 +101,43 @@ def load_route(path: str | Path) -> RouteConfig:
         return _from_dict(raw)
     except ConfigError as exc:
         raise ConfigError(f"{path}: {exc}") from None
+
+
+def route_from_json(text: str) -> RouteConfig:
+    """Parse a routes.config_json value back into a RouteConfig.
+
+    Accepts two shapes:
+    - canonical (top-level "route" key) — what `to_json` writes now;
+    - legacy asdict snapshot (top-level "name"/"origins") — what every
+      scan wrote to the DB before 2026-07-06. Converted then validated
+      through the same `_from_dict` as everything else.
+    """
+    try:
+        raw = json.loads(text)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ConfigError(f"config_json is not valid JSON: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise ConfigError("config_json: top-level must be a mapping")
+    if "route" not in raw and "name" in raw:
+        raw = _from_asdict_shape(raw)
+    return _from_dict(raw)
+
+
+def _from_asdict_shape(raw: dict[str, Any]) -> dict[str, Any]:
+    """Convert a legacy `asdict(RouteConfig)` snapshot to canonical shape."""
+    return {
+        "route": {
+            "name": raw.get("name"),
+            "origins": raw.get("origins"),
+            "destinations": raw.get("destinations"),
+        },
+        "search_window": raw.get("search_window") or {},
+        "stay_preferences": raw.get("stay") or {},
+        "currency": raw.get("currency"),
+        "sweep": raw.get("sweep") or {},
+        "followup": raw.get("followup") or {},
+        "alerts": raw.get("alerts") or {},
+    }
 
 
 def _from_dict(raw: dict[str, Any]) -> RouteConfig:

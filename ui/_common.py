@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 
 from lib import config as config_mod
 from lib import db as db_mod
+from lib import route_store
 from lib.searchapi_io import SOURCE_ID as SEARCHAPI_SOURCE
 from lib.skyscanner_rapidapi import SOURCE_ID as SKYSCANNER_SOURCE
 
@@ -592,17 +593,30 @@ def apply_overrides(
 
 
 def load_route_from_sidebar() -> tuple[config_mod.RouteConfig, sqlite3.Connection]:
-    """Sidebar route picker + DB connection. Both are cached per session."""
-    routes = list_routes()
+    """Sidebar route picker + DB connection. Both are cached per session.
+
+    Config comes from the DB when a row exists (route_store precedence);
+    the YAML only seeds a fresh DB. This means "Save as default" edits
+    survive container restarts, and a mutated/corrupt file can no longer
+    crash the app at startup (the 2026-07-06 cloud outage).
+    """
+    conn = connect_db()
+    routes = route_store.list_route_ids(conn, ROUTES_DIR)
     if not routes:
-        st.error(f"No route YAML files in {ROUTES_DIR}")
+        st.error(f"No routes in the DB or in {ROUTES_DIR}")
         st.stop()
     with st.sidebar:
         st.markdown("### Route")
         name = st.selectbox("Pick route", routes, index=0, key="route_name")
         _render_db_backend_badge()
-    route = config_mod.load_route(ROUTES_DIR / f"{name}.yaml")
-    conn = connect_db()
+    try:
+        route, cfg_source = route_store.load_effective_route(conn, name, ROUTES_DIR)
+    except config_mod.ConfigError as exc:
+        st.error(f"Route {name} has no usable config: {exc}")
+        st.stop()
+        raise  # unreachable; keeps type-checkers honest
+    with st.sidebar:
+        st.caption(f"config: {cfg_source}")
     return route, conn
 
 

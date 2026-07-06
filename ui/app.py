@@ -26,7 +26,7 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from lib import config as config_mod  # noqa: E402
+from lib import route_store  # noqa: E402
 from lib.planner import Caps, build_run_plan  # noqa: E402
 from ui._common import (  # noqa: E402
     apply_overrides,
@@ -38,7 +38,6 @@ from ui._common import (  # noqa: E402
     setup_page,
     terminal_header,
     top_alternatives,
-    ROUTES_DIR,
 )
 
 setup_page("Search")
@@ -124,11 +123,16 @@ except ValueError as exc:
 save_col, _ = st.columns([1, 3])
 with save_col:
     if st.button("Save as default", use_container_width=True,
-                 help="Write these settings back to the route's YAML file.",
+                 help="Save these settings to the cloud DB — the default "
+                      "for scans and reloads everywhere.",
                  disabled=not route_valid):
         try:
-            config_mod.save_route(ROUTES_DIR / f"{base_route.name}.yaml", route)
-            st.toast("Saved to YAML — this is now the default for CLI + reloads.")
+            # DB, not YAML: container filesystems are ephemeral and drift
+            # from git (the 2026-07-06 crash). route_store makes this the
+            # config every scan and reload uses, on any machine.
+            route_store.save_route_config(conn, route)
+            st.toast("Saved to cloud DB — this is now the default for "
+                     "scans + reloads.")
         except Exception as exc:  # noqa: BLE001
             st.error(f"Save failed: {exc}")
 
