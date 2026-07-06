@@ -1591,6 +1591,16 @@ def _run_kiwi_discovery(conn, kw_client, route, *, bands, dry_run: bool) -> int:
                 currency=route.currency, limit=50,
             )
         except KiwiError as exc:
+            # A monthly-quota 429 fails identically for every band —
+            # one clear line, stop the discovery pass (observed
+            # 2026-07-06: 8 bands -> 8 error stanzas for one fact).
+            if "MONTHLY quota" in str(exc) or "429" in str(exc):
+                LOG.warning(
+                    "kiwi monthly quota exhausted — skipping discovery "
+                    "(resets ~10th); %d band(s) not attempted",
+                    len(bands) - bands.index(b) - 1,
+                )
+                break
             LOG.error("kiwi band failed %s->%s %s..%s err=%s",
                       b.origin, b.destination, b.outbound_start,
                       b.outbound_end, exc)

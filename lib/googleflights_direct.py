@@ -56,6 +56,13 @@ class GoogleFlightsError(RuntimeError):
     pass
 
 
+class GoogleFlightsUnavailable(GoogleFlightsError):
+    """The browser itself can't start (missing executable, dead display).
+
+    Distinct from a per-query failure: retrying other itineraries with the
+    same client is pointless, so callers should stop the whole batch."""
+
+
 def is_available() -> bool:
     """True when playwright + fast-flights are importable AND a Chromium
     executable is installed. Cheap enough to call at client-construction
@@ -66,8 +73,14 @@ def is_available() -> bool:
     except ImportError:
         return False
     try:
+        from pathlib import Path
         with sync_playwright() as p:
-            return bool(p.chromium.executable_path)
+            # executable_path is the EXPECTED path — it's non-empty even
+            # when the browser was never downloaded (observed 2026-07-06:
+            # a scan planned 25 free queries and every one failed with
+            # "Executable doesn't exist"). Check the file is really there.
+            exe = p.chromium.executable_path
+            return bool(exe) and Path(exe).exists()
     except Exception:  # noqa: BLE001
         return False
 
@@ -87,6 +100,7 @@ class GoogleFlightsClient:
         self._pw = None
         self._browser = None
         self._ctx = None
+        self._launch_error: str | None = None
 
     @classmethod
     def from_env(cls, **kwargs) -> "GoogleFlightsClient":
@@ -109,11 +123,23 @@ class GoogleFlightsClient:
     def _ensure_browser(self):
         if self._ctx is not None:
             return
+        # Once a launch has failed, every later query would fail the same
+        # way — and re-calling sync_playwright().start() after a half-torn
+        # first attempt surfaces as the misleading "Sync API inside the
+        # asyncio loop" error on all 24 remaining candidates (observed
+        # 2026-07-06). Fail fast with the ORIGINAL cause instead.
+        if self._launch_error is not None:
+            raise GoogleFlightsUnavailable(self._launch_error)
         from playwright.sync_api import sync_playwright
-        self._pw = sync_playwright().start()
-        self._browser = self._pw.chromium.launch(headless=self._headless)
-        self._ctx = self._browser.new_context(locale="en-US", user_agent=_UA)
-        self._ctx.add_cookies(_CONSENT_COOKIES)
+        try:
+            self._pw = sync_playwright().start()
+            self._browser = self._pw.chromium.launch(headless=self._headless)
+            self._ctx = self._browser.new_context(locale="en-US", user_agent=_UA)
+            self._ctx.add_cookies(_CONSENT_COOKIES)
+        except Exception as exc:
+            self._launch_error = f"browser launch failed: {exc}"
+            self.close()  # stop the half-started playwright driver
+            raise GoogleFlightsUnavailable(self._launch_error) from exc
 
     def close(self) -> None:
         for closer in (

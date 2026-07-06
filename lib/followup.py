@@ -321,8 +321,20 @@ def run_followup(
                         c["departure_date"], c["return_date"], len(rows),
                     )
             except Exception as exc:  # noqa: BLE001 — client-specific error types
-                # (SearchApiError, GoogleFlightsError, ...) all mean the
-                # same thing here: this candidate produced nothing; move on.
+                # A client that says it can't serve ANY query (browser
+                # won't start, hard quota wall) fails the same way for
+                # every remaining candidate — stop the batch with one
+                # clear line instead of 24 more error stanzas.
+                if type(exc).__name__ == "GoogleFlightsUnavailable":
+                    LOG.error(
+                        "%s unavailable — skipping remaining %d candidates: %s",
+                        client_source, len(candidates) - sa_calls - 1, exc,
+                    )
+                    sa_calls += 1
+                    client = None  # stop only THIS client; skyscanner (below) still runs
+                    continue
+                # Otherwise (SearchApiError, GoogleFlightsError, ...):
+                # this candidate produced nothing; move on.
                 LOG.error(
                     "%s point_query failed %s->%s dep=%s ret=%s err=%s",
                     client_source, c["origin"], c["destination"],

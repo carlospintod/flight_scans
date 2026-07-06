@@ -189,3 +189,36 @@ def test_legacy_mode_when_thresholds_unset(tmp_path: Path):
     assert len(candidates) == 1
     assert candidates[0]["trigger"] == "baseline"
     assert candidates[0]["is_lowest_price"] is True
+
+
+def test_unavailable_client_aborts_batch_after_first_failure(tmp_path: Path):
+    """A browser that can't launch fails identically for every candidate.
+
+    Regression for 2026-07-06: a missing Chromium executable produced 25
+    error stanzas (24 of them the misleading playwright asyncio message)
+    instead of one. The batch must stop after the FIRST unavailability."""
+    from lib.followup import run_followup
+    from lib.googleflights_direct import GoogleFlightsUnavailable
+
+    class DeadClient:
+        source_id = "googleflights"
+        calls = 0
+
+        def point_query(self, **kwargs):
+            DeadClient.calls += 1
+            raise GoogleFlightsUnavailable("browser launch failed: no exe")
+
+    cands = [
+        {"origin": "MAD", "destination": "NBO",
+         "departure_date": f"2026-09-{d:02d}", "return_date": f"2026-11-{d:02d}"}
+        for d in (5, 10, 15)
+    ]
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, _route())
+        result = run_followup(conn=conn, client=DeadClient(), route=_route(),
+                              candidates=cands)
+
+    assert DeadClient.calls == 1        # stopped after the first failure
+    assert result.rows_stored == 0
