@@ -276,6 +276,93 @@ export async function getCarrierMix(w: RouteWindow): Promise<CarrierCount[]> {
   }));
 }
 
+/** Latest point-query detail (ranks 0..2) for one itinerary — the same
+ *  lookup top_alternatives does per-row, expanded to all ranks of the
+ *  most recent snapshot. */
+export async function getItineraryDetail(
+  routeId: string,
+  origin: string,
+  destination: string,
+  departureDate: string,
+  returnDate: string,
+): Promise<
+  {
+    rank: number;
+    price: number;
+    currency: string;
+    carriers: string;
+    stops: number | null;
+    totalMinutes: number | null;
+    isSelfTransfer: boolean;
+    source: string;
+    snapshotAt: string;
+  }[]
+> {
+  const rs = await db().execute({
+    sql: `SELECT rank, price, currency, carriers, stops, total_minutes,
+                 is_self_transfer, source, snapshot_at
+          FROM point_queries
+          WHERE route_id = ? AND origin = ? AND destination = ?
+            AND departure_date = ? AND return_date = ?
+            AND snapshot_at = (
+                SELECT MAX(snapshot_at) FROM point_queries
+                WHERE route_id = ? AND origin = ? AND destination = ?
+                  AND departure_date = ? AND return_date = ?
+            )
+          ORDER BY rank ASC LIMIT 3`,
+    args: [
+      routeId, origin, destination, departureDate, returnDate,
+      routeId, origin, destination, departureDate, returnDate,
+    ],
+  });
+  return rs.rows.map((r) => ({
+    rank: Number(r["rank"]),
+    price: Number(r["price"]),
+    currency: String(r["currency"]),
+    carriers: String(r["carriers"]),
+    stops: r["stops"] === null ? null : Number(r["stops"]),
+    totalMinutes:
+      r["total_minutes"] === null ? null : Number(r["total_minutes"]),
+    isSelfTransfer: Number(r["is_self_transfer"] ?? 0) === 1,
+    source: String(r["source"]),
+    snapshotAt: String(r["snapshot_at"]),
+  }));
+}
+
+/** Alerts fired for one itinerary (any source). Same table recent_alerts
+ *  reads, narrowed to the itinerary key. */
+export async function getItineraryAlerts(
+  routeId: string,
+  origin: string,
+  destination: string,
+  departureDate: string,
+  returnDate: string,
+): Promise<Alert[]> {
+  const rs = await db().execute({
+    sql: `SELECT fired_at, alert_type, source, origin, destination,
+                 departure_date, return_date, price, currency,
+                 baseline_median, drop_pct
+          FROM alerts
+          WHERE route_id = ? AND origin = ? AND destination = ?
+            AND departure_date = ? AND return_date = ?
+          ORDER BY fired_at DESC LIMIT 20`,
+    args: [routeId, origin, destination, departureDate, returnDate],
+  });
+  return rs.rows.map((r) => ({
+    firedAt: String(r["fired_at"]),
+    alertType: String(r["alert_type"]),
+    source: String(r["source"]),
+    origin: String(r["origin"]),
+    destination: String(r["destination"]),
+    departureDate: String(r["departure_date"]),
+    returnDate: String(r["return_date"]),
+    price: Number(r["price"]),
+    currency: String(r["currency"]),
+    baselineMedian: Number(r["baseline_median"]),
+    dropPct: Number(r["drop_pct"]),
+  }));
+}
+
 /** Mirrors ui/_common.itinerary_history_chart's query. */
 export async function getItineraryHistory(
   routeId: string,
