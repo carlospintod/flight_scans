@@ -1,0 +1,107 @@
+# Scheduled flight scan — the cloud backbone (Phase 1 of the
+# publishable-product plan). Writes to Turso; the dashboards read it.
+#
+# Secrets (repo Settings -> Secrets and variables -> Actions -> Secrets):
+#   TURSO_DATABASE_URL, TURSO_AUTH_TOKEN   - persistent DB
+#   RAPIDAPI_KEY                           - kiwi (+ skyscanner)
+#   TRAVELPAYOUTS_TOKEN                    - aviasales
+#   SERPAPI_KEY                            - managed Google Flights (100/mo)
+#   NTFY_TOPIC                             - phone push topic (long + random)
+# Deliberately NOT given to CI: SEARCHAPI_KEY (2 break-glass credits,
+# local-only for booking-day verification).
+#
+# Variables (repo Settings -> ... -> Variables):
+#   GF_ON_ACTIONS = "true" | "false"  - set from the probe workflow's
+#   verdict; gates the browser install. When false, run_scan gracefully
+#   skips googleflights and verifies via serpapi instead.
+
+name: scan
+
+on:
+  schedule:
+    - cron: "23 5 * * 1,3,6"   # Mon/Wed/Sat 05:23 UTC; odd minute dodges queue spikes
+  workflow_dispatch:
+    inputs:
+      sources:
+        description: "Comma-separated sources"
+        default: "googleflights,serpapi,aviasales,kiwi"
+        required: false
+      cap:
+        description: "Max googleflights verifications"
+        default: "25"
+        required: false
+      route:
+        description: "Route id"
+        default: "spain-nairobi"
+        required: false
+
+concurrency:
+  group: scan
+  cancel-in-progress: false
+
+permissions:
+  actions: write     # keepalive step re-enables this workflow
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Cache Playwright browsers
+        if: vars.GF_ON_ACTIONS == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-chromium
+
+      - name: Install browser stack (googleflights enabled)
+        if: vars.GF_ON_ACTIONS == 'true'
+        run: |
+          pip install playwright fast-flights
+          playwright install --with-deps chromium
+
+      - name: Run scan
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+        run: |
+          python run_scan.py \
+            --route "${{ inputs.route || 'spain-nairobi' }}" \
+            --sources "${{ inputs.sources || 'googleflights,serpapi,aviasales,kiwi' }}" \
+            --cap "${{ inputs.cap || '25' }}" \
+            --trigger "${{ github.event_name }}" \
+            --json-summary summary.json
+
+      - name: Job summary
+        if: always()
+        run: python scripts/render_summary.py summary.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify phone (ntfy.sh)
+        if: always()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          JOB_STATUS: ${{ job.status }}
+        run: python scripts/notify_ntfy.py summary.json
+
+      # GitHub disables scheduled workflows after 60 days without repo
+      # activity; re-enabling resets that timer so the tracker keeps
+      # scanning even when development goes quiet.
+      - name: Keepalive
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/scan.yml/enable"

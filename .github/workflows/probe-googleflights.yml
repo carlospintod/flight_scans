@@ -1,0 +1,56 @@
+# Manual probe: does the free Google Flights scraper work from GitHub
+# Actions runner IPs? Google may serve datacenter IPs a consent wall or
+# captcha it never shows a residential connection — nobody documents
+# this, so we measure it. Re-run monthly; Google's posture drifts.
+#
+# Green run  -> set repo Actions variable GF_ON_ACTIONS = "true"
+# Red run    -> set it to "false" (scan.yml then verifies via serpapi)
+# Either way scheduled scans work — this only decides whether the free
+# unmetered source joins them.
+
+name: probe-googleflights
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies + browser
+        run: |
+          pip install -r requirements.txt playwright fast-flights
+          playwright install --with-deps chromium
+
+      - name: Probe (3 production-path queries, no secrets)
+        run: python scripts/probe_googleflights_ci.py
+
+      - name: Upload verdict + failure DOMs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gf-probe
+          path: gf_probe/
+          retention-days: 30
+
+      - name: Verdict to job summary
+        if: always()
+        run: |
+          {
+            echo "## Google Flights from Actions IPs"
+            echo '```json'
+            cat gf_probe/verdict.json
+            echo '```'
+            echo "Set repo variable \`GF_ON_ACTIONS\` per the verdict above."
+          } >> "$GITHUB_STEP_SUMMARY"

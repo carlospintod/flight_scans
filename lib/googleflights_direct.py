@@ -39,7 +39,10 @@ LOG = logging.getLogger(__name__)
 
 SOURCE_ID = "googleflights"
 PAGE_TIMEOUT_MS = 60_000
-RESULTS_SETTLE_MS = 30_000
+# Results-XHR budget. Typical renders land in 8-15s, but Google slow-lanes
+# some loads past 30s (observed 2026-07-06: still "Loading results" at the
+# old 30s cap) — the long tail only costs time on slow/no-result pages.
+RESULTS_SETTLE_MS = 45_000
 
 _CONSENT_COOKIES = [
     {"name": "CONSENT", "value": "YES+cb.20240101-01-p0.en+FX+700",
@@ -170,8 +173,13 @@ class GoogleFlightsClient:
         return_: date,
         currency: str = "EUR",
         adults: int = 1,
+        dump_html_to=None,
     ) -> PointResponse:
-        """Fetch + parse one round-trip result page. Free; ~5-8s."""
+        """Fetch + parse one round-trip result page. Free; ~5-8s.
+
+        `dump_html_to`: optional Path — write the rendered DOM there for
+        diagnostics (CI probes, empty-result investigations).
+        """
         from fast_flights import FlightQuery, Passengers, create_query
 
         q = create_query(
@@ -193,20 +201,49 @@ class GoogleFlightsClient:
         try:
             page.goto(url, wait_until="domcontentloaded",
                       timeout=PAGE_TIMEOUT_MS)
-            try:
-                page.wait_for_load_state("networkidle",
-                                         timeout=RESULTS_SETTLE_MS)
-            except Exception:  # noqa: BLE001 — settle timeout is fine, parse what's there
-                pass
-            html = page.content()
+            html = self._await_results(page)
+            options = _parse_aria_labels(html)
+            # Zero options with "Loading results" still in the DOM is a
+            # mid-load snapshot, not a genuine empty — Google slow-lanes
+            # some loads past even the 45s budget (observed 2026-07-06:
+            # the same pair parsed 0, 0, then 10 options at 661 EUR on
+            # consecutive attempts). One reload converts most stragglers;
+            # a true no-flights page has no loading marker and stays 0.
+            if not options and "Loading results" in html:
+                LOG.info("results still loading after %dms — one retry",
+                         RESULTS_SETTLE_MS)
+                page.reload(wait_until="domcontentloaded",
+                            timeout=PAGE_TIMEOUT_MS)
+                html = self._await_results(page)
+                options = _parse_aria_labels(html)
         finally:
             page.close()
 
-        options = _parse_aria_labels(html)
+        if dump_html_to is not None:
+            from pathlib import Path
+            Path(dump_html_to).write_text(html, encoding="utf-8")
         if not options and "consent.google.com" in html[:3000]:
             raise GoogleFlightsError("hit the Google consent page — cookie bypass failed")
         return PointResponse(raw={"html_chars": len(html)},
                              best_flights=tuple(options))
+
+    def _await_results(self, page) -> str:
+        """Wait for a rendered price aria-label (the thing we parse), then
+        capture the DOM.
+
+        NOT networkidle: Google's beacon traffic keeps the network busy,
+        the idle wait times out mid-render, and the snapshot parses to
+        zero options (14 of 25 queries on 2026-07-06). A pair with
+        genuinely no flights times out here and parses as empty — same
+        outcome as before, just slower.
+        """
+        try:
+            page.wait_for_selector('[aria-label*="euros"]',
+                                   timeout=RESULTS_SETTLE_MS)
+            page.wait_for_timeout(1500)  # let the rest of the list stream in
+        except Exception:  # noqa: BLE001 — no results, or slower than budget
+            pass
+        return page.content()
 
 
 # --- parser (pure, fixture-testable) ----------------------------------------
