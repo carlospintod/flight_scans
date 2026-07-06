@@ -36,6 +36,22 @@ export function ageDays(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
 }
 
+/** Human "seen …" label for a price observation. */
+export function seenLabel(iso: string): string {
+  const d = ageDays(iso);
+  if (d <= 0) return "seen today";
+  if (d === 1) return "seen yesterday";
+  return `seen ${d}d ago`;
+}
+
+/** A price older than this is not something you can act on without
+ *  re-checking — the display marks it. */
+export const STALE_DAYS = 10;
+
+export function isStale(iso: string): boolean {
+  return ageDays(iso) > STALE_DAYS;
+}
+
 export type Freshness = "fresh" | "aging" | "stale";
 
 /** Stale-data ladder for the badge: amber >4d, red >8d (plan Phase 2). */

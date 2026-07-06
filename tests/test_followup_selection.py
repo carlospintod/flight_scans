@@ -222,3 +222,42 @@ def test_unavailable_client_aborts_batch_after_first_failure(tmp_path: Path):
 
     assert DeadClient.calls == 1        # stopped after the first failure
     assert result.rows_stored == 0
+
+
+def test_followup_writes_calendar_row_for_verified_price(tmp_path: Path):
+    """A verified point-query price is also a calendar observation, so the
+    discovery board reflects fresh scans. Regression for 2026-07-06: the
+    'cheapest right now' board froze on month-old searchapi data because
+    googleflights verification wrote only point_queries."""
+    from lib.followup import run_followup
+    from lib.searchapi_io import FlightOption, PointResponse
+
+    class FakeGF:
+        source_id = "googleflights"
+
+        def point_query(self, **kwargs):
+            return PointResponse(raw={}, best_flights=(
+                FlightOption(price=567, total_minutes=820, stops=1,
+                             carriers="Etihad"),
+                FlightOption(price=690, total_minutes=825, stops=1,
+                             carriers="Qatar Airways"),
+            ))
+
+    cands = [{"origin": "MAD", "destination": "NBO",
+              "departure_date": "2026-09-15", "return_date": "2026-11-17"}]
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, _route())
+        run_followup(conn=conn, client=FakeGF(), route=_route(),
+                     candidates=cands)
+        cal = conn.execute(
+            "SELECT source, price, stay_days FROM calendar_snapshots "
+            "WHERE route_id='t' AND source='googleflights'").fetchall()
+        pq = conn.execute(
+            "SELECT COUNT(*) FROM point_queries WHERE source='googleflights'"
+        ).fetchone()[0]
+    assert len(cal) == 1                      # one calendar row (rank-0 only)
+    assert cal[0]["price"] == 567             # the cheapest option
+    assert cal[0]["stay_days"] == 63          # Sep15 -> Nov17
+    assert pq == 2                            # both ranks still in point_queries

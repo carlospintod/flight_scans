@@ -21,6 +21,7 @@ export interface Itinerary {
   price: number;
   currency: string;
   source: string;
+  snapshotAt: string;
   topCarrier: string | null;
   stops: number | null;
   totalMinutes: number | null;

@@ -30,8 +30,10 @@ from datetime import date, datetime, timedelta, timezone
 
 from .config import RouteConfig
 from .db import (
+    CalendarRow,
     PointRow,
     calendar_history_for_itinerary,
+    insert_calendar_rows,
     insert_point_rows,
     latest_calendar_snapshot_per_itinerary,
 )
@@ -302,6 +304,38 @@ def run_followup(
                     for i, f in enumerate(resp.best_flights[:MAX_RANKS_TO_STORE])
                 ]
                 sa_rows += insert_point_rows(conn, rows)
+                # A verified price IS a calendar observation of this exact
+                # itinerary — write the cheapest (rank-0) option to
+                # calendar_snapshots too, so the discovery board (which
+                # reads that table) reflects fresh scans. Without this the
+                # board froze on the last calendar-engine sweep: after
+                # searchapi was retired and kiwi hit its quota, googleflights
+                # verification wrote only point_queries and the "cheapest
+                # right now" view showed month-old prices (observed
+                # 2026-07-06: hero stuck at a June-9 532 EUR row).
+                if rows:
+                    best = rows[0]
+                    try:
+                        stay = (
+                            date.fromisoformat(c["return_date"])
+                            - date.fromisoformat(c["departure_date"])
+                        ).days
+                    except (ValueError, TypeError):
+                        stay = 0
+                    if stay > 0:
+                        insert_calendar_rows(conn, [CalendarRow(
+                            snapshot_at=snapshot_at,
+                            route_id=route.name,
+                            source=client_source,
+                            origin=c["origin"],
+                            destination=c["destination"],
+                            departure_date=c["departure_date"],
+                            return_date=c["return_date"],
+                            stay_days=stay,
+                            price=best.price,
+                            currency=route.currency,
+                            is_lowest_price=False,
+                        )])
                 sa_queried += 1
                 if not rows:
                     # API answered but returned zero flights (e.g. "Google

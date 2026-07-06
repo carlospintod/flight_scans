@@ -18,6 +18,20 @@ import type {
 
 const DEFAULT_ROUTE = "spain-nairobi";
 
+/** The "cheapest" views (hero, table, heatmap) only trust observations
+ *  this fresh — a month-old price you can't book is not the cheapest
+ *  anything. History (the drill-down charts) keeps everything. At the
+ *  3x/week cadence the board is normally 0–2 days old; this only bites
+ *  when scanning has genuinely lapsed, which the stale badge already
+ *  flags. */
+const FRESH_WINDOW_DAYS = 21;
+
+function freshCutoff(): string {
+  return new Date(Date.now() - FRESH_WINDOW_DAYS * 86_400_000)
+    .toISOString()
+    .replace(/\.\d{3}Z$/, "Z");
+}
+
 /** Effective route config — routes.config_json (canonical shape written
  *  by lib/config.RouteConfig.to_json). Mirrors route_store precedence:
  *  the web app never falls back to YAML (the DB row always exists after
@@ -83,7 +97,7 @@ export async function getTopAlternatives(
   const rs = await db().execute({
     sql: `
       SELECT cs.origin, cs.destination, cs.departure_date, cs.return_date,
-             cs.stay_days, cs.price, cs.currency, cs.source,
+             cs.stay_days, cs.price, cs.currency, cs.source, cs.snapshot_at,
              (SELECT carriers FROM point_queries pq
               WHERE pq.route_id = cs.route_id AND pq.origin = cs.origin
                 AND pq.destination = cs.destination
@@ -125,11 +139,12 @@ export async function getTopAlternatives(
         AND cs.stay_days BETWEEN ? AND ?
         AND cs.departure_date >= ?
         AND cs.return_date <= ?
+        AND cs.snapshot_at >= ?
       ORDER BY cs.price ASC
       LIMIT ?`,
     args: [
       w.routeId, w.routeId, w.minStay, w.maxStay,
-      w.earliestDeparture, w.latestReturn, fetchLimit,
+      w.earliestDeparture, w.latestReturn, freshCutoff(), fetchLimit,
     ],
   });
   const seen = new Set<string>();
@@ -147,6 +162,7 @@ export async function getTopAlternatives(
       price: Number(r["price"]),
       currency: String(r["currency"]),
       source: String(r["source"]),
+      snapshotAt: String(r["snapshot_at"]),
       topCarrier: r["top_carrier"] ? String(r["top_carrier"]) : null,
       stops: r["stops"] === null ? null : Number(r["stops"]),
       totalMinutes:
@@ -228,11 +244,12 @@ export async function getHeatmapGrid(
         AND cs.stay_days BETWEEN ? AND ?
         AND cs.departure_date >= ?
         AND cs.return_date <= ?
+        AND cs.snapshot_at >= ?
       GROUP BY cs.departure_date, cs.stay_days
       ORDER BY cs.departure_date ASC, cs.stay_days ASC`,
     args: [
       w.routeId, origin, w.routeId, origin,
-      w.minStay, w.maxStay, w.earliestDeparture, w.latestReturn,
+      w.minStay, w.maxStay, w.earliestDeparture, w.latestReturn, freshCutoff(),
     ],
   });
   return rs.rows.map((r) => ({

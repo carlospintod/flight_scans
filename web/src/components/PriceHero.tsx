@@ -1,4 +1,10 @@
-import { fmtDateLong, fmtDuration, fmtStops } from "@/lib/format";
+import {
+  fmtDateLong,
+  fmtDuration,
+  fmtStops,
+  isStale,
+  seenLabel,
+} from "@/lib/format";
 import type { Itinerary, RouteWindow } from "@/lib/types";
 
 export function PriceHero({
@@ -16,10 +22,25 @@ export function PriceHero({
       </div>
     );
   }
+  const stale = isStale(best.snapshotAt);
   return (
-    <div className="rounded-card border border-line bg-bg-2 p-6">
-      <div className="mb-1 font-mono text-[11px] uppercase tracking-[2px] text-fg-dim">
-        Cheapest right now · {w.minStay}–{w.maxStay} day stay
+    <div
+      className={`rounded-card border bg-bg-2 p-6 ${
+        stale ? "border-amber/40" : "border-line"
+      }`}
+    >
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <span className="font-mono text-[11px] uppercase tracking-[2px] text-fg-dim">
+          Cheapest observed · {w.minStay}–{w.maxStay} day stay
+        </span>
+        <span
+          className={`font-mono text-[11px] tracking-wider ${
+            stale ? "text-amber" : "text-fg-mid"
+          }`}
+        >
+          {seenLabel(best.snapshotAt)}
+          {stale && " · re-check before booking"}
+        </span>
       </div>
       <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
         <span className="font-mono text-5xl font-semibold text-matrix [text-shadow:0_0_18px_rgb(0_255_65/0.35)]">

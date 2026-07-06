@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { fmtDate, fmtStops } from "@/lib/format";
+import { fmtDate, fmtStops, isStale, seenLabel } from "@/lib/format";
 import type { Itinerary } from "@/lib/types";
 
 /** Cheapest itinerary per departure day (the collapse mirrors
@@ -26,14 +26,17 @@ export function AlternativesTable({ rows }: { rows: Itinerary[] }) {
               <th className="py-2 pr-4">Stay</th>
               <th className="py-2 pr-4">Carrier</th>
               <th className="py-2 pr-4">Stops</th>
-              <th className="py-2">Src</th>
+              <th className="py-2 pr-4">Src</th>
+              <th className="py-2">Seen</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
               <tr
                 key={`${r.origin}${r.departureDate}${r.returnDate}`}
-                className="border-b border-line hover:bg-bg-3"
+                className={`border-b border-line hover:bg-bg-3 ${
+                  isStale(r.snapshotAt) ? "opacity-55" : ""
+                }`}
               >
                 <td className="py-2 pr-4 font-semibold text-fg-bright">
                   <Link
@@ -51,7 +54,14 @@ export function AlternativesTable({ rows }: { rows: Itinerary[] }) {
                   {r.topCarrier ?? "—"}
                 </td>
                 <td className="py-2 pr-4">{fmtStops(r.stops)}</td>
-                <td className="py-2 text-fg-dim">{r.source}</td>
+                <td className="py-2 pr-4 text-fg-dim">{r.source}</td>
+                <td
+                  className={`py-2 ${
+                    isStale(r.snapshotAt) ? "text-amber" : "text-fg-dim"
+                  }`}
+                >
+                  {seenLabel(r.snapshotAt).replace("seen ", "")}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -62,7 +72,9 @@ export function AlternativesTable({ rows }: { rows: Itinerary[] }) {
         {rows.map((r) => (
           <li
             key={`${r.origin}${r.departureDate}${r.returnDate}`}
-            className="rounded-card border border-line bg-bg-2 p-3 font-mono text-[13px]"
+            className={`rounded-card border border-line bg-bg-2 p-3 font-mono text-[13px] ${
+              isStale(r.snapshotAt) ? "opacity-55" : ""
+            }`}
           >
             <Link href={itinHref(r)} className="block">
               <div className="flex items-baseline justify-between">
@@ -77,7 +89,10 @@ export function AlternativesTable({ rows }: { rows: Itinerary[] }) {
               </div>
               <div className="mt-0.5 text-[11px] text-fg-dim">
                 {r.topCarrier ?? "carrier unknown"} · {fmtStops(r.stops)} ·{" "}
-                {r.source}
+                {r.source} ·{" "}
+                <span className={isStale(r.snapshotAt) ? "text-amber" : ""}>
+                  {seenLabel(r.snapshotAt)}
+                </span>
               </div>
             </Link>
           </li>
