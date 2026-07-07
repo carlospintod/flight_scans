@@ -1,80 +1,101 @@
-# flight-tracker
+# flight_scans
 
-A configurable price tracker for flexible-date round-trip flights. Scans a date
-rectangle across a target window, tracks how prices evolve over time, and alerts
-on drops below a per-itinerary baseline.
+A flexible-date flight price tracker with a search mechanism mainstream
+tools don't offer: **both your departure and your return float freely
+inside a window, bounded by a min/max trip length.** The tracker hunts
+the cheapest `(departure, return)` combination across thousands of date
+pairs, three times a week, on a $0/month stack — and tells you the exact
+API budget of every search **before** it runs, as a guaranteed upper
+bound.
 
-First run targets **Spain (MAD, BCN) ↔ Nairobi (NBO)**, but everything
-route-specific lives in `routes/<name>.yaml` — same code runs for any other
-flexible-dates corridor by swapping the config file.
+First corridor: **Spain (MAD/BCN) → Nairobi (NBO)** — live as the public
+demo on the web app. The system is multi-user (invite-only) and fully
+route-agnostic.
 
-See [`CLAUDE.md`](CLAUDE.md) for the full design doc, data-source notes,
-architecture decisions, and build order.
+## Architecture
 
-## Data sources (free, sustainable)
+```
+GitHub Actions cron (Mon/Wed/Sat)          Vercel (Next.js 16)
+┌───────────────────────────────┐          ┌────────────────────────────┐
+│ run_batch.py                  │          │ /            public demo   │
+│  for each active search:      │          │ /searches    your searches │
+│   plan → quote → RESERVE      │─ Turso ─▶│ /searches/new + cost       │
+│   → execute (guarded clients) │  libSQL  │              preview       │
+│   → settle (reserved vs used) │          │ /s/[slug]    results       │
+│   skip-and-notify on shortfall│          │ /ops         owner console │
+└───────────────────────────────┘          └────────────────────────────┘
+```
 
-| Source | Cost | Role |
+- **Quota ledger** (`lib/quota.py`): charge-before-call spend events, one
+  per HTTP attempt; provider headers re-anchor pools; reservations are
+  single-statement compare-and-swap (no transactions needed on Turso's
+  autocommit HTTP API). *Predicted = guaranteed upper bound* — a run can
+  spend less than quoted, never more; searches that don't fit are
+  skipped with a recorded reason, never silently degraded.
+- **Auth**: signed one-time links (invite = login), hand-rolled HMAC
+  sessions, no passwords, no email dependency, users in our own DB.
+- **Alerts**: 15% drops vs the 30-day per-itinerary median AND new
+  all-time lows (fire from the second scan). Push via ntfy.sh.
+
+## Data sources (all free)
+
+| Source | Budget | Role |
 |---|---|---|
-| **Google Flights direct** (`googleflights`) | FREE, unmetered at polite volume | Primary verification: local headless Chromium renders Google Flights pages, parses aria-labels (price/carrier/stops/duration). Needs `playwright install chromium` locally; auto-disabled on Streamlit Cloud |
-| **Kiwi** (RapidAPI, `kiwi`) | 300/mo, resets ~10th | Discovery engine: one range-search call sweeps a multi-week departure band and returns the cheapest ~50 itineraries with carriers + virtual-interlining flags |
-| **Aviasales** (Travelpayouts, `aviasales`) | soft-unlimited | Bonus signal (Saudia + MENA carriers Google skips); cache sparse on some corridors |
-| **Sky Scrapper** (RapidAPI, `skyscanner`) | 20/mo, resets ~16th | Monthly seasonal departure-price curve |
-| **SearchAPI.io** (`searchapi`) | free credits are ONE-TIME (~100 at signup) | Break-glass verification only — reserve the last credits for booking day |
+| **Google Flights direct** | free, politeness-bounded | Verification: headless Chromium on the CI runner parses public result pages (probed: works from Actions IPs) |
+| **Kiwi** (RapidAPI) | 300/mo free → $5/mo for 20k (a config switch) | Discovery: one range-search sweeps a multi-week band, ~50 cheapest itineraries |
+| **SerpAPI** | 250/mo free | Managed verification — the contingency rail when the browser dies |
+| **Aviasales** (Travelpayouts) | soft-unlimited (cached 2-7d) | Broad cached sweep; carriers Google skips |
+| **SearchAPI.io** | 2 one-time credits left | Local break-glass for booking day; never in CI |
 
-Every DB row is tagged with its `source`; baselines, alerts, and budget tracking are per-source. Alerts fire on 15% drops vs the 30-day median AND on any **new all-time low** (needs only 2 scans).
-
-## Quick start
+## Quick start (local development)
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1     # PowerShell on Windows
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-playwright install chromium      # for the free googleflights source
+playwright install chromium          # for the free googleflights source
 
-cp .env.example .env             # then add keys to .env:
-                                 #   RAPIDAPI_KEY=<RapidAPI key: kiwi + sky scrapper>
-                                 #   TRAVELPAYOUTS_TOKEN=<travelpayouts token>
-                                 #   SEARCHAPI_KEY=<optional, break-glass>
+cp .env.example .env                 # add: RAPIDAPI_KEY, TRAVELPAYOUTS_TOKEN,
+                                     # SERPAPI_KEY, TURSO_* (optional: local
+                                     # SQLite is the fallback)
 
-# Recommended: the one-shot scan (plan -> discover -> verify -> alert)
-python run_scan.py --sources googleflights,aviasales,kiwi
+python run_batch.py --trigger local  # all active searches, quota-enforced
+python run_scan.py --route spain-nairobi   # legacy single-route path
 
-# CLI mode
-python tracker.py sweep    --route spain-nairobi
-python tracker.py followup --route spain-nairobi
-python tracker.py alerts   --route spain-nairobi
-python tracker.py report   --route spain-nairobi
-
-# Dashboard mode
-streamlit run ui/app.py          # opens http://localhost:8501
+cd web && npm install && npm run dev # the web app on localhost:3000
 ```
 
-`--sources searchapi skyscanner` controls which sources to query on each CLI invocation; default is both. `--dry-run` plans without spending API budget.
+CI runs `run_batch.py` on the cron; repo secrets carry the keys
+(`scripts/set_ci_secrets.py` pushes them from `.env`). The estimator
+drift guard (`web/scripts/check-estimator.mjs`) keeps the web cost
+preview provably equal to the Python planner's geometry.
 
 ## Layout
 
 ```
-tracker.py                # CLI entry point
-routes/<name>.yaml        # one config file per tracked route
-lib/                      # business logic
-  config.py               #   YAML loader + validator
-  searchapi_io.py         #   SearchAPI.io client (Google Flights wrapper)
-  skyscanner_rapidapi.py  #   Sky Scrapper client (Skyscanner wrapper)
-  db.py                   #   SQLite schema + queries
-  sweep.py                #   Tier 1: curve + grid discovery
-  followup.py             #   Tier 2: point queries (both sources)
-  alerts.py               #   per-source drop detection
-  report.py               #   terminal report
-ui/
-  app.py                  # Streamlit landing page
-  _common.py              # shared chart/DB helpers
-  pages/                  # Run jobs · Itinerary detail · Alerts
-data/tracker.db           # SQLite store (gitignored)
-tests/                    # fixture-driven unit tests (34, network-free)
+run_batch.py             # multi-search batch runner (what CI executes)
+run_scan.py              # legacy single-route runner (local fallback)
+routes/<name>.yaml       # seed config (DB is the source of truth)
+lib/                     # planner, quota ledger, source clients,
+                         # alerts, scan ops, route store
+scripts/                 # CI probes, summaries, notifications, secrets
+web/                     # Next.js app (Vercel): demo, searches, ops
+ui/                      # legacy Streamlit dashboard (retiring)
+tests/                   # 145+ offline fixture-driven tests
 ```
+
+## Honest limits
+
+Not a booking site — prices are observations from free sources and can
+be hours old; verify before paying. Some sources scrape public pages
+politely (tens of queries per scan). Free-tier capacity is deliberately
+small (the owner + a couple of guest searches) until the $5 Kiwi switch
+flips. Saudia doesn't appear in Google Flights on the MAD-NBO corridor —
+a known blind spot.
 
 ## Tests
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
+node web/scripts/check-estimator.mjs
 ```
