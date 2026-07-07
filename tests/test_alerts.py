@@ -321,3 +321,36 @@ def test_duplicate_same_second_rows_fire_one_alert(tmp_path: Path):
         n = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
     assert len(fired) == 1
     assert n == 1
+
+
+def test_new_low_ignores_trivial_improvement(tmp_path: Path):
+    """A 567 -> 566 render twitch is not worth a push: the new_low
+    epsilon (max 5 EUR, 1%) suppresses it. Regression for the 4 one-euro
+    alerts in the 2026-07-07 CI batch."""
+    db_path = tmp_path / "t.db"
+    log_path = tmp_path / "alerts.log"
+    today = date(2026, 6, 15)
+    with connect(db_path) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, ROUTE)
+        insert_calendar_rows(conn, [
+            _row(567, datetime(2026, 6, 10)),
+            _row(566, datetime(2026, 6, 14)),   # 1 EUR below prev min
+        ])
+        fired = evaluate(conn=conn, route=ROUTE, log_path=log_path, today=today)
+    assert fired == []
+
+
+def test_new_low_fires_on_meaningful_improvement(tmp_path: Path):
+    db_path = tmp_path / "t.db"
+    log_path = tmp_path / "alerts.log"
+    today = date(2026, 6, 15)
+    with connect(db_path) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, ROUTE)
+        insert_calendar_rows(conn, [
+            _row(567, datetime(2026, 6, 10)),
+            _row(555, datetime(2026, 6, 14)),   # 12 EUR below -> fires
+        ])
+        fired = evaluate(conn=conn, route=ROUTE, log_path=log_path, today=today)
+    assert len(fired) == 1 and fired[0].price == 555

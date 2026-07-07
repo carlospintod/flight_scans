@@ -149,6 +149,25 @@ class QuotaLedger:
             (source, remaining, limit_total, origin, _now_iso()),
         )
 
+    def floor_anchor(self, source: str) -> None:
+        """Force a monthly pool's baseline to 0 — used when a provider
+        returns a MONTHLY-quota 429 while our anchor still showed
+        availability (a stale seed). Only floors monthly pools, and only
+        when the current provider_view is still positive (so a genuine
+        reset isn't clobbered by a late-arriving 429 from before it)."""
+        pool = self._conn.execute(
+            "SELECT pool_kind FROM quota_pools WHERE source = ?", (source,)
+        ).fetchone()
+        if pool is None or pool["pool_kind"] != "monthly":
+            return
+        state = self.pool_state(source)
+        if state and state.provider_view is not None and state.provider_view > 0:
+            self.record_anchor(source, remaining=0, limit_total=None,
+                               origin="quota_429_floor")
+            LOG.warning("quota: %s returned MONTHLY 429 with anchor still "
+                        "positive (%s) — floored pool to 0 (stale anchor)",
+                        source, state.provider_view)
+
     def capture_anchors_from_snapshots(self, since_iso: str) -> int:
         """After a run: promote fresh provider observations (written by
         the clients into quota_snapshots during the run) into anchors.
@@ -586,9 +605,18 @@ class GuardedClient:
             try:
                 result = attr(*args, **kwargs)
             except Exception as exc:
-                label = "429" if "429" in str(exc) else "error"
+                msg = str(exc)
+                label = "429" if "429" in msg else "error"
                 try:
                     self._ledger.mark(event_id, label)
+                    # 429-despite-available (design §6.3): a MONTHLY-quota
+                    # 429 means our anchor is stale (provider is really at
+                    # ~0). Force-anchor the pool to 0 so the NEXT run's
+                    # reservations refuse it — fail closed — instead of
+                    # re-reserving units it can't spend. A per-second rate
+                    # limit is NOT exhaustion, so gate on "monthly".
+                    if label == "429" and "monthly" in msg.lower():
+                        self._ledger.floor_anchor(self._source)
                 except Exception:  # noqa: BLE001 — marking must not mask the real error
                     LOG.warning("quota: mark(%s) failed post-error", event_id)
                 raise

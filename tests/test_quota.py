@@ -442,3 +442,38 @@ def test_owner_priority_bypasses_per_search_cap(conn):
     # Owner is still bounded by the pool itself (100-15-20=65 < 70).
     assert ledger.reserve(run, "mission2", _cost(("kiwi", 70, "primary")),
                           enforce_per_search_cap=False) is False
+
+
+def test_monthly_429_floors_stale_anchor(conn):
+    """A MONTHLY-quota 429 while the anchor still shows availability means
+    the anchor is stale; the pool floors to 0 so the next run refuses it
+    (design 6.3, observed 2026-07-07: kiwi seed anchor 298 vs real 429)."""
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    ledger.record_anchor("kiwi", remaining=298, limit_total=300, origin="seed")
+    assert ledger.pool_state("kiwi").provider_view == 298
+    fake = _FakeKiwi(fail_with="kiwi HTTP 429: You have exceeded the MONTHLY quota")
+    guarded = GuardedClient(fake, ledger=ledger, source="kiwi",
+                            run_id="r", search_id="s")
+    with pytest.raises(RuntimeError):
+        guarded.range_search()
+    assert ledger.pool_state("kiwi").provider_view == 0   # floored
+    origin = conn.execute("SELECT origin FROM pool_anchors "
+                          "ORDER BY anchor_id DESC LIMIT 1").fetchone()[0]
+    assert origin == "quota_429_floor"
+
+
+def test_rate_limit_429_does_not_floor(conn):
+    """A per-second rate-limit 429 (no 'monthly') is transient — the pool
+    must NOT be floored."""
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    ledger.record_anchor("kiwi", remaining=200, limit_total=300, origin="seed")
+    fake = _FakeKiwi(fail_with="kiwi HTTP 429: Too Many Requests (rate limit)")
+    guarded = GuardedClient(fake, ledger=ledger, source="kiwi",
+                            run_id="r", search_id="s")
+    with pytest.raises(RuntimeError):
+        guarded.range_search()
+    # provider_view = 200 anchor - 1 (charged-before-call spend); the
+    # point is it was NOT floored to 0 by the rate-limit 429.
+    assert ledger.pool_state("kiwi").provider_view == 199

@@ -30,8 +30,23 @@ from .db import (
 
 LOG = logging.getLogger(__name__)
 
+# A new all-time low must beat the previous minimum by at least this much
+# to be worth a notification. Without it, a 567 -> 566 render twitch is
+# "a new low" and fires (4 such 1-EUR alerts in the 2026-07-07 CI batch).
+# max(5 EUR, 1%): kills parse jitter, keeps genuine moves.
+NEW_LOW_MIN_ABS = 5
+NEW_LOW_MIN_PCT = 0.01
+
 # (source, origin, destination, departure_date, return_date)
 _ItinKey = tuple
+
+
+def _is_meaningful_new_low(prev_min: int, price: int) -> bool:
+    """True when `price` beats `prev_min` by the interestingness epsilon."""
+    if price >= prev_min:
+        return False
+    drop = prev_min - price
+    return drop >= max(NEW_LOW_MIN_ABS, prev_min * NEW_LOW_MIN_PCT)
 
 
 def _batch_prev_min(conn, route_id: str) -> dict[_ItinKey, int]:
@@ -190,7 +205,8 @@ def evaluate(
         # twice, and this branch fired once per duplicate (8 doubled
         # alerts in production, found 2026-07-07). The drop branch below
         # always had this check; new_low was missing it.
-        if (prev_min is not None and row["price"] < prev_min
+        if (prev_min is not None
+                and _is_meaningful_new_low(prev_min, row["price"])
                 and itin_key not in fired_keys):
             if not _already_alerted_batched(row["price"]):
                 new_alerts.append(AlertRow(
