@@ -27,12 +27,17 @@ def main() -> int:
     cases = []
     base = date(2026, 9, 12)
     grid = [
-        # (n_origins, n_dest, window_days_total, min_stay)
-        (1, 1, 30, 7), (1, 1, 60, 30), (2, 1, 125, 60), (1, 1, 1, 1),
-        (2, 2, 90, 14), (1, 1, 365, 90), (3, 1, 21, 21), (1, 1, 22, 7),
-        (1, 1, 42, 10), (2, 1, 63, 5),
+        # (n_origins, n_dest, window_days_total, min_stay, trip_type)
+        (1, 1, 30, 7, "round_trip"), (1, 1, 60, 30, "round_trip"),
+        (2, 1, 125, 60, "round_trip"), (1, 1, 1, 1, "round_trip"),
+        (2, 2, 90, 14, "round_trip"), (1, 1, 365, 90, "round_trip"),
+        (3, 1, 21, 21, "round_trip"), (1, 1, 22, 7, "round_trip"),
+        (1, 1, 42, 10, "round_trip"), (2, 1, 63, 5, "round_trip"),
+        # one-way: departures span the whole window; discovery-only.
+        (1, 1, 45, 0, "one_way"), (1, 1, 21, 0, "one_way"),
+        (1, 1, 22, 0, "one_way"), (2, 1, 90, 0, "one_way"),
     ]
-    for n_o, n_d, span, min_stay in grid:
+    for n_o, n_d, span, min_stay, trip in grid:
         earliest = base
         latest_return = base + timedelta(days=span)
         cases.append({
@@ -41,11 +46,12 @@ def main() -> int:
                 "earliestDeparture": earliest.isoformat(),
                 "latestReturn": latest_return.isoformat(),
                 "minStayDays": min_stay,
+                "tripType": trip,
             },
             "expected": predict_upper_bounds(
                 n_origins=n_o, n_destinations=n_d,
                 earliest_departure=earliest, latest_return=latest_return,
-                min_stay_days=min_stay,
+                min_stay_days=min_stay, trip_type=trip,
             ),
         })
     print(json.dumps({"cases": cases}, indent=1))

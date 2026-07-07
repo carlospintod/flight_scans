@@ -65,6 +65,7 @@ def predict_upper_bounds(
     earliest_departure: date,
     latest_return: date,
     min_stay_days: int,
+    trip_type: str = "round_trip",
     kiwi_band_days: int = 21,
     gf_cap: int = 25,
     serpapi_contingency: int = 7,
@@ -76,14 +77,21 @@ def predict_upper_bounds(
 
     Kiwi discovery geometry matches build_run_plan exactly: one band per
     started `kiwi_band_days` chunk of the departure window, per
-    (origin, destination) pair. Verification (googleflights) is quoted
-    at its cap — it grows with findings and can never exceed the cap;
-    the contingency line mirrors cost_vector's rule.
+    (origin, destination) pair. For one-way (discovery-only), that is the
+    whole cost — no verification, aviasales, or contingency. For
+    round-trip, verification (googleflights) is quoted at its cap and the
+    contingency line mirrors cost_vector's rule.
     """
-    latest_dep = latest_return - timedelta(days=min_stay_days)
+    one_way = trip_type == "one_way"
+    # One-way departures span the whole window (no return leg to fit).
+    latest_dep = latest_return if one_way else (
+        latest_return - timedelta(days=min_stay_days))
     window_days = max(0, (latest_dep - earliest_departure).days + 1)
     bands_per_pair = -(-window_days // kiwi_band_days) if window_days else 0
     pairs = n_origins * n_destinations
+    if one_way:
+        return {"kiwi": bands_per_pair * pairs, "googleflights": 0,
+                "serpapi_contingency": 0, "aviasales": 0}
     return {
         "kiwi": bands_per_pair * pairs,
         "googleflights": gf_cap,
@@ -228,8 +236,11 @@ def build_run_plan(
             followup_source = cand_source
             followup_cap = cand_cap
             break
+    # One-way v1 is discovery-only (kiwi one-way range + aviasales feed
+    # the cheapest-per-departure-day curve). Point verification uses
+    # (dep, ret) candidates, which one-way rows don't have — skip it.
     followup_candidates: list[dict] = []
-    if followup_source in src:
+    if followup_source in src and not route.is_one_way:
         cands = select_candidates(conn, route, today=today)
         if followup_cap is not None and len(cands) > followup_cap:
             notes.append(
@@ -271,7 +282,7 @@ def build_run_plan(
     # ---- Kiwi point candidates (only when kiwi is the followup fallback,
     # i.e. selected WITHOUT googleflights) ----
     kiwi_candidates: list[dict] = []
-    if "kiwi" in src and "googleflights" not in src:
+    if "kiwi" in src and "googleflights" not in src and not route.is_one_way:
         kc = select_candidates(conn, route, today=today)
         kiwi_cap = caps.kiwi if caps.kiwi is not None else DEFAULT_KIWI_CAP
         # Bands consume budget too; leave room.
@@ -284,8 +295,10 @@ def build_run_plan(
         kiwi_candidates = kc
 
     # ---- Aviasales pairs (1 cheap_prices call per origin-destination) ----
+    # Skipped for one-way: /v1/prices/cheap serves round-trip cache only;
+    # Kiwi's /one-way is the one-way discovery rail.
     aviasales_pairs: list[tuple[str, str]] = []
-    if "aviasales" in src:
+    if "aviasales" in src and not route.is_one_way:
         aviasales_pairs = [
             (o, d) for o in route.origins for d in route.destinations
         ]

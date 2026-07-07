@@ -53,11 +53,48 @@ export async function getRouteWindow(
     destinations: cfg.route.destinations,
     earliestDeparture: cfg.search_window.earliest_departure,
     latestReturn: cfg.search_window.latest_return,
-    minStay: cfg.stay_preferences.min_days,
-    maxStay: cfg.stay_preferences.max_days,
+    minStay: cfg.stay_preferences?.min_days ?? 0,
+    maxStay: cfg.stay_preferences?.max_days ?? 0,
     currency: cfg.currency,
     watchBelowPrice: cfg.followup?.watch_below_price ?? null,
+    tripType: cfg.trip_type === "one_way" ? "one_way" : "round_trip",
   };
+}
+
+/** Cheapest price per departure day for a one-way search — the
+ *  price-curve data (round-trip uses the heatmap instead). Reads the
+ *  freshest observation per (departure_date), window + freshness bound
+ *  like getTopAlternatives. */
+export async function getOneWayCurve(
+  w: RouteWindow,
+): Promise<{ departureDate: string; price: number; origin: string }[]> {
+  const rs = await db().execute({
+    sql: `
+      SELECT cs.departure_date, cs.origin, MIN(cs.price) AS price
+      FROM calendar_snapshots cs
+      JOIN (
+          SELECT source, origin, destination, departure_date, return_date,
+                 MAX(snapshot_at) AS latest
+          FROM calendar_snapshots WHERE route_id = ?
+          GROUP BY source, origin, destination, departure_date, return_date
+      ) m
+        ON m.source = cs.source AND m.origin = cs.origin
+       AND m.destination = cs.destination
+       AND m.departure_date = cs.departure_date
+       AND m.return_date = cs.return_date AND m.latest = cs.snapshot_at
+      WHERE cs.route_id = ? AND cs.return_date = ''
+        AND cs.departure_date >= ? AND cs.departure_date <= ?
+        AND cs.snapshot_at >= ?
+      GROUP BY cs.departure_date
+      ORDER BY cs.departure_date ASC`,
+    args: [w.routeId, w.routeId, w.earliestDeparture, w.latestReturn,
+           freshCutoff()],
+  });
+  return rs.rows.map((r) => ({
+    departureDate: String(r["departure_date"]),
+    price: Number(r["price"]),
+    origin: String(r["origin"]),
+  }));
 }
 
 /** Mirrors lib/db.latest_scan_run. */

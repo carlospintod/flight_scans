@@ -75,3 +75,58 @@ def test_rejects_stay_inversion(tmp_path):
     )
     with pytest.raises(ConfigError, match="max_days"):
         load_route(p)
+
+
+def test_one_way_config_roundtrip():
+    """One-way config parses (no stay_preferences required) and round-trips
+    through to_json; to_json emits trip_type for one_way."""
+    from lib.config import route_from_json
+    import json
+    ow = {
+        "trip_type": "one_way",
+        "route": {"name": "ow1", "origins": ["MAD"], "destinations": ["BKK"]},
+        "search_window": {"earliest_departure": "2026-10-01",
+                          "latest_return": "2026-12-15"},
+        "currency": "EUR",
+        "sweep": {"cadence_days": 3},
+        "alerts": {"drop_threshold_pct": 15, "baseline_window_days": 30,
+                   "min_observations": 4},
+    }
+    cfg = route_from_json(json.dumps(ow))
+    assert cfg.is_one_way
+    assert cfg.stay.min_days == 0 and cfg.stay.max_days == 0
+    assert route_from_json(cfg.to_json()) == cfg
+    assert '"trip_type"' in cfg.to_json()
+
+
+def test_round_trip_config_omits_trip_type_field():
+    """B2: a round-trip config's serialized shape has NO trip_type key, so
+    it is byte-identical to pre-one-way code (owner's search untouched)."""
+    from lib.config import (RouteConfig, SearchWindow, StayPreferences,
+                            SweepParams, FollowupParams, AlertParams,
+                            route_to_yaml_dict)
+    rt = RouteConfig(
+        name="rt", origins=("MAD",), destinations=("NBO",),
+        search_window=SearchWindow(date(2026, 9, 1), date(2027, 1, 15)),
+        stay=StayPreferences(60, 90), currency="EUR",
+        sweep=SweepParams(cadence_days=3), followup=FollowupParams(),
+        alerts=AlertParams(15, 30, 4))
+    assert "trip_type" not in route_to_yaml_dict(rt)
+    assert '"trip_type"' not in rt.to_json()
+
+
+def test_one_way_config_rejects_bad_trip_type():
+    from lib.config import route_from_json, ConfigError
+    import json
+    bad = {"trip_type": "multi_city",
+           "route": {"name": "x", "origins": ["MAD"], "destinations": ["BKK"]},
+           "search_window": {"earliest_departure": "2026-10-01",
+                             "latest_return": "2026-12-15"},
+           "currency": "EUR", "sweep": {"cadence_days": 3},
+           "alerts": {"drop_threshold_pct": 15, "baseline_window_days": 30,
+                      "min_observations": 4}}
+    try:
+        route_from_json(json.dumps(bad))
+        assert False, "should reject"
+    except ConfigError:
+        pass

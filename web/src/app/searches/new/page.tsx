@@ -34,6 +34,7 @@ interface Capacity {
 
 export default function NewSearchPage() {
   const router = useRouter();
+  const [tripType, setTripType] = useState<"round_trip" | "one_way">("round_trip");
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [earliest, setEarliest] = useState("");
@@ -43,6 +44,7 @@ export default function NewSearchPage() {
   const [capacity, setCapacity] = useState<Capacity | null>(null);
   const [state, setState] = useState<"idle" | "busy" | { error: string }>(
     "idle");
+  const oneWay = tripType === "one_way";
 
   useEffect(() => {
     fetch("/api/capacity").then(async (r) => {
@@ -54,15 +56,17 @@ export default function NewSearchPage() {
     && /^[A-Za-z]{3}$/.test(destination)
     && earliest !== "" && latestReturn !== ""
     && Date.parse(latestReturn) > Date.parse(earliest)
-    && maxStay >= minStay && minStay >= 1;
+    && (oneWay || (maxStay >= minStay && minStay >= 1));
 
   const preview = useMemo(() => {
     if (!complete) return null;
     return predictUpperBounds({
       nOrigins: 1, nDestinations: 1,
-      earliestDeparture: earliest, latestReturn, minStayDays: minStay,
+      earliestDeparture: earliest, latestReturn,
+      minStayDays: oneWay ? 0 : minStay,
+      tripType: oneWay ? "one_way" : "round_trip",
     });
-  }, [complete, earliest, latestReturn, minStay]);
+  }, [complete, earliest, latestReturn, minStay, oneWay]);
 
   const fits = useMemo(() => {
     if (!preview || !capacity) return null;
@@ -77,7 +81,8 @@ export default function NewSearchPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        origin: origin.toUpperCase(), destination: destination.toUpperCase(),
+        tripType, origin: origin.toUpperCase(),
+        destination: destination.toUpperCase(),
         earliestDeparture: earliest, latestReturn, minStay, maxStay,
       }),
     });
@@ -101,10 +106,26 @@ export default function NewSearchPage() {
       <div>
         <h1 className="font-mono text-lg text-fg-bright">NEW SEARCH</h1>
         <p className="mt-1 text-sm text-fg-mid">
-          Both your departure and your return float freely — you set the
-          window and how long you want to stay. The tracker hunts the
-          cheapest combination, every scan.
+          {oneWay
+            ? "One-way: your departure floats across the whole window. The tracker hunts the cheapest day to fly out, every scan."
+            : "Both your departure and your return float freely — you set the window and how long you want to stay. The tracker hunts the cheapest combination, every scan."}
         </p>
+      </div>
+
+      <div className="inline-flex overflow-hidden rounded-card border border-line">
+        {(["round_trip", "one_way"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTripType(t)}
+            className={`px-4 py-2 font-mono text-[12px] tracking-wider ${
+              tripType === t
+                ? "bg-bg-3 text-matrix"
+                : "bg-bg-2 text-fg-mid hover:text-fg"
+            }`}
+          >
+            {t === "round_trip" ? "ROUND TRIP" : "ONE WAY"}
+          </button>
+        ))}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -132,23 +153,29 @@ export default function NewSearchPage() {
                  className={input} />
         </div>
         <div>
-          <label className={label}>latest return</label>
+          <label className={label}>
+            {oneWay ? "latest departure" : "latest return"}
+          </label>
           <input type="date" value={latestReturn}
                  onChange={(e) => setLatestReturn(e.target.value)}
                  className={input} />
         </div>
-        <div>
-          <label className={label}>min stay (days)</label>
-          <input type="number" min={1} value={minStay}
-                 onChange={(e) => setMinStay(Number(e.target.value))}
-                 className={input} />
-        </div>
-        <div>
-          <label className={label}>max stay (days)</label>
-          <input type="number" min={minStay} value={maxStay}
-                 onChange={(e) => setMaxStay(Number(e.target.value))}
-                 className={input} />
-        </div>
+        {!oneWay && (
+          <>
+            <div>
+              <label className={label}>min stay (days)</label>
+              <input type="number" min={1} value={minStay}
+                     onChange={(e) => setMinStay(Number(e.target.value))}
+                     className={input} />
+            </div>
+            <div>
+              <label className={label}>max stay (days)</label>
+              <input type="number" min={minStay} value={maxStay}
+                     onChange={(e) => setMaxStay(Number(e.target.value))}
+                     className={input} />
+            </div>
+          </>
+        )}
       </div>
 
       <div className="rounded-card border border-line bg-bg-2 p-4">

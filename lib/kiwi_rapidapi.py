@@ -211,6 +211,37 @@ class KiwiClient:
         data = self._request("/one-way", params)
         return KiwiResponse(raw=data, options=tuple(_parse_options(data, currency)))
 
+    def one_way_range_search(
+        self,
+        *,
+        origin: str,
+        destination: str,
+        outbound_start: date,
+        outbound_end: date,
+        currency: str,
+        adults: int = 1,
+        limit: int = 50,
+    ) -> KiwiResponse:
+        """One-way discovery across a WIDE departure range in one call.
+
+        The /one-way endpoint accepts the same outbound date-range params
+        as /round-trip (verified live 2026-07-07), so a single band call
+        returns the cheapest ~50 one-way departures across the window —
+        the one-way analogue of range_search, at 1 call per band.
+        """
+        params: dict[str, Any] = {
+            "source": origin,
+            "destination": destination,
+            "currency": currency.upper(),
+            "outboundDepartureDateStart": f"{outbound_start.isoformat()}T00:00:00",
+            "outboundDepartureDateEnd": f"{outbound_end.isoformat()}T23:59:59",
+            "adults": str(adults),
+            "limit": str(limit),
+            "sortBy": "PRICE",
+        }
+        data = self._request("/one-way", params)
+        return KiwiResponse(raw=data, options=tuple(_parse_options(data, currency)))
+
     # --- internals -------------------------------------------------------
 
     def _request(self, path: str, params: dict) -> dict:

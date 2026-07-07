@@ -55,6 +55,7 @@ export async function capacityView(): Promise<CapacityView> {
         earliestDeparture: cfg.search_window.earliest_departure,
         latestReturn: cfg.search_window.latest_return,
         minStayDays: cfg.stay_preferences?.min_days ?? 1,
+        tripType: cfg.trip_type === "one_way" ? "one_way" : "round_trip",
       }).kiwi;
     } catch {
       /* unparseable config never blocks the meter */

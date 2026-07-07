@@ -77,6 +77,11 @@ class RouteConfig:
     sweep: SweepParams
     followup: FollowupParams
     alerts: AlertParams
+    trip_type: str = "round_trip"   # 'round_trip' | 'one_way'
+
+    @property
+    def is_one_way(self) -> bool:
+        return self.trip_type == "one_way"
 
     def to_json(self) -> str:
         """Stable JSON snapshot for persisting to the routes table.
@@ -146,17 +151,30 @@ def _from_dict(raw: dict[str, Any]) -> RouteConfig:
     origins = _require_iata_list(route, "origins", path="route.origins")
     destinations = _require_iata_list(route, "destinations", path="route.destinations")
 
+    # trip_type is emitted in config_json ONLY for one_way (round-trip
+    # configs stay byte-identical to pre-one-way code, so old readers and
+    # the owner's mission search are untouched — see route_to_yaml_dict).
+    trip_type = raw.get("trip_type", "round_trip")
+    if trip_type not in ("round_trip", "one_way"):
+        raise ConfigError("trip_type must be 'round_trip' or 'one_way'")
+
     sw_raw = _require_mapping(raw, "search_window")
     earliest = _require_date(sw_raw, "earliest_departure", path="search_window.earliest_departure")
     latest = _require_date(sw_raw, "latest_return", path="search_window.latest_return")
     if latest <= earliest:
         raise ConfigError("search_window.latest_return must be after earliest_departure")
 
-    stay_raw = _require_mapping(raw, "stay_preferences")
-    min_days = _require_positive_int(stay_raw, "min_days", path="stay_preferences.min_days")
-    max_days = _require_positive_int(stay_raw, "max_days", path="stay_preferences.max_days")
-    if max_days < min_days:
-        raise ConfigError("stay_preferences.max_days must be >= min_days")
+    if trip_type == "one_way":
+        # One-way has no stay dimension; the field is synthesized as (0,0)
+        # so return_date='' / stay_days=0 sentinel rows pass the stay-range
+        # filters everywhere (which use min_days>=1 for round-trips).
+        min_days = max_days = 0
+    else:
+        stay_raw = _require_mapping(raw, "stay_preferences")
+        min_days = _require_positive_int(stay_raw, "min_days", path="stay_preferences.min_days")
+        max_days = _require_positive_int(stay_raw, "max_days", path="stay_preferences.max_days")
+        if max_days < min_days:
+            raise ConfigError("stay_preferences.max_days must be >= min_days")
 
     currency = _require_str(raw, "currency", path="currency")
     if len(currency) != 3 or not currency.isalpha() or currency != currency.upper():
@@ -224,6 +242,7 @@ def _from_dict(raw: dict[str, Any]) -> RouteConfig:
             baseline_window_days=baseline,
             min_observations=min_obs,
         ),
+        trip_type=trip_type,
     )
 
 
@@ -272,6 +291,12 @@ def route_to_yaml_dict(route: RouteConfig) -> dict[str, Any]:
             "min_observations": route.alerts.min_observations,
         },
     }
+    # Emit trip_type ONLY for one_way: round-trip configs serialize
+    # byte-identically to pre-one-way code, so the owner's mission search
+    # and any old reader (route_store self-heal, Streamlit) are untouched
+    # — no config ping-pong (red-team B2).
+    if route.is_one_way:
+        out["trip_type"] = "one_way"
     if followup:
         out["followup"] = followup
     return out

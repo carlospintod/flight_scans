@@ -159,20 +159,28 @@ def evaluate(
     # out-of-window history (by design), but a great fare you can't
     # take is not an alert. Same filter the followup applies.
     sw = route.search_window
-    latest_dep_allowed = sw.latest_return - timedelta(days=min_stay)
+    one_way = route.is_one_way
+    # One-way: latest departure is the window end itself (no return leg
+    # to fit); round-trip: latest_return - min_stay.
+    latest_dep_allowed = (sw.latest_return if one_way
+                          else sw.latest_return - timedelta(days=min_stay))
 
     new_alerts: list[AlertRow] = []
     fired_keys: set[tuple] = set()  # itinerary+source fired in THIS pass
     for row in latest:
-        if row["stay_days"] < min_stay or row["stay_days"] > max_stay:
+        if not one_way and (row["stay_days"] < min_stay
+                            or row["stay_days"] > max_stay):
             continue
         try:
             dep_d = date.fromisoformat(row["departure_date"])
-            ret_d = date.fromisoformat(row["return_date"])
+            # One-way rows carry the '' return sentinel — no return leg.
+            ret_d = (None if one_way
+                     else date.fromisoformat(row["return_date"]))
         except (ValueError, TypeError):
             continue
-        if (dep_d < sw.earliest_departure or dep_d > latest_dep_allowed
-                or ret_d > sw.latest_return):
+        if dep_d < sw.earliest_departure or dep_d > latest_dep_allowed:
+            continue
+        if ret_d is not None and ret_d > sw.latest_return:
             continue
         src = row["source"]
         itin_key = (src, row["origin"], row["destination"],

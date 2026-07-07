@@ -31,7 +31,9 @@ export function PriceHero({
     >
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
         <span className="font-mono text-[11px] uppercase tracking-[2px] text-fg-dim">
-          Cheapest observed · {w.minStay}–{w.maxStay} day stay
+          Cheapest observed{w.tripType === "one_way"
+            ? " · one-way"
+            : ` · ${w.minStay}–${w.maxStay} day stay`}
         </span>
         <span
           className={`font-mono text-[11px] tracking-wider ${
@@ -55,17 +57,23 @@ export function PriceHero({
       </div>
       <div className="mt-3 grid gap-x-8 gap-y-1 font-mono text-[13px] text-fg sm:grid-cols-2">
         <div>
-          <span className="text-fg-dim">out&nbsp;&nbsp;</span>
+          <span className="text-fg-dim">
+            {w.tripType === "one_way" ? "fly&nbsp;" : "out&nbsp;&nbsp;"}
+          </span>
           {fmtDateLong(best.departureDate)}
         </div>
-        <div>
-          <span className="text-fg-dim">back&nbsp;</span>
-          {fmtDateLong(best.returnDate)}
-        </div>
-        <div>
-          <span className="text-fg-dim">stay&nbsp;</span>
-          {best.stayDays} days
-        </div>
+        {w.tripType !== "one_way" && (
+          <>
+            <div>
+              <span className="text-fg-dim">back&nbsp;</span>
+              {fmtDateLong(best.returnDate)}
+            </div>
+            <div>
+              <span className="text-fg-dim">stay&nbsp;</span>
+              {best.stayDays} days
+            </div>
+          </>
+        )}
         <div>
           <span className="text-fg-dim">via&nbsp;&nbsp;</span>
           {best.topCarrier ?? "—"}

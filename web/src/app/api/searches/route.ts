@@ -34,26 +34,35 @@ export async function POST(req: NextRequest) {
   const origin = String(b.origin ?? "").toUpperCase().trim();
   const destination = String(b.destination ?? "").toUpperCase().trim();
   const earliest = String(b.earliestDeparture ?? "");
+  const oneWay = b.tripType === "one_way";
+  // One-way has no return leg: the "latest return" field is repurposed as
+  // the latest DEPARTURE the user will accept, and stay is irrelevant.
   const latestReturn = String(b.latestReturn ?? "");
-  const minStay = Number(b.minStay);
-  const maxStay = Number(b.maxStay);
+  const minStay = oneWay ? 0 : Number(b.minStay);
+  const maxStay = oneWay ? 0 : Number(b.maxStay);
 
   const problems: string[] = [];
   if (!IATA.test(origin)) problems.push("origin must be a 3-letter airport code");
   if (!IATA.test(destination)) problems.push("destination must be a 3-letter airport code");
   if (origin === destination) problems.push("origin and destination must differ");
   if (!DATE.test(earliest) || !DATE.test(latestReturn)) problems.push("dates must be YYYY-MM-DD");
-  if (!Number.isInteger(minStay) || minStay < 1) problems.push("min stay must be ≥ 1");
-  if (!Number.isInteger(maxStay) || maxStay < minStay) problems.push("max stay must be ≥ min stay");
+  if (!oneWay) {
+    if (!Number.isInteger(minStay) || minStay < 1) problems.push("min stay must be ≥ 1");
+    if (!Number.isInteger(maxStay) || maxStay < minStay) problems.push("max stay must be ≥ min stay");
+  }
   if (DATE.test(earliest) && DATE.test(latestReturn)) {
     if (Date.parse(latestReturn) <= Date.parse(earliest)) {
-      problems.push("latest return must be after earliest departure");
+      problems.push(oneWay
+        ? "latest departure must be after earliest departure"
+        : "latest return must be after earliest departure");
     }
     if (Date.parse(earliest) < Date.now() - 86_400_000) {
       problems.push("earliest departure is in the past");
     }
-    const span = (Date.parse(latestReturn) - Date.parse(earliest)) / 86_400_000;
-    if (maxStay > span) problems.push("max stay doesn't fit inside the window");
+    if (!oneWay) {
+      const span = (Date.parse(latestReturn) - Date.parse(earliest)) / 86_400_000;
+      if (maxStay > span) problems.push("max stay doesn't fit inside the window");
+    }
   }
   if (problems.length) {
     return NextResponse.json({ error: problems.join("; ") }, { status: 400 });
@@ -78,6 +87,7 @@ export async function POST(req: NextRequest) {
   const predicted = predictUpperBounds({
     nOrigins: 1, nDestinations: 1,
     earliestDeparture: earliest, latestReturn, minStayDays: minStay,
+    tripType: oneWay ? "one_way" : "round_trip",
   });
   const cap = await capacityView();
   const newMonthly = predicted.kiwi * RUNS_PER_MONTH;
@@ -94,7 +104,7 @@ export async function POST(req: NextRequest) {
 
   const id = slug();
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-  const config = {
+  const config: Record<string, unknown> = {
     route: { name: id, origins: [origin], destinations: [destination] },
     search_window: {
       earliest_departure: earliest, latest_return: latestReturn,
@@ -111,6 +121,10 @@ export async function POST(req: NextRequest) {
     alerts: { drop_threshold_pct: 15, baseline_window_days: 30,
               min_observations: 4 },
   };
+  // Emit trip_type ONLY for one_way — round-trip configs stay identical
+  // to pre-one-way shape (matches lib/config route_to_yaml_dict, so
+  // route_store never rewrites them).
+  if (oneWay) config.trip_type = "one_way";
 
   await client.execute({
     sql: `INSERT INTO routes (route_id, config_json, created_at, updated_at)

@@ -11,6 +11,7 @@ export interface PredictInput {
   earliestDeparture: string; // YYYY-MM-DD
   latestReturn: string;
   minStayDays: number;
+  tripType?: "round_trip" | "one_way";
 }
 
 export interface UpperBounds {
@@ -25,14 +26,21 @@ const GF_CAP = 25;
 const SERPAPI_CONTINGENCY = 7;
 
 export function predictUpperBounds(p: PredictInput): UpperBounds {
+  const oneWay = p.tripType === "one_way";
   const earliest = Date.parse(p.earliestDeparture + "T00:00:00Z");
   const latestReturn = Date.parse(p.latestReturn + "T00:00:00Z");
-  const latestDep = latestReturn - p.minStayDays * 86_400_000;
+  const latestDep = oneWay
+    ? latestReturn
+    : latestReturn - p.minStayDays * 86_400_000;
   const windowDays = Math.max(
     0, Math.round((latestDep - earliest) / 86_400_000) + 1);
   const bandsPerPair =
     windowDays === 0 ? 0 : Math.ceil(windowDays / KIWI_BAND_DAYS);
   const pairs = p.nOrigins * p.nDestinations;
+  if (oneWay) {
+    return { kiwi: bandsPerPair * pairs, googleflights: 0,
+             serpapi_contingency: 0, aviasales: 0 };
+  }
   return {
     kiwi: bandsPerPair * pairs,
     googleflights: GF_CAP,

@@ -6,7 +6,8 @@
     "nDestinations": 1,
     "earliestDeparture": "2026-09-12",
     "latestReturn": "2026-10-12",
-    "minStayDays": 7
+    "minStayDays": 7,
+    "tripType": "round_trip"
    },
    "expected": {
     "kiwi": 2,
@@ -21,7 +22,8 @@
     "nDestinations": 1,
     "earliestDeparture": "2026-09-12",
     "latestReturn": "2026-11-11",
-    "minStayDays": 30
+    "minStayDays": 30,
+    "tripType": "round_trip"
    },
    "expected": {
     "kiwi": 2,
@@ -36,7 +38,8 @@
     "nDestinations": 1,
     "earliestDeparture": "2026-09-12",
     "latestReturn": "2027-01-15",
-    "minStayDays": 60
+    "minStayDays": 60,
+    "tripType": "round_trip"
    },
    "expected": {
     "kiwi": 8,
@@ -51,7 +54,8 @@
     "nDestinations": 1,
     "earliestDeparture": "2026-09-12",
     "latestReturn": "2026-09-13",
-    "minStayDays": 1
+    "minStayDays": 1,
+    "tripType": "round_trip"
    },
    "expected": {
     "kiwi": 1,
@@ -66,7 +70,8 @@
     "nDestinations": 2,
     "earliestDeparture": "2026-09-12",
     "latestReturn": "2026-12-11",
-    "minStayDays": 14
+    "minStayDays": 14,
+    "tripType": "round_trip"
    },
    "expected": {
     "kiwi": 16,
@@ -81,7 +86,8 @@
     "nDestinations": 1,
     "earliestDeparture": "2026-09-12",
     "latestReturn": "2027-09-12",
-    "minStayDays": 90
+    "minStayDays": 90,
+    "tripType": "round_trip"
    },
    "expected": {
     "kiwi": 14,
@@ -96,7 +102,8 @@
     "nDestinations": 1,
     "earliestDeparture": "2026-09-12",
     "latestReturn": "2026-10-03",
-    "minStayDays": 21
+    "minStayDays": 21,
+    "tripType": "round_trip"
    },
    "expected": {
     "kiwi": 3,
@@ -111,7 +118,8 @@
     "nDestinations": 1,
     "earliestDeparture": "2026-09-12",
     "latestReturn": "2026-10-04",
-    "minStayDays": 7
+    "minStayDays": 7,
+    "tripType": "round_trip"
    },
    "expected": {
     "kiwi": 1,
@@ -126,7 +134,8 @@
     "nDestinations": 1,
     "earliestDeparture": "2026-09-12",
     "latestReturn": "2026-10-24",
-    "minStayDays": 10
+    "minStayDays": 10,
+    "tripType": "round_trip"
    },
    "expected": {
     "kiwi": 2,
@@ -141,13 +150,78 @@
     "nDestinations": 1,
     "earliestDeparture": "2026-09-12",
     "latestReturn": "2026-11-14",
-    "minStayDays": 5
+    "minStayDays": 5,
+    "tripType": "round_trip"
    },
    "expected": {
     "kiwi": 6,
     "googleflights": 25,
     "serpapi_contingency": 7,
     "aviasales": 2
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 1,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2026-10-27",
+    "minStayDays": 0,
+    "tripType": "one_way"
+   },
+   "expected": {
+    "kiwi": 3,
+    "googleflights": 0,
+    "serpapi_contingency": 0,
+    "aviasales": 0
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 1,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2026-10-03",
+    "minStayDays": 0,
+    "tripType": "one_way"
+   },
+   "expected": {
+    "kiwi": 2,
+    "googleflights": 0,
+    "serpapi_contingency": 0,
+    "aviasales": 0
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 1,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2026-10-04",
+    "minStayDays": 0,
+    "tripType": "one_way"
+   },
+   "expected": {
+    "kiwi": 2,
+    "googleflights": 0,
+    "serpapi_contingency": 0,
+    "aviasales": 0
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 2,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2026-12-11",
+    "minStayDays": 0,
+    "tripType": "one_way"
+   },
+   "expected": {
+    "kiwi": 10,
+    "googleflights": 0,
+    "serpapi_contingency": 0,
+    "aviasales": 0
    }
   }
  ]

@@ -51,11 +51,11 @@ def run_aviasales_sweep(conn, av_client, route, *, dry_run: bool,
         rows: list[CalendarRow] = []
         for q in resp.quotes:
             if not q.return_date:
-                continue  # need round-trip for calendar_snapshots
+                continue  # /v1/prices/cheap is round-trip cache only
             try:
                 d_dep = date.fromisoformat(q.departure_date)
                 d_ret = date.fromisoformat(q.return_date)
-            except ValueError:
+            except (ValueError, TypeError):
                 continue
             stay_days = (d_ret - d_dep).days
             if stay_days <= 0:
@@ -93,14 +93,22 @@ def run_kiwi_discovery(conn, kw_client, route, *, bands, dry_run: bool) -> int:
     from .kiwi_rapidapi import KiwiError, SOURCE_ID as KW_SOURCE
     snapshot_at = _now_iso()
     stored = 0
+    one_way = route.is_one_way
     for b in bands:
         try:
-            resp = kw_client.range_search(
-                origin=b.origin, destination=b.destination,
-                outbound_start=b.outbound_start, outbound_end=b.outbound_end,
-                inbound_start=b.inbound_start, inbound_end=b.inbound_end,
-                currency=route.currency, limit=50,
-            )
+            if one_way:
+                resp = kw_client.one_way_range_search(
+                    origin=b.origin, destination=b.destination,
+                    outbound_start=b.outbound_start, outbound_end=b.outbound_end,
+                    currency=route.currency, limit=50,
+                )
+            else:
+                resp = kw_client.range_search(
+                    origin=b.origin, destination=b.destination,
+                    outbound_start=b.outbound_start, outbound_end=b.outbound_end,
+                    inbound_start=b.inbound_start, inbound_end=b.inbound_end,
+                    currency=route.currency, limit=50,
+                )
         except KiwiError as exc:
             # A monthly-quota 429 fails identically for every band —
             # one clear line, stop the discovery pass (observed
@@ -118,20 +126,30 @@ def run_kiwi_discovery(conn, kw_client, route, *, bands, dry_run: bool) -> int:
             continue
         cal_rows, pq_rows = [], []
         for opt in resp.options:
-            if not opt.return_date:
-                continue
             try:
                 dep_d = date.fromisoformat(opt.depart_date)
-                ret_d = date.fromisoformat(opt.return_date)
-            except ValueError:
+            except (ValueError, TypeError):
                 continue
-            stay = (ret_d - dep_d).days
-            if stay <= 0:
-                continue
+            if one_way:
+                # Sentinel: return_date='' and stay_days=0 make one-way
+                # rows invisible to round-trip stay-range filters
+                # (min_days>=1) while sharing the same tables.
+                ret_str, stay = "", 0
+            else:
+                if not opt.return_date:
+                    continue
+                try:
+                    ret_d = date.fromisoformat(opt.return_date)
+                except (ValueError, TypeError):
+                    continue
+                stay = (ret_d - dep_d).days
+                if stay <= 0:
+                    continue
+                ret_str = opt.return_date
             cal_rows.append(CalendarRow(
                 snapshot_at=snapshot_at, route_id=route.name, source=KW_SOURCE,
                 origin=b.origin, destination=b.destination,
-                departure_date=opt.depart_date, return_date=opt.return_date,
+                departure_date=opt.depart_date, return_date=ret_str,
                 stay_days=stay, price=opt.price,
                 currency=opt.currency or route.currency,
                 is_lowest_price=False,
@@ -139,7 +157,7 @@ def run_kiwi_discovery(conn, kw_client, route, *, bands, dry_run: bool) -> int:
             pq_rows.append(PointRow(
                 snapshot_at=snapshot_at, route_id=route.name, source=KW_SOURCE,
                 origin=b.origin, destination=b.destination,
-                departure_date=opt.depart_date, return_date=opt.return_date,
+                departure_date=opt.depart_date, return_date=ret_str,
                 rank=0, price=opt.price,
                 currency=opt.currency or route.currency,
                 carriers=opt.carriers, total_minutes=opt.total_minutes,

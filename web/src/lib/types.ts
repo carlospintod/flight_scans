@@ -5,11 +5,12 @@ export interface RouteWindow {
   origins: string[];
   destinations: string[];
   earliestDeparture: string; // YYYY-MM-DD
-  latestReturn: string;
+  latestReturn: string;      // for one-way this is the latest DEPARTURE
   minStay: number;
   maxStay: number;
   currency: string;
   watchBelowPrice: number | null;
+  tripType: "round_trip" | "one_way";
 }
 
 export interface Itinerary {
