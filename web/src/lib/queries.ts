@@ -462,6 +462,100 @@ export async function getScanHistory(
   }));
 }
 
+export interface SearchListItem {
+  searchId: string;
+  status: string;
+  notify: string;
+  isPublic: boolean;
+  window: RouteWindow | null;
+  cheapestNow: { price: number; currency: string; departureDate: string;
+                 returnDate: string; origin: string } | null;
+  lastRun: {
+    startedAt: string; status: string; rowsStored: number;
+    alertsFired: number; skipReason: string | null;
+    reservedVsUsed: { source: string; kind: string; reserved: number;
+                      used: number; state: string }[];
+  } | null;
+}
+
+/** A user's searches with their latest run digest — the M3 UI
+ *  replacement for the email digest. */
+export async function getUserSearches(
+  userId: number,
+): Promise<SearchListItem[]> {
+  const rs = await db().execute({
+    sql: `SELECT search_id, status, notify, is_public FROM searches
+          WHERE user_id = ? ORDER BY created_at`,
+    args: [userId],
+  });
+  const out: SearchListItem[] = [];
+  for (const r of rs.rows) {
+    const sid = String(r["search_id"]);
+    let window: RouteWindow | null = null;
+    try {
+      window = await getRouteWindow(sid);
+    } catch {
+      window = null;
+    }
+    let cheapestNow: SearchListItem["cheapestNow"] = null;
+    if (window) {
+      const cheap = await getTopAlternatives(window, 1);
+      if (cheap[0]) {
+        cheapestNow = {
+          price: cheap[0].price, currency: cheap[0].currency,
+          departureDate: cheap[0].departureDate,
+          returnDate: cheap[0].returnDate, origin: cheap[0].origin,
+        };
+      }
+    }
+    const runRs = await db().execute({
+      sql: `SELECT started_at, status, rows_stored, alerts_fired,
+                   summary_json, reserved_json
+            FROM scan_runs WHERE route_id = ?
+            ORDER BY started_at DESC LIMIT 1`,
+      args: [sid],
+    });
+    let lastRun: SearchListItem["lastRun"] = null;
+    const runRow = runRs.rows[0];
+    if (runRow) {
+      let skipReason: string | null = null;
+      let reservedVsUsed: NonNullable<SearchListItem["lastRun"]>["reservedVsUsed"] = [];
+      try {
+        const summary = JSON.parse(String(runRow["summary_json"] ?? "{}"));
+        skipReason = summary.skip_reason ?? null;
+      } catch { /* absent */ }
+      try {
+        const rvu = JSON.parse(String(runRow["reserved_json"] ?? "[]"));
+        if (Array.isArray(rvu)) {
+          reservedVsUsed = rvu.map((x) => ({
+            source: String(x.source), kind: String(x.kind),
+            reserved: Number(x.reserved_units), used: Number(x.used_units),
+            state: String(x.state),
+          }));
+        }
+      } catch { /* absent */ }
+      lastRun = {
+        startedAt: String(runRow["started_at"]),
+        status: String(runRow["status"]),
+        rowsStored: Number(runRow["rows_stored"]),
+        alertsFired: Number(runRow["alerts_fired"]),
+        skipReason,
+        reservedVsUsed,
+      };
+    }
+    out.push({
+      searchId: sid,
+      status: String(r["status"]),
+      notify: String(r["notify"]),
+      isPublic: Number(r["is_public"]) === 1,
+      window,
+      cheapestNow,
+      lastRun,
+    });
+  }
+  return out;
+}
+
 /** Mirrors ui/_common.itinerary_history_chart's query. */
 export async function getItineraryHistory(
   routeId: string,

@@ -1,8 +1,12 @@
+import { redirect } from "next/navigation";
 import { ConfigEditor } from "@/components/ops/ConfigEditor";
 import { TriggerScan } from "@/components/ops/TriggerScan";
+import { UserAdmin } from "@/components/ops/UserAdmin";
 import { Card, SectionHeading } from "@/components/Section";
+import { isOpsBreakGlass } from "@/lib/auth";
 import { ageDays } from "@/lib/format";
 import { getQuotas, getScanHistory } from "@/lib/queries";
+import { requireUser } from "@/lib/users";
 import type { RouteConfigJson } from "@/lib/config-schema";
 import { db } from "@/lib/db";
 
@@ -20,6 +24,12 @@ const QUOTA_LABELS: Record<string, string> = {
 };
 
 export default async function OpsPage() {
+  // Owner-only: the proxy admits any valid session (stateless); the
+  // role check happens here where the DB is available. Break-glass
+  // APP_PASSWORD sessions administer too (owner bootstrap path).
+  const owner = await requireUser("owner");
+  if (!owner && !(await isOpsBreakGlass())) redirect("/ops/login");
+
   const [quotas, scans, cfgRow] = await Promise.all([
     getQuotas(),
     getScanHistory(ROUTE_ID, 10),
@@ -41,6 +51,13 @@ export default async function OpsPage() {
       <section>
         <SectionHeading>Run a scan</SectionHeading>
         <TriggerScan />
+      </section>
+
+      <section>
+        <SectionHeading>Users & invites</SectionHeading>
+        <Card>
+          <UserAdmin />
+        </Card>
       </section>
 
       <section>

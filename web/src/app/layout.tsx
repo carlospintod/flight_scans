@@ -41,6 +41,9 @@ export default function RootLayout({
               <Link href="/" className="hover:text-matrix">
                 RADAR
               </Link>
+              <Link href="/searches" className="hover:text-matrix">
+                SEARCHES
+              </Link>
               <Link href="/about" className="hover:text-matrix">
                 ABOUT
               </Link>

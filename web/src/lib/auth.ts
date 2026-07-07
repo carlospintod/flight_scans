@@ -73,6 +73,72 @@ export async function isAuthed(): Promise<boolean> {
   return verifySessionValue(store.get(SESSION_COOKIE)?.value);
 }
 
+// ---------------------------------------------------------------------------
+// v2 user sessions (link-based multi-user auth, product plan M3).
+// Cookie value: "v2.{userId}.{exp}.{sv}.{hmac(userId.exp.sv)}".
+// The proxy verifies statelessly (crypto only, zero DB reads per
+// navigation); mutating routes additionally compare sv against
+// users.session_version (bump = revoke everywhere). The legacy
+// "{exp}.{hmac}" APP_PASSWORD session stays as the /ops break-glass.
+// ---------------------------------------------------------------------------
+
+export interface UserSession {
+  userId: number;
+  sv: number;
+}
+
+export async function makeUserSessionValue(
+  userId: number, sessionVersion: number,
+): Promise<string> {
+  const exp = Math.floor(Date.now() / 1000) + SESSION_DAYS * 86_400;
+  const payload = `${userId}.${exp}.${sessionVersion}`;
+  return `v2.${payload}.${await hmac(requireSecret(), payload)}`;
+}
+
+export async function verifyUserSessionValue(
+  value: string | undefined,
+): Promise<UserSession | null> {
+  if (!value || !value.startsWith("v2.")) return null;
+  const parts = value.split(".");
+  if (parts.length !== 5) return null;
+  const [, userId, exp, sv, sig] = parts;
+  if (!/^\d+$/.test(userId) || !/^\d+$/.test(exp) || !/^\d+$/.test(sv)) {
+    return null;
+  }
+  if (Number(exp) * 1000 < Date.now()) return null;
+  const expected = await hmac(requireSecret(), `${userId}.${exp}.${sv}`);
+  if (!(await safeEqual(sig, expected))) return null;
+  return { userId: Number(userId), sv: Number(sv) };
+}
+
+/** Server-component/route helper: the current v2 user session, or null.
+ *  Crypto-only — callers that MUTATE must also check session_version
+ *  and role against the DB (see requireUser in users.ts). */
+export async function getUserSession(): Promise<UserSession | null> {
+  const store = await cookies();
+  return verifyUserSessionValue(store.get(SESSION_COOKIE)?.value);
+}
+
+/** Break-glass: the legacy APP_PASSWORD session also authorizes /ops. */
+export async function isOpsBreakGlass(): Promise<boolean> {
+  const store = await cookies();
+  const v = store.get(SESSION_COOKIE)?.value;
+  if (!v || v.startsWith("v2.")) return false;
+  return verifySessionValue(v);
+}
+
+const TOKEN_BYTES = 24;
+
+export function newLinkToken(): string {
+  const buf = new Uint8Array(TOKEN_BYTES);
+  crypto.getRandomValues(buf);
+  return [...buf].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export async function hashToken(token: string): Promise<string> {
+  return toHex(await crypto.subtle.digest("SHA-256", enc(token) as BufferSource));
+}
+
 export function sessionCookieOptions() {
   return {
     httpOnly: true,
