@@ -24,3 +24,11 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt pytest
       - run: python -m pytest -q
+      # Estimator drift guard: Python generates the fixture, Node
+      # re-computes it through web/src/lib/predict.ts — any divergence
+      # between the two implementations turns CI red.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: python scripts/gen_estimator_fixture.py > web/estimator-fixture.json
+      - run: node web/scripts/check-estimator.mjs

@@ -19,16 +19,20 @@ export default async function SearchesPage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-mono text-lg text-fg-bright">YOUR SEARCHES</h1>
-        <span className="font-mono text-[11px] text-fg-dim">
-          new searches arrive with the next update
-        </span>
+        <Link
+          href="/searches/new"
+          className="rounded-card border border-matrix-dim bg-bg-2 px-4 py-2 font-mono text-[13px] font-semibold tracking-wider text-matrix hover:shadow-glow"
+        >
+          + NEW SEARCH
+        </Link>
       </div>
 
       {searches.length === 0 && (
         <Card>
           <p className="font-mono text-sm text-fg-mid">
-            No searches yet. Creating them from here lands in the next
-            update — until then, ask the owner to set one up for you.
+            No searches yet — create your first one. You set the route, the
+            date window, and how long you want to stay; the tracker hunts
+            the cheapest combination three times a week.
           </p>
         </Card>
       )}

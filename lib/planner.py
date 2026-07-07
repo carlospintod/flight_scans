@@ -19,7 +19,7 @@ Row-key access, which works identically on stdlib sqlite3 and on the
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 
 from .config import RouteConfig
 from .followup import select_candidates
@@ -56,6 +56,40 @@ class CostVector:
             if kind is None or l.kind == kind:
                 out[l.source] = out.get(l.source, 0) + l.units
         return out
+
+
+def predict_upper_bounds(
+    *,
+    n_origins: int,
+    n_destinations: int,
+    earliest_departure: date,
+    latest_return: date,
+    min_stay_days: int,
+    kiwi_band_days: int = 21,
+    gf_cap: int = 25,
+    serpapi_contingency: int = 7,
+) -> dict[str, int]:
+    """Closed-form, DB-free per-scan upper bounds for a search — what the
+    creation form shows BEFORE any history exists. Pure geometry, no
+    conn: mirrored 1:1 in web/src/lib/predict.ts, drift-guarded by a
+    fixture this function generates in CI (scripts/gen_estimator_fixture).
+
+    Kiwi discovery geometry matches build_run_plan exactly: one band per
+    started `kiwi_band_days` chunk of the departure window, per
+    (origin, destination) pair. Verification (googleflights) is quoted
+    at its cap — it grows with findings and can never exceed the cap;
+    the contingency line mirrors cost_vector's rule.
+    """
+    latest_dep = latest_return - timedelta(days=min_stay_days)
+    window_days = max(0, (latest_dep - earliest_departure).days + 1)
+    bands_per_pair = -(-window_days // kiwi_band_days) if window_days else 0
+    pairs = n_origins * n_destinations
+    return {
+        "kiwi": bands_per_pair * pairs,
+        "googleflights": gf_cap,
+        "serpapi_contingency": min(gf_cap, serpapi_contingency),
+        "aviasales": pairs,
+    }
 
 
 def cost_vector(plan: "RunPlan", *, caps: "Caps") -> CostVector:

@@ -1,0 +1,154 @@
+{
+ "cases": [
+  {
+   "input": {
+    "nOrigins": 1,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2026-10-12",
+    "minStayDays": 7
+   },
+   "expected": {
+    "kiwi": 2,
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 1
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 1,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2026-11-11",
+    "minStayDays": 30
+   },
+   "expected": {
+    "kiwi": 2,
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 1
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 2,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2027-01-15",
+    "minStayDays": 60
+   },
+   "expected": {
+    "kiwi": 8,
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 2
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 1,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2026-09-13",
+    "minStayDays": 1
+   },
+   "expected": {
+    "kiwi": 1,
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 1
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 2,
+    "nDestinations": 2,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2026-12-11",
+    "minStayDays": 14
+   },
+   "expected": {
+    "kiwi": 16,
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 4
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 1,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2027-09-12",
+    "minStayDays": 90
+   },
+   "expected": {
+    "kiwi": 14,
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 1
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 3,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2026-10-03",
+    "minStayDays": 21
+   },
+   "expected": {
+    "kiwi": 3,
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 3
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 1,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2026-10-04",
+    "minStayDays": 7
+   },
+   "expected": {
+    "kiwi": 1,
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 1
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 1,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2026-10-24",
+    "minStayDays": 10
+   },
+   "expected": {
+    "kiwi": 2,
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 1
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 2,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2026-11-14",
+    "minStayDays": 5
+   },
+   "expected": {
+    "kiwi": 6,
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 2
+   }
+  }
+ ]
+}

@@ -338,3 +338,25 @@ def test_followup_candidates_month_diversified_after_cap(tmp_path: Path):
     months = {c["departure_date"][:7] for c in plan.followup_candidates}
     # With round-robin, a cap of 2 spans both months instead of 2x Sep.
     assert months == {"2026-09", "2026-10"}
+
+
+def test_predict_upper_bounds_matches_band_geometry(tmp_path: Path):
+    """The closed-form estimator's kiwi count must equal the REAL
+    planner's band count for the same window — the preview is only a
+    guaranteed upper bound if the geometry is identical."""
+    from lib.planner import predict_upper_bounds
+    route = _route(origins=("MAD", "BCN"))
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        plan = build_run_plan(conn, route, sources=["kiwi"],
+                              caps=Caps(searchapi_sweep=0), today=TODAY)
+    est = predict_upper_bounds(
+        n_origins=len(route.origins), n_destinations=len(route.destinations),
+        earliest_departure=max(route.search_window.earliest_departure, TODAY),
+        latest_return=route.search_window.latest_return,
+        min_stay_days=route.stay.min_days,
+    )
+    assert est["kiwi"] == len(plan.kiwi_bands)
+    assert est["aviasales"] == 2
