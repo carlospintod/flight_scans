@@ -142,6 +142,89 @@ CREATE TABLE IF NOT EXISTS scan_runs (
 
 CREATE INDEX IF NOT EXISTS idx_scan_runs_route
     ON scan_runs (route_id, started_at);
+
+-- ============================================================================
+-- Quota ledger (product plan M1+). In M1 these RECORD (shadow mode);
+-- M2 turns on reservation enforcement. Design: predicted = guaranteed
+-- upper bound; charge-before-call; ledger-primary, provider-re-anchored.
+-- All correctness mutations are single-statement CAS (the Turso HTTP
+-- backend autocommits per statement — no multi-statement transactions).
+-- ============================================================================
+
+-- Per-source configuration. Seeded with INSERT OR IGNORE (never upsert:
+-- /ops edits — e.g. the $5 Kiwi Pro switch — must survive re-seeding).
+CREATE TABLE IF NOT EXISTS quota_pools (
+    source           TEXT PRIMARY KEY,
+    pool_kind        TEXT NOT NULL,      -- 'monthly'|'per_run'|'rate_only'
+    period_limit     INTEGER,            -- NULL for rate_only/per_run
+    reset_anchor_day INTEGER,            -- display/pacing only; NEVER credits pools
+    safety_margin    INTEGER NOT NULL DEFAULT 0,
+    per_search_cap   INTEGER,            -- max units one search may reserve per run
+    per_run_cap      INTEGER,            -- politeness budget for per_run pools
+    active           INTEGER NOT NULL DEFAULT 1,
+    updated_at       TEXT NOT NULL
+);
+
+-- Append-only spend log: ONE row per HTTP attempt, charged BEFORE the
+-- call, never refunded (failed calls are metered by providers too).
+CREATE TABLE IF NOT EXISTS spend_events (
+    event_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id     TEXT,
+    search_id  TEXT,
+    source     TEXT NOT NULL,
+    units      INTEGER NOT NULL DEFAULT 1,
+    op         TEXT NOT NULL,
+    result     TEXT NOT NULL DEFAULT 'pending',  -- 'ok'|'error'|'429'|'empty'
+    spent_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_spend_source ON spend_events (source, event_id);
+CREATE INDEX IF NOT EXISTS idx_spend_run ON spend_events (run_id, search_id, source);
+
+-- Provider observations that re-anchor a pool's remaining. Ordered by
+-- last_spend_event_id (monotonic), NOT wall-clock — every timestamp
+-- helper in this repo truncates to seconds, so same-second events would
+-- mis-bucket spend against the anchor (red-team A2). The latest anchor
+-- per source is MAX(anchor_id).
+CREATE TABLE IF NOT EXISTS pool_anchors (
+    anchor_id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    source              TEXT NOT NULL,
+    baseline_remaining  INTEGER NOT NULL,
+    limit_total         INTEGER,
+    last_spend_event_id INTEGER NOT NULL DEFAULT 0,  -- spend AFTER this counts against the anchor
+    origin              TEXT NOT NULL,   -- 'header'|'account_api'|'manual'|'reset_detected'|'seed'
+    baseline_at         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_anchor_source ON pool_anchors (source, anchor_id);
+
+-- One row per batch run: the lease + envelope. scan_runs stays as the
+-- per-search execution heartbeat; this is the run-level wrapper.
+CREATE TABLE IF NOT EXISTS ledger_runs (
+    run_id           TEXT PRIMARY KEY,
+    started_at       TEXT NOT NULL,
+    lease_expires_at TEXT NOT NULL,
+    finished_at      TEXT,
+    trigger          TEXT NOT NULL,
+    status           TEXT NOT NULL,      -- 'running'|'ok'|'degraded'|'failed'|'abandoned'
+    planned_searches INTEGER NOT NULL DEFAULT 0,
+    skipped_searches INTEGER NOT NULL DEFAULT 0,
+    summary_json     TEXT
+);
+
+-- Reserved vs actual per (run, search, source, kind) — the accounting
+-- table the "predicted <=X / used Y" digest line reads.
+CREATE TABLE IF NOT EXISTS run_reservations (
+    run_id         TEXT NOT NULL,
+    search_id      TEXT NOT NULL,
+    source         TEXT NOT NULL,
+    kind           TEXT NOT NULL,        -- 'primary'|'contingency'
+    reserved_units INTEGER NOT NULL,
+    used_units     INTEGER NOT NULL DEFAULT 0,
+    state          TEXT NOT NULL DEFAULT 'held',  -- 'held'|'consumed'|'released'|'skipped'
+    skip_reason    TEXT,
+    created_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_resv_run ON run_reservations (run_id, search_id, source);
+CREATE INDEX IF NOT EXISTS idx_resv_source_state ON run_reservations (source, state);
 """
 
 

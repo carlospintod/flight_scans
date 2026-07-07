@@ -291,9 +291,25 @@ class TursoConnection:
         SQLite's semicolon is the statement separator. This isn't a
         full SQL parser — it's naive to semicolons inside string
         literals — but our code doesn't have any, so this is fine.
+
+        Chunks containing only comments/whitespace are dropped: a
+        semicolon at the end of a `--` comment line splits the script
+        there, and Turso rejects a comment-only "statement" with
+        'SQL string does not contain any statement' (hit 2026-07-07
+        by the quota-ledger schema banner).
         """
         parts = [s.strip() for s in re.split(r";\s*(?:\n|$)", sql)]
-        return [p for p in parts if p]
+        out = []
+        for p in parts:
+            if not p:
+                continue
+            has_sql = any(
+                line.strip() and not line.strip().startswith("--")
+                for line in p.splitlines()
+            )
+            if has_sql:
+                out.append(p)
+        return out
 
 
 def _stmt(sql: str, args: Sequence | None = None) -> dict:

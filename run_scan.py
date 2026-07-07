@@ -68,6 +68,7 @@ def main() -> int:
     from lib.clients import make_clients
     from lib.followup import run_followup
     from lib.planner import Caps, build_run_plan
+    from lib.quota import POOL_SEEDS, QuotaLedger
     from lib.scanops import run_aviasales_sweep, run_kiwi_discovery
 
     started_at = _now_iso()
@@ -95,6 +96,16 @@ def main() -> int:
             return EXIT_FATAL
         LOG.info("route %s config source: %s", args.route, cfg_source)
 
+        # Quota ledger in SHADOW mode (M1): records every metered call as
+        # a spend event and anchors pools from provider headers, but
+        # never refuses — scan behavior is identical to unguarded.
+        # Enforcement (reservations, skip-and-notify) arrives in M2.
+        ledger = QuotaLedger(conn)
+        ledger.seed_pools()
+        for seed in POOL_SEEDS:
+            ledger.seed_anchor_from_snapshots(seed[0])
+        ledger_run_id = ledger.begin_shadow_run(trigger=trigger)
+
         caps = Caps(googleflights=args.cap, kiwi=20,
                     searchapi_sweep=0, searchapi_followup=0)
         plan = build_run_plan(conn, route, sources=sources, caps=caps,
@@ -106,7 +117,9 @@ def main() -> int:
         for n in plan.notes:
             print(f"  note: {n}")
 
-        clients, client_warnings = make_clients(sources, conn)
+        clients, client_warnings = make_clients(
+            sources, conn, ledger=ledger, run_id=ledger_run_id,
+            search_id=args.route)
         for w in client_warnings:
             LOG.warning("%s", w)   # graceful skip, not degradation
 
@@ -174,6 +187,25 @@ def main() -> int:
                 latest_return=route.search_window.latest_return)
         ]
         status = "degraded" if degraded else "ok"
+        # Shadow-ledger close-out: promote provider headers observed
+        # during this run into pool anchors, and put the recorded spend
+        # next to the plan in the summary — the M1 drift report.
+        try:
+            ledger.capture_anchors_from_snapshots(started_at)
+            ledger.finalize_run(ledger_run_id, status)
+            shadow_spend = {
+                f"{sid or '?'}:{src}": units
+                for (sid, src), units in ledger.spent_by_run(ledger_run_id).items()
+            }
+            pool_view = {
+                p.source: {"available": p.effective_available,
+                           "provider_view": p.provider_view,
+                           "anchored": p.baseline_at}
+                for p in ledger.all_pool_states()
+            }
+        except Exception as exc:  # noqa: BLE001 — shadow mode must never fail a scan
+            LOG.warning("shadow ledger close-out failed: %s", exc)
+            shadow_spend, pool_view = {}, {}
         summary = {
             "route": route.name,
             "trigger": trigger,
@@ -194,6 +226,8 @@ def main() -> int:
                 for a in fired
             ],
             "status": status,
+            "ledger_shadow": {"run_id": ledger_run_id,
+                              "spend": shadow_spend, "pools": pool_view},
         }
         db_mod.insert_scan_run(
             conn,

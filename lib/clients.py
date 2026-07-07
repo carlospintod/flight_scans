@@ -9,7 +9,8 @@ from __future__ import annotations
 
 
 def make_clients(
-    sources: list[str], conn, *, dry_run: bool = False
+    sources: list[str], conn, *, dry_run: bool = False,
+    ledger=None, run_id: str | None = None, search_id: str | None = None,
 ) -> tuple[dict[str, object | None], list[str]]:
     """Build API clients per the source list.
 
@@ -17,6 +18,12 @@ def make_clients(
     that source is unavailable (missing key, missing browser) — the
     matching human-readable reason is in `warnings`, and callers skip the
     source. In dry_run all entries are None and no warnings are produced.
+
+    `ledger` (lib.quota.QuotaLedger): when given, every client is wrapped
+    in a GuardedClient that charges spend_events BEFORE each metered call
+    — the single chokepoint that makes the quota ledger unbypassable
+    (CLI, batch runner, UI all construct clients here). M1 runs the
+    guard in shadow mode (record, never refuse).
     """
     out: dict[str, object | None] = {
         "searchapi": None, "skyscanner": None,
@@ -65,4 +72,13 @@ def make_clients(
     _try("kiwi", "Kiwi", _build_kiwi)
     _try("googleflights", "Google Flights (direct)", _build_googleflights)
     _try("serpapi", "SerpAPI", _build_serpapi)
+
+    if ledger is not None:
+        from .quota import GuardedClient
+        for src, client in out.items():
+            if client is not None:
+                out[src] = GuardedClient(
+                    client, ledger=ledger, source=src,
+                    run_id=run_id, search_id=search_id, shadow=True,
+                )
     return out, warnings

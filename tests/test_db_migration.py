@@ -100,3 +100,21 @@ def test_fresh_db_picks_up_new_schema(tmp_path: Path):
     assert {"calendar_snapshots", "point_queries", "departure_curves",
             "airport_cache", "alerts", "routes"} <= tables
     conn.close()
+
+
+def test_turso_split_drops_comment_only_chunks():
+    """A ';' ending a comment line splits the script into a comment-only
+    chunk, which Turso rejects ('SQL string does not contain any
+    statement'). The splitter must drop such chunks (hit 2026-07-07)."""
+    from lib.turso_http import TursoConnection
+    split = TursoConnection._split_multi
+    script = (
+        "-- banner comment ends with a semicolon;\n"
+        "-- more banner\n"
+        "CREATE TABLE t (x INTEGER);\n"
+        "-- trailing note\n"
+    )
+    stmts = split(object(), script)  # method needs no instance state
+    assert len(stmts) == 1
+    assert stmts[0].startswith("-- more banner")
+    assert "CREATE TABLE t" in stmts[0]
