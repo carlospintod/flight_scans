@@ -298,3 +298,26 @@ def test_baseline_window_excludes_old_observations(tmp_path: Path):
     # 465 < all-time min 600 though, so a new_low fires — expected.
     assert [a for a in fired if a.alert_type == "drop"] == []
     assert len([a for a in fired if a.alert_type == "new_low"]) == 1
+
+
+def test_duplicate_same_second_rows_fire_one_alert(tmp_path: Path):
+    """Two identical-timestamp snapshot rows for one itinerary (real
+    production artifact) must fire exactly ONE new_low — the branch was
+    missing the fired_keys check the drop branch always had (8 doubled
+    alerts found in production 2026-07-07)."""
+    db_path = tmp_path / "t.db"
+    log_path = tmp_path / "alerts.log"
+    today = date(2026, 6, 15)
+    with connect(db_path) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, ROUTE)
+        insert_calendar_rows(conn, [
+            _row(600, datetime(2026, 6, 10)),
+            # Same price, same second — duplicate ingest artifact.
+            _row(540, datetime(2026, 6, 14)),
+            _row(540, datetime(2026, 6, 14)),
+        ])
+        fired = evaluate(conn=conn, route=ROUTE, log_path=log_path, today=today)
+        n = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+    assert len(fired) == 1
+    assert n == 1

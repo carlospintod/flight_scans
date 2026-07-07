@@ -185,7 +185,13 @@ def evaluate(
             prev_min = None
         else:
             prev_min = prev_min_map.get(itin_key)
-        if prev_min is not None and row["price"] < prev_min:
+        # itin_key in fired_keys: duplicate same-second snapshot rows make
+        # latest_calendar_snapshot_per_itinerary yield the SAME itinerary
+        # twice, and this branch fired once per duplicate (8 doubled
+        # alerts in production, found 2026-07-07). The drop branch below
+        # always had this check; new_low was missing it.
+        if (prev_min is not None and row["price"] < prev_min
+                and itin_key not in fired_keys):
             if not _already_alerted_batched(row["price"]):
                 new_alerts.append(AlertRow(
                     fired_at=fired_at,
