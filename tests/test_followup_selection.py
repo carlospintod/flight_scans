@@ -300,3 +300,45 @@ def test_candidates_deduped_across_sources_latest_wins(tmp_path: Path):
     assert len(candidates) == 1
     assert candidates[0]["snapshot_price"] == 720   # latest across sources
     assert candidates[0]["all_time_min"] == 580     # min across sources
+
+
+def test_cached_source_never_displaces_live_current_price(tmp_path: Path):
+    """A stale aviasales cache quote re-stamped with a newer scan time
+    must NOT hijack an itinerary's current price: a live 620 with an
+    850 cached row on top stays a candidate; a live 900 with a zombie
+    cached 640 on top stays excluded (M0 adversarial audit, 2026-07-07)."""
+    db = tmp_path / "t.db"
+    live_cheap = _row(datetime(2026, 5, 10), "2026-09-05", "2026-11-08", 64, 620)
+    cached_high = _row(datetime(2026, 5, 15), "2026-09-05", "2026-11-08", 64, 850)
+    live_high = _row(datetime(2026, 5, 10), "2026-09-10", "2026-11-15", 66, 900)
+    cached_zombie = _row(datetime(2026, 5, 15), "2026-09-10", "2026-11-15", 66, 640)
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, _route())
+        insert_calendar_rows(conn, [
+            CalendarRow(**{**live_cheap.__dict__, "source": "googleflights"}),
+            CalendarRow(**{**cached_high.__dict__, "source": "aviasales"}),
+            CalendarRow(**{**live_high.__dict__, "source": "googleflights"}),
+            CalendarRow(**{**cached_zombie.__dict__, "source": "aviasales"}),
+        ])
+        candidates = select_candidates(conn, _route(watch=650),
+                                       today=date(2026, 5, 16))
+    keys = {(c["departure_date"], c["snapshot_price"]) for c in candidates}
+    assert ("2026-09-05", 620) in keys       # live price wins despite older stamp
+    assert not any(d == "2026-09-10" for d, _ in keys)  # zombie can't resurrect
+
+
+def test_cached_only_itinerary_still_nominates(tmp_path: Path):
+    """Aviasales' discovery value survives: an itinerary ONLY it has
+    seen still becomes a candidate."""
+    db = tmp_path / "t.db"
+    r = _row(datetime(2026, 5, 10), "2026-09-05", "2026-11-08", 64, 580)
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, _route())
+        insert_calendar_rows(conn, [
+            CalendarRow(**{**r.__dict__, "source": "aviasales"}),
+        ])
+        candidates = select_candidates(conn, _route(), today=date(2026, 5, 16))
+    assert len(candidates) == 1
+    assert candidates[0]["snapshot_price"] == 580

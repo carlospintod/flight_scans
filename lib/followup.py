@@ -48,6 +48,11 @@ LOG = logging.getLogger(__name__)
 
 MAX_RANKS_TO_STORE = 3
 
+# Sources whose calendar rows are re-served CACHE data rather than live
+# observations. They may nominate candidates (unique discovery value)
+# but never displace a live source as an itinerary's current price.
+CACHED_SOURCES = frozenset({"aviasales"})
+
 
 @dataclass
 class FollowupResult:
@@ -110,14 +115,29 @@ def select_candidates(conn, route: RouteConfig, *, today: date | None = None) ->
 
     # latest_calendar_snapshot_per_itinerary(source=None) yields one row
     # per (itinerary, source); collapse to one candidate per itinerary,
-    # keeping the most recent observation across sources (its price is
-    # the "current" price the drop_above filter judges).
+    # keeping the most recent LIVE observation (its price is the
+    # "current" price the drop_above filter judges).
+    #
+    # Cached sources rank below live ones regardless of snapshot_at:
+    # aviasales serves 2-7 day cached quotes (they carry their own
+    # found_at, which scanops discards for scan time), and the CI run
+    # order puts its sweep AFTER verification — so a stale cached fare
+    # would win the freshness race by construction, wrongly excluding
+    # (cached 850 masking a live 620) or including (zombie cheap fare
+    # burning capped verifications) candidates, self-renewing every
+    # scan. Found by the M0 adversarial audit, 2026-07-07. Cached-only
+    # itineraries still nominate candidates — that discovery role
+    # (carriers no live rail sees) is the point of keeping aviasales.
     best_row_by_itin: dict[tuple, object] = {}
+
+    def _freshness_rank(row) -> tuple:
+        return (row["source"] not in CACHED_SOURCES, row["snapshot_at"])
+
     for row in latest_calendar_snapshot_per_itinerary(conn, route.name):
         key = (row["origin"], row["destination"],
                row["departure_date"], row["return_date"])
         prev = best_row_by_itin.get(key)
-        if prev is None or row["snapshot_at"] > prev["snapshot_at"]:
+        if prev is None or _freshness_rank(row) > _freshness_rank(prev):
             best_row_by_itin[key] = row
 
     out: list[dict] = []
