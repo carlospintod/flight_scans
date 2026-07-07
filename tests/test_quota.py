@@ -243,3 +243,155 @@ def test_context_manager_passthrough_stays_guarded(conn):
         g.point_query()
     ev = conn.execute("SELECT source, op FROM spend_events").fetchone()
     assert (ev["source"], ev["op"]) == ("googleflights", "point_query")
+
+
+# --- M2 enforcement primitives ------------------------------------------
+
+
+def _cost(*lines):
+    from lib.planner import CostLine, CostVector
+    return CostVector(lines=tuple(
+        CostLine(source=s, units=u, kind=k, note="") for s, u, k in lines))
+
+
+def test_lease_cas_single_holder(conn):
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    r1 = ledger.begin_run(trigger="cron")
+    assert r1 is not None
+    assert ledger.begin_run(trigger="local") is None   # lease held
+    ledger.finalize_run(r1, "ok")
+    r2 = ledger.begin_run(trigger="local")             # freed
+    assert r2 is not None and r2 != r1
+
+
+def test_reserve_monthly_guard_and_pool_short(conn):
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    ledger.record_anchor("kiwi", remaining=30, limit_total=300,
+                         origin="manual")
+    run = ledger.begin_run(trigger="cron")
+    # available = 30 - 15(margin) = 15. First search takes 8: fits.
+    assert ledger.reserve(run, "s1", _cost(("kiwi", 8, "primary"))) is True
+    # Second search wants 8 more: 30-15-8(held)=7 < 8 -> pool short.
+    assert ledger.reserve(run, "s2", _cost(("kiwi", 8, "primary"))) is False
+    states = {r["search_id"]: r["state"] for r in conn.execute(
+        "SELECT search_id, state FROM run_reservations").fetchall()}
+    assert states == {"s1": "held", "s2": "skipped"}
+
+
+def test_reserve_fails_closed_without_anchor(conn):
+    """No bootstrap anchor -> availability unknown -> refuse (A6)."""
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    run = ledger.begin_run(trigger="cron")
+    assert ledger.reserve(run, "s1", _cost(("kiwi", 1, "primary"))) is False
+
+
+def test_reserve_per_run_pool_caps_renders(conn):
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()   # googleflights per_run_cap=30
+    run = ledger.begin_run(trigger="cron")
+    assert ledger.reserve(run, "s1",
+                          _cost(("googleflights", 25, "primary"))) is True
+    assert ledger.reserve(run, "s2",
+                          _cost(("googleflights", 10, "primary"))) is False
+
+
+def test_reserve_all_or_nothing_flips_earlier_lines(conn):
+    """If the second line fails, the first line's hold must not leak."""
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    ledger.record_anchor("kiwi", remaining=100, limit_total=300,
+                         origin="manual")
+    run = ledger.begin_run(trigger="cron")
+    ok = ledger.reserve(run, "s1", _cost(
+        ("kiwi", 8, "primary"),
+        ("serpapi", 5, "contingency"),   # no serpapi anchor -> fails
+    ))
+    assert ok is False
+    rows = conn.execute("SELECT source, state FROM run_reservations "
+                        "WHERE search_id='s1'").fetchall()
+    assert {r["state"] for r in rows} == {"skipped"}
+
+
+def test_expired_lease_holds_stop_counting(conn):
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    ledger.record_anchor("kiwi", remaining=30, limit_total=300,
+                         origin="manual")
+    run1 = ledger.begin_run(trigger="cron", lease_minutes=0)  # instantly dead
+    ledger.reserve(run1, "s1", _cost(("kiwi", 8, "primary")))
+    # A new run can acquire (old lease expired) and the dead hold is free.
+    run2 = ledger.begin_run(trigger="cron")
+    assert run2 is not None
+    assert ledger.reserve(run2, "s2", _cost(("kiwi", 8, "primary"))) is True
+    assert ledger.expire_orphans() == 1
+
+
+def test_settle_splits_primary_then_contingency(conn):
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    ledger.record_anchor("kiwi", remaining=200, limit_total=300,
+                         origin="manual")
+    ledger.record_anchor("serpapi", remaining=200, limit_total=250,
+                         origin="manual")
+    run = ledger.begin_run(trigger="cron")
+    assert ledger.reserve(run, "s1", _cost(
+        ("googleflights", 10, "primary"),
+        ("serpapi", 5, "contingency"),
+    ))
+    # Primary rail spent 3 googleflights; fallback spent 2 serpapi.
+    for _ in range(3):
+        ledger.record_spend(run_id=run, search_id="s1",
+                            source="googleflights", units=1, op="point_query")
+    for _ in range(2):
+        ledger.record_spend(run_id=run, search_id="s1",
+                            source="serpapi", units=1, op="point_query")
+    ledger.settle(run, "s1")
+    rows = {(r["source"], r["kind"]): (r["used_units"], r["state"])
+            for r in conn.execute(
+                "SELECT * FROM run_reservations WHERE search_id='s1'"
+            ).fetchall()}
+    assert rows[("googleflights", "primary")] == (3, "consumed")
+    assert rows[("serpapi", "contingency")] == (2, "consumed")
+
+
+def test_settle_releases_unused_contingency(conn):
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    ledger.record_anchor("serpapi", remaining=200, limit_total=250,
+                         origin="manual")
+    run = ledger.begin_run(trigger="cron")
+    assert ledger.reserve(run, "s1", _cost(
+        ("googleflights", 10, "primary"),
+        ("serpapi", 5, "contingency"),
+    ))
+    ledger.record_spend(run_id=run, search_id="s1",
+                        source="googleflights", units=7, op="point_query")
+    ledger.settle(run, "s1")
+    rows = {(r["source"], r["kind"]): (r["used_units"], r["state"])
+            for r in conn.execute(
+                "SELECT * FROM run_reservations WHERE search_id='s1'"
+            ).fetchall()}
+    assert rows[("googleflights", "primary")] == (7, "consumed")
+    assert rows[("serpapi", "contingency")] == (0, "released")
+    assert ledger.reserved_units(run, "s1", "serpapi") == 0  # closed
+
+
+def test_cost_vector_includes_serpapi_contingency():
+    from lib.planner import Caps, cost_vector
+
+    class _P:  # minimal RunPlan stand-in (cost_vector reads 4 attrs)
+        calls_by_source = {"kiwi": 8, "googleflights": 23,
+                           "aviasales": 2, "serpapi": 0}
+        followup_source = "googleflights"
+        sources = ("googleflights", "serpapi", "aviasales", "kiwi")
+        followup_candidates = tuple(range(23))
+
+    cv = cost_vector(_P(), caps=Caps())
+    assert cv.total("googleflights") == 23
+    assert cv.total("serpapi", kind="contingency") == 7   # min(23, caps 7)
+    assert cv.total("serpapi", kind="primary") == 0
+    assert cv.by_source() == {"kiwi": 8, "googleflights": 23,
+                              "serpapi": 7, "aviasales": 2}

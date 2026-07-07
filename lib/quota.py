@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 LOG = logging.getLogger(__name__)
 
@@ -238,7 +238,7 @@ class QuotaLedger:
         ).fetchall()
         return [s for r in rows if (s := self.pool_state(r["source"]))]
 
-    # -- runs (shadow: correlation only; M2 adds the lease CAS) ----------------
+    # -- runs -------------------------------------------------------------------
 
     def begin_shadow_run(self, *, trigger: str) -> str:
         run_id = uuid.uuid4().hex[:12]
@@ -252,6 +252,239 @@ class QuotaLedger:
             (run_id, now, now, trigger),
         )
         return run_id
+
+    def begin_run(self, *, trigger: str,
+                  lease_minutes: int = 20) -> str | None:
+        """Acquire the single-run lease (CAS: insert-unless-live-run).
+
+        Returns None when another unexpired run holds the lease — the
+        caller exits cleanly ('another run is active'). Dead runs stop
+        blocking automatically when their lease expires; heartbeat()
+        extends it after each search.
+        """
+        run_id = uuid.uuid4().hex[:12]
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        expires = (now + timedelta(minutes=lease_minutes)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ")
+        now_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        cur = self._conn.execute(
+            """
+            INSERT INTO ledger_runs
+                (run_id, started_at, lease_expires_at, trigger, status)
+            SELECT ?, ?, ?, ?, 'running'
+            WHERE NOT EXISTS (
+                SELECT 1 FROM ledger_runs
+                WHERE status = 'running' AND lease_expires_at > ?
+            )
+            """,
+            (run_id, now_iso, expires, trigger, now_iso),
+        )
+        return run_id if cur.rowcount == 1 else None
+
+    def heartbeat(self, run_id: str, *, lease_minutes: int = 20) -> None:
+        expires = (datetime.now(timezone.utc)
+                   + timedelta(minutes=lease_minutes)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ")
+        self._conn.execute(
+            """
+            UPDATE ledger_runs SET lease_expires_at = ?
+            WHERE run_id = ? AND status = 'running'
+            """,
+            (expires, run_id),
+        )
+
+    def expire_orphans(self) -> int:
+        """Mark dead 'running' runs as abandoned (hygiene only — expired
+        leases already stop counting in every availability query)."""
+        cur = self._conn.execute(
+            """
+            UPDATE ledger_runs SET status = 'abandoned', finished_at = ?
+            WHERE status = 'running' AND lease_expires_at <= ?
+            """,
+            (_now_iso(), _now_iso()),
+        )
+        return cur.rowcount or 0
+
+    # -- reservations (M2 enforcement, on the CAS proven by
+    #    scripts/probe_ledger_cas.py: 6/6 races, exactly one winner) ----------
+
+    def reserve(self, run_id: str, search_id: str, cost) -> bool:
+        """Reserve a CostVector for one search. All-or-nothing: if any
+        line fails its guard, every line already held for this
+        (run, search) flips to 'skipped' and False returns.
+
+        The SQL guard re-verifies raw availability even though the
+        planner pre-checked — a concurrent local/manual run can never
+        oversubscribe (GH Actions' concurrency group only serializes CI).
+        """
+        now = _now_iso()
+        for line in cost.lines:
+            pool = self._conn.execute(
+                "SELECT * FROM quota_pools WHERE source = ? AND active = 1",
+                (line.source,),
+            ).fetchone()
+            if pool is None or pool["pool_kind"] == "rate_only":
+                # Unmetered (or unpooled, e.g. break-glass sources kept
+                # out of v1 pools): record the hold for accounting; no
+                # scarcity to guard.
+                cur = self._conn.execute(
+                    """
+                    INSERT INTO run_reservations
+                        (run_id, search_id, source, kind, reserved_units,
+                         state, created_at)
+                    VALUES (?, ?, ?, ?, ?, 'held', ?)
+                    """,
+                    (run_id, search_id, line.source, line.kind,
+                     line.units, now),
+                )
+            elif pool["pool_kind"] == "per_run":
+                cap = pool["per_run_cap"] or 0
+                cur = self._conn.execute(
+                    """
+                    INSERT INTO run_reservations
+                        (run_id, search_id, source, kind, reserved_units,
+                         state, created_at)
+                    SELECT ?, ?, ?, ?, ?, 'held', ?
+                    WHERE ? <= ? - COALESCE((
+                        SELECT SUM(rr.reserved_units) FROM run_reservations rr
+                        WHERE rr.run_id = ? AND rr.source = ?
+                          AND rr.state = 'held'), 0)
+                    """,
+                    (run_id, search_id, line.source, line.kind, line.units,
+                     now, line.units, cap, run_id, line.source),
+                )
+            else:  # monthly
+                per_search = pool["per_search_cap"]
+                if per_search is not None and line.units > per_search:
+                    LOG.warning("reserve %s/%s: %d units exceeds "
+                                "per_search_cap %d", search_id, line.source,
+                                line.units, per_search)
+                    self._skip_held(run_id, search_id,
+                                    reason="per_search_cap")
+                    return False
+                cur = self._conn.execute(
+                    """
+                    INSERT INTO run_reservations
+                        (run_id, search_id, source, kind, reserved_units,
+                         state, created_at)
+                    SELECT ?, ?, ?, ?, ?, 'held', ?
+                    WHERE ? <= (
+                        SELECT COALESCE((
+                            SELECT pa.baseline_remaining FROM pool_anchors pa
+                            WHERE pa.source = ?
+                            ORDER BY pa.anchor_id DESC LIMIT 1), -1)
+                        - COALESCE((
+                            SELECT SUM(se.units) FROM spend_events se
+                            WHERE se.source = ? AND se.event_id > COALESCE((
+                                SELECT pa2.last_spend_event_id
+                                FROM pool_anchors pa2 WHERE pa2.source = ?
+                                ORDER BY pa2.anchor_id DESC LIMIT 1), 0)), 0)
+                        - COALESCE((
+                            SELECT SUM(rr.reserved_units)
+                            FROM run_reservations rr
+                            JOIN ledger_runs lr ON lr.run_id = rr.run_id
+                            WHERE rr.source = ? AND rr.state = 'held'
+                              AND lr.status = 'running'
+                              AND lr.lease_expires_at > ?), 0)
+                        - (SELECT qp.safety_margin FROM quota_pools qp
+                           WHERE qp.source = ?)
+                    )
+                    """,
+                    (run_id, search_id, line.source, line.kind, line.units,
+                     now, line.units, line.source, line.source, line.source,
+                     line.source, now, line.source),
+                )
+            if (cur.rowcount or 0) != 1:
+                LOG.info("reserve %s/%s/%s: pool short — skipping search",
+                         search_id, line.source, line.kind)
+                self._skip_held(run_id, search_id, reason="pool_short")
+                # The failed line never inserted a row — record it as
+                # skipped explicitly so the digest can say WHICH pool
+                # was short (skip-and-notify needs the receipt).
+                self._conn.execute(
+                    """
+                    INSERT INTO run_reservations
+                        (run_id, search_id, source, kind, reserved_units,
+                         state, skip_reason, created_at)
+                    VALUES (?, ?, ?, ?, ?, 'skipped', 'pool_short', ?)
+                    """,
+                    (run_id, search_id, line.source, line.kind,
+                     line.units, now),
+                )
+                return False
+        return True
+
+    def _skip_held(self, run_id: str, search_id: str, *, reason: str) -> None:
+        self._conn.execute(
+            """
+            UPDATE run_reservations SET state = 'skipped', skip_reason = ?
+            WHERE run_id = ? AND search_id = ? AND state = 'held'
+            """,
+            (reason, run_id, search_id),
+        )
+
+    def reserved_units(self, run_id: str, search_id: str, source: str) -> int:
+        """Total held units for one (run, search, source) — the budget
+        GuardedClient enforces (primary + contingency combined: the
+        fallback path re-uses whatever the primary didn't spend, still
+        inside the quoted total for that source)."""
+        return self._conn.execute(
+            """
+            SELECT COALESCE(SUM(reserved_units), 0) FROM run_reservations
+            WHERE run_id = ? AND search_id = ? AND source = ?
+              AND state = 'held'
+            """,
+            (run_id, search_id, source),
+        ).fetchone()[0]
+
+    def settle(self, run_id: str, search_id: str) -> None:
+        """Backfill used_units from spend_events and close the holds.
+
+        Spend attributes to the PRIMARY line first (up to its
+        reservation); only the overflow lands on the contingency line —
+        so per-row used_units sums correctly instead of duplicating the
+        total into both kinds. Unused contingency -> 'released';
+        everything else -> 'consumed'. Idempotent (only touches 'held').
+        """
+        spend_sq = """
+            COALESCE((SELECT SUM(se.units) FROM spend_events se
+                      WHERE se.run_id = run_reservations.run_id
+                        AND se.search_id = run_reservations.search_id
+                        AND se.source = run_reservations.source), 0)
+        """
+        self._conn.execute(
+            f"""
+            UPDATE run_reservations
+            SET used_units = MIN(reserved_units, {spend_sq}),
+                state = 'consumed'
+            WHERE run_id = ? AND search_id = ? AND state = 'held'
+              AND kind = 'primary'
+            """,
+            (run_id, search_id),
+        )
+        self._conn.execute(
+            f"""
+            UPDATE run_reservations
+            SET used_units = MAX(0, {spend_sq} - COALESCE((
+                    SELECT SUM(p.reserved_units) FROM run_reservations p
+                    WHERE p.run_id = run_reservations.run_id
+                      AND p.search_id = run_reservations.search_id
+                      AND p.source = run_reservations.source
+                      AND p.kind = 'primary'), 0)),
+                state = CASE
+                    WHEN MAX(0, {spend_sq} - COALESCE((
+                        SELECT SUM(p2.reserved_units) FROM run_reservations p2
+                        WHERE p2.run_id = run_reservations.run_id
+                          AND p2.search_id = run_reservations.search_id
+                          AND p2.source = run_reservations.source
+                          AND p2.kind = 'primary'), 0)) = 0
+                    THEN 'released' ELSE 'consumed'
+                END
+            WHERE run_id = ? AND search_id = ? AND state = 'held'
+              AND kind = 'contingency'
+            """,
+            (run_id, search_id),
+        )
 
     def finalize_run(self, run_id: str, status: str) -> None:
         self._conn.execute(

@@ -30,6 +30,69 @@ DEFAULT_KIWI_CAP = 20
 
 
 @dataclass(frozen=True)
+class CostLine:
+    """One quoted budget line. kind='contingency' lines are reserved but
+    only spent when the primary rail fails — shown separately everywhere
+    (preview, digest, ledger)."""
+    source: str
+    units: int
+    kind: str          # 'primary' | 'contingency'
+    note: str
+
+
+@dataclass(frozen=True)
+class CostVector:
+    """Worst-case units per source for one RunPlan — what the ledger
+    reserves and the user sees. PREDICTED = GUARANTEED UPPER BOUND."""
+    lines: tuple[CostLine, ...]
+
+    def total(self, source: str, *, kind: str | None = None) -> int:
+        return sum(l.units for l in self.lines
+                   if l.source == source and (kind is None or l.kind == kind))
+
+    def by_source(self, *, kind: str | None = None) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for l in self.lines:
+            if kind is None or l.kind == kind:
+                out[l.source] = out.get(l.source, 0) + l.units
+        return out
+
+
+def cost_vector(plan: "RunPlan", *, caps: "Caps") -> CostVector:
+    """Pure function of a RunPlan: the exact upper-bound cost lines the
+    ledger reserves before executing it.
+
+    Contingency: when googleflights is the followup rail and serpapi is
+    an enabled source, run_scan._run_verification re-runs the candidate
+    list through serpapi if the browser rail dies — that spend must be
+    quoted and reserved too (an unreserved fallback either overspends
+    the quote or silently drops verification; both forbidden).
+    """
+    lines: list[CostLine] = []
+    notes = {
+        "kiwi": "discovery bands + candidate checks",
+        "googleflights": "verification (free politeness budget)",
+        "serpapi": "verification",
+        "searchapi": "verification (break-glass)",
+        "aviasales": "cached sweep (unmetered, rate-paced)",
+        "skyscanner": "curve + lookups",
+    }
+    for source, units in plan.calls_by_source.items():
+        if units:
+            lines.append(CostLine(source=source, units=units, kind="primary",
+                                  note=notes.get(source, "")))
+    if (plan.followup_source == "googleflights"
+            and "serpapi" in plan.sources and plan.followup_candidates):
+        fallback_units = min(len(plan.followup_candidates),
+                             caps.serpapi or 0)
+        if fallback_units:
+            lines.append(CostLine(
+                source="serpapi", units=fallback_units, kind="contingency",
+                note="only if the browser rail dies mid-batch"))
+    return CostVector(lines=tuple(lines))
+
+
+@dataclass(frozen=True)
 class Caps:
     """Per-source call caps for a single run. None = uncapped."""
     searchapi_sweep: int | None = None
