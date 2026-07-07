@@ -1,3 +1,4 @@
+import { LandingHero } from "@/components/LandingHero";
 import { SearchRadar } from "@/components/SearchRadar";
 import { getRouteWindow } from "@/lib/queries";
 
@@ -6,9 +7,14 @@ import { getRouteWindow } from "@/lib/queries";
 // per-request here (Turso read budget).
 export const revalidate = 21600;
 
-/** The landing radar = the owner's public demo search, rendered by the
- *  same component every /s/[slug] page uses. A live marketing screen. */
+/** Landing = terminal hero + the owner's public demo search, rendered by
+ *  the same component every /s/[slug] page uses. A live marketing screen. */
 export default async function RadarPage() {
   const w = await getRouteWindow();
-  return <SearchRadar w={w} />;
+  return (
+    <>
+      <LandingHero />
+      <SearchRadar w={w} />
+    </>
+  );
 }

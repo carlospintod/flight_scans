@@ -58,7 +58,7 @@ export function PriceHero({
       <div className="mt-3 grid gap-x-8 gap-y-1 font-mono text-[13px] text-fg sm:grid-cols-2">
         <div>
           <span className="text-fg-dim">
-            {w.tripType === "one_way" ? "fly&nbsp;" : "out&nbsp;&nbsp;"}
+            {w.tripType === "one_way" ? "fly " : "out  "}
           </span>
           {fmtDateLong(best.departureDate)}
         </div>
