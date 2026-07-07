@@ -82,6 +82,10 @@ jobs:
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
           TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          # Set the repo variable SCAN_LOG_PRIVATE=true BEFORE the first
+          # non-owner user exists: search ids in public logs/summaries
+          # become stable hashes (user search params never leak).
+          SCAN_LOG_PRIVATE: ${{ vars.SCAN_LOG_PRIVATE }}
         run: |
           if [ "${{ inputs.mode || 'batch' }}" = "legacy" ]; then
             python run_scan.py \

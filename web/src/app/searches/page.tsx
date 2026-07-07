@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { SearchControls } from "@/components/SearchControls";
 import { Card, SectionHeading } from "@/components/Section";
 import { getUserSession } from "@/lib/auth";
 import { fmtDate, seenLabel } from "@/lib/format";
@@ -137,6 +138,14 @@ export default async function SearchesPage() {
                 no runs yet — next scheduled window is Mon/Wed/Sat morning
               </p>
             )}
+          </div>
+
+          <div className="mt-3 border-t border-line pt-3">
+            <SearchControls
+              searchId={s.searchId}
+              status={s.status}
+              notify={s.notify}
+            />
           </div>
         </Card>
       ))}
