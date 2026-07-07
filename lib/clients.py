@@ -11,6 +11,7 @@ from __future__ import annotations
 def make_clients(
     sources: list[str], conn, *, dry_run: bool = False,
     ledger=None, run_id: str | None = None, search_id: str | None = None,
+    shadow: bool = True,
 ) -> tuple[dict[str, object | None], list[str]]:
     """Build API clients per the source list.
 
@@ -74,11 +75,33 @@ def make_clients(
     _try("serpapi", "SerpAPI", _build_serpapi)
 
     if ledger is not None:
-        from .quota import GuardedClient
-        for src, client in out.items():
-            if client is not None:
-                out[src] = GuardedClient(
-                    client, ledger=ledger, source=src,
-                    run_id=run_id, search_id=search_id, shadow=True,
-                )
+        out = guard_clients(out, ledger=ledger, run_id=run_id,
+                            search_id=search_id, shadow=shadow)
     return out, warnings
+
+
+def guard_clients(raw: dict[str, object | None], *, ledger,
+                  run_id: str | None, search_id: str | None,
+                  shadow: bool = True) -> dict[str, object | None]:
+    """Wrap already-constructed clients in GuardedClients for one
+    (run, search). The batch runner constructs raw clients ONCE per run
+    (browser startup is the expensive part) and re-wraps them per search
+    with that search's own budget."""
+    from .quota import GuardedClient
+    out: dict[str, object | None] = {}
+    for src, client in raw.items():
+        if client is None:
+            out[src] = None
+            continue
+        inner = getattr(client, "_inner", client)  # never double-wrap
+        budget = None
+        if not shadow and run_id and search_id:
+            # Enforced mode: the hard-stop budget is this search's
+            # reservation for the source (primary + contingency).
+            budget = ledger.reserved_units(run_id, search_id, src)
+        out[src] = GuardedClient(
+            inner, ledger=ledger, source=src,
+            run_id=run_id, search_id=search_id, shadow=shadow,
+            budget_units=budget,
+        )
+    return out

@@ -27,11 +27,15 @@ on:
         default: "googleflights,serpapi,aviasales,kiwi"
         required: false
       cap:
-        description: "Max googleflights verifications"
+        description: "Max googleflights verifications per search"
         default: "25"
         required: false
+      mode:
+        description: "batch = all active searches; legacy = single-route run_scan.py"
+        default: "batch"
+        required: false
       route:
-        description: "Route id"
+        description: "Route id (legacy mode only)"
         default: "spain-nairobi"
         required: false
 
@@ -79,12 +83,20 @@ jobs:
           TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
         run: |
-          python run_scan.py \
-            --route "${{ inputs.route || 'spain-nairobi' }}" \
-            --sources "${{ inputs.sources || 'googleflights,serpapi,aviasales,kiwi' }}" \
-            --cap "${{ inputs.cap || '25' }}" \
-            --trigger "${{ github.event_name }}" \
-            --json-summary summary.json
+          if [ "${{ inputs.mode || 'batch' }}" = "legacy" ]; then
+            python run_scan.py \
+              --route "${{ inputs.route || 'spain-nairobi' }}" \
+              --sources "${{ inputs.sources || 'googleflights,serpapi,aviasales,kiwi' }}" \
+              --cap "${{ inputs.cap || '25' }}" \
+              --trigger "${{ github.event_name }}" \
+              --json-summary summary.json
+          else
+            python run_batch.py \
+              --sources "${{ inputs.sources || 'googleflights,serpapi,aviasales,kiwi' }}" \
+              --cap "${{ inputs.cap || '25' }}" \
+              --trigger "${{ github.event_name }}" \
+              --json-summary summary.json
+          fi
 
       - name: Job summary
         if: always()

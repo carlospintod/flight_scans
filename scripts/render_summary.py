@@ -24,6 +24,39 @@ def main() -> int:
         return 0
 
     status_icon = {"ok": "🟢", "degraded": "🟡"}.get(s.get("status"), "🔴")
+    if "per_search" in s:  # batch shape (run_batch.py)
+        print(f"## {status_icon} Batch scan ({s.get('trigger')}): "
+              f"{s.get('searches_total', 0) - s.get('searches_skipped', 0)}"
+              f"/{s.get('searches_total', 0)} searches ran, "
+              f"{s.get('searches_skipped', 0)} skipped")
+        print()
+        print(f"`{s.get('started_at')}` → `{s.get('finished_at')}`")
+        print()
+        print("| Search | Status | Rows | Alerts | Reserved → used |")
+        print("|--------|--------|------|--------|-----------------|")
+        for ps in s.get("per_search", []):
+            rvu = "; ".join(
+                f"{r['source']}{'*' if r['kind'] == 'contingency' else ''} "
+                f"≤{r['reserved_units']}→{r['used_units']}"
+                for r in ps.get("reserved_vs_used", []))
+            print(f"| {ps['search_id']} | {ps['status']} "
+                  f"| {ps['rows_stored']} | {ps['alerts']} | {rvu or '—'} |")
+        print()
+        pools = s.get("pools") or {}
+        if pools:
+            print("### Pools after run")
+            print()
+            for src, p in pools.items():
+                print(f"- {src}: available {p.get('available')}")
+            print()
+        alerts = s.get("alerts_fired") or []
+        print(f"### Alerts fired: {len(alerts)}")
+        for a in alerts[:10]:
+            print(f"- **{a['type']}** {a['origin']}→{a['destination']} "
+                  f"{a['departure_date']}..{a['return_date']} "
+                  f"at **{a['price']} {a['currency']}**")
+        return 0
+
     print(f"## {status_icon} Scan: {s.get('route')} "
           f"({s.get('trigger')}, config: {s.get('config_source')})")
     print()

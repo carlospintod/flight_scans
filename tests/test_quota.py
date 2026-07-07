@@ -395,3 +395,50 @@ def test_cost_vector_includes_serpapi_contingency():
     assert cv.total("serpapi", kind="primary") == 0
     assert cv.by_source() == {"kiwi": 8, "googleflights": 23,
                               "serpapi": 7, "aviasales": 2}
+
+
+def test_bootstrap_owner_idempotent(conn):
+    from lib.db import bootstrap_owner
+    bootstrap_owner(conn)
+    bootstrap_owner(conn)
+    users = conn.execute("SELECT * FROM users").fetchall()
+    searches = conn.execute("SELECT * FROM searches").fetchall()
+    assert len(users) == 1 and users[0]["role"] == "owner"
+    assert len(searches) == 1
+    assert searches[0]["search_id"] == "spain-nairobi"
+    assert searches[0]["priority"] == "owner"
+    assert searches[0]["is_public"] == 1
+    # Bootstrap never resurrects a paused/edited search's fields.
+    conn.execute("UPDATE searches SET status='paused' WHERE search_id='spain-nairobi'")
+    bootstrap_owner(conn)
+    assert conn.execute("SELECT status FROM searches").fetchone()[0] == "paused"
+
+
+def test_guard_clients_rewraps_without_double_wrapping(conn):
+    from lib.clients import guard_clients
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    fake = _FakeKiwi()
+    first = guard_clients({"kiwi": fake}, ledger=ledger,
+                          run_id="r1", search_id="s1", shadow=True)
+    second = guard_clients(first, ledger=ledger,
+                           run_id="r1", search_id="s2", shadow=True)
+    second["kiwi"].range_search()
+    ev = conn.execute("SELECT search_id FROM spend_events").fetchall()
+    assert [e["search_id"] for e in ev] == ["s2"]     # charged once, to s2
+    assert second["kiwi"]._inner is fake              # not wrapped twice
+
+
+def test_owner_priority_bypasses_per_search_cap(conn):
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()   # kiwi per_search_cap=10
+    ledger.record_anchor("kiwi", remaining=100, limit_total=300,
+                         origin="manual")
+    run = ledger.begin_run(trigger="cron")
+    # 20 units > guest cap 10: guests refuse, owner reserves.
+    assert ledger.reserve(run, "guest", _cost(("kiwi", 20, "primary"))) is False
+    assert ledger.reserve(run, "mission", _cost(("kiwi", 20, "primary")),
+                          enforce_per_search_cap=False) is True
+    # Owner is still bounded by the pool itself (100-15-20=65 < 70).
+    assert ledger.reserve(run, "mission2", _cost(("kiwi", 70, "primary")),
+                          enforce_per_search_cap=False) is False

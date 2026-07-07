@@ -62,23 +62,14 @@ def main() -> int:
     trigger = {"schedule": "cron", "workflow_dispatch": "dispatch"}.get(
         args.trigger, args.trigger)
 
-    from lib import alerts as alerts_mod
     from lib import db as db_mod
     from lib import route_store
     from lib.clients import make_clients
-    from lib.followup import run_followup
     from lib.planner import Caps, build_run_plan
     from lib.quota import POOL_SEEDS, QuotaLedger
-    from lib.scanops import run_aviasales_sweep, run_kiwi_discovery
+    from lib.runner import execute_search
 
     started_at = _now_iso()
-    results: dict[str, dict] = {}   # source -> {attempted, stored, error}
-    degraded = False
-
-    def _result(source: str, *, attempted: int = 0, stored: int = 0,
-                error: str | None = None) -> None:
-        results[source] = {"attempted": attempted, "stored": stored,
-                           "error": error}
 
     try:
         conn_cm = db_mod.connect(REPO / "data" / "tracker.db")
@@ -123,52 +114,17 @@ def main() -> int:
         for w in client_warnings:
             LOG.warning("%s", w)   # graceful skip, not degradation
 
-        # --- Kiwi discovery bands (fails gracefully while quota is 0) ---
-        if plan.kiwi_bands and clients.get("kiwi") is not None:
-            try:
-                stored = run_kiwi_discovery(
-                    conn, clients["kiwi"], route,
-                    bands=list(plan.kiwi_bands), dry_run=False)
-                _result("kiwi", attempted=len(plan.kiwi_bands), stored=stored)
-                print(f"\nkiwi discovery: {stored} itineraries stored")
-            except Exception as exc:  # noqa: BLE001
-                degraded = True
-                _result("kiwi", attempted=len(plan.kiwi_bands),
-                        error=str(exc))
-                LOG.error("kiwi discovery failed: %s", exc)
-
-        # --- Verification via the followup ladder ---
-        candidates = list(plan.followup_candidates)
-        if candidates:
-            v_stored, v_queried, v_source, v_error = _run_verification(
-                conn=conn, route=route, candidates=candidates,
-                plan_source=plan.followup_source, clients=clients,
-                caps=caps, run_followup=run_followup)
-            _result(v_source, attempted=len(candidates), stored=v_stored,
-                    error=v_error)
-            if v_error is not None:
-                degraded = True
-            print(f"\n{v_source} verification: {v_queried} itineraries, "
-                  f"{v_stored} rows")
-
-        # --- Aviasales bonus signal ---
-        if plan.aviasales_pairs and clients.get("aviasales") is not None:
-            try:
-                stored = run_aviasales_sweep(
-                    conn, clients["aviasales"], route, dry_run=False,
-                    pairs=list(plan.aviasales_pairs))
-                _result("aviasales", attempted=len(plan.aviasales_pairs),
-                        stored=stored)
-                print(f"aviasales: {stored} rows stored")
-            except Exception as exc:  # noqa: BLE001
-                degraded = True
-                _result("aviasales", attempted=len(plan.aviasales_pairs),
-                        error=str(exc))
-                LOG.error("aviasales failed: %s", exc)
-
-        # --- Alerts (drop + new_low) ---
-        fired = alerts_mod.evaluate(
-            conn=conn, route=route, log_path=REPO / "data" / "alerts.log")
+        res = execute_search(conn=conn, route=route, plan=plan,
+                             clients=clients, caps=caps,
+                             alerts_log=REPO / "data" / "alerts.log")
+        degraded = res.degraded
+        results = res.results
+        fired = res.alerts
+        for source, r in results.items():
+            line = f"{source}: attempted={r['attempted']} stored={r['stored']}"
+            if r["error"]:
+                line += f" ERROR={r['error'][:120]}"
+            print(line)
         print(f"\nalerts fired: {len(fired)}")
         for a in fired:
             print(f"  [{a.alert_type}] {a.origin}->{a.destination} "
@@ -247,56 +203,6 @@ def main() -> int:
             LOG.info("summary written to %s", args.json_summary)
 
     return EXIT_DEGRADED if degraded else EXIT_OK
-
-
-def _run_verification(*, conn, route, candidates, plan_source, clients,
-                      caps, run_followup):
-    """Verify candidates via the planned source, falling back to serpapi.
-
-    The fallback is the CI path: the plan may say googleflights, but on a
-    runner without a browser the client is None (construction warning) or
-    dies on the first query (GoogleFlightsUnavailable aborts the batch,
-    itineraries_queried == 0). Either way the SAME candidate list runs
-    through serpapi, capped to its budget — a Google block must never
-    silently drop verification.
-
-    Returns (rows_stored, itineraries_queried, source_used, error|None).
-    """
-    primary = clients.get(plan_source)
-    if primary is not None:
-        try:
-            if hasattr(primary, "__exit__"):   # browser client: close after
-                with primary as client:
-                    res = run_followup(conn=conn, client=client, route=route,
-                                       candidates=candidates,
-                                       skyscanner_max_calls=0)
-            else:
-                res = run_followup(conn=conn, client=primary, route=route,
-                                   candidates=candidates,
-                                   skyscanner_max_calls=0)
-            if res.itineraries_queried > 0:
-                return res.rows_stored, res.itineraries_queried, plan_source, None
-            LOG.warning("%s verified nothing (browser dead or all queries "
-                        "failed) — trying serpapi fallback", plan_source)
-        except Exception as exc:  # noqa: BLE001
-            LOG.error("%s verification failed: %s — trying serpapi fallback",
-                      plan_source, exc)
-    else:
-        LOG.info("%s unavailable — trying serpapi fallback", plan_source)
-
-    fallback = clients.get("serpapi")
-    if plan_source == "serpapi" or fallback is None:
-        return 0, 0, plan_source, f"{plan_source} unavailable and no serpapi fallback"
-    capped = candidates[: caps.serpapi] if caps.serpapi else candidates
-    if len(capped) < len(candidates):
-        LOG.info("serpapi fallback capped to %d of %d candidates",
-                 len(capped), len(candidates))
-    try:
-        res = run_followup(conn=conn, client=fallback, route=route,
-                           candidates=capped, skyscanner_max_calls=0)
-        return res.rows_stored, res.itineraries_queried, "serpapi", None
-    except Exception as exc:  # noqa: BLE001
-        return 0, 0, "serpapi", str(exc)
 
 
 if __name__ == "__main__":

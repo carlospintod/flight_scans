@@ -136,8 +136,10 @@ CREATE TABLE IF NOT EXISTS scan_runs (
     sources       TEXT NOT NULL,           -- comma-joined as requested
     rows_stored   INTEGER NOT NULL DEFAULT 0,
     alerts_fired  INTEGER NOT NULL DEFAULT 0,
-    status        TEXT NOT NULL,           -- 'ok' | 'degraded' | 'failed'
-    summary_json  TEXT
+    status        TEXT NOT NULL,           -- 'ok'|'degraded'|'failed'|'skipped'
+    summary_json  TEXT,
+    batch_id      TEXT,                    -- ledger_runs.run_id when batch-run
+    reserved_json TEXT                     -- reserved-vs-used receipt
 );
 
 CREATE INDEX IF NOT EXISTS idx_scan_runs_route
@@ -225,6 +227,53 @@ CREATE TABLE IF NOT EXISTS run_reservations (
 );
 CREATE INDEX IF NOT EXISTS idx_resv_run ON run_reservations (run_id, search_id, source);
 CREATE INDEX IF NOT EXISTS idx_resv_source_state ON run_reservations (source, state);
+
+-- ============================================================================
+-- Multi-user (product plan M2-M4). No FOREIGN KEY clauses by design:
+-- the Turso HTTP path never enables FK enforcement; integrity is
+-- app-enforced with ordered, re-runnable cascades.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS users (
+    user_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    email           TEXT UNIQUE,        -- NULL until first login-link mint
+    display_name    TEXT,
+    role            TEXT NOT NULL DEFAULT 'user',   -- 'owner'|'user'
+    session_version INTEGER NOT NULL DEFAULT 1,     -- bump = revoke sessions
+    invited_by      INTEGER,
+    created_at      TEXT NOT NULL
+);
+
+-- A search IS a route: search_id == route_id partitions every fat table
+-- (zero-migration trick, red-team verified). This table holds ownership,
+-- lifecycle, and notification config ONLY — params live in
+-- routes.config_json (one canonical copy, route_store precedence).
+CREATE TABLE IF NOT EXISTS searches (
+    search_id         TEXT PRIMARY KEY,
+    user_id           INTEGER NOT NULL,
+    status            TEXT NOT NULL DEFAULT 'active',  -- active|paused|ended
+    is_public         INTEGER NOT NULL DEFAULT 0,
+    notify            TEXT NOT NULL DEFAULT 'alerts_only', -- every_run|alerts_only|off
+    priority          TEXT NOT NULL DEFAULT 'user',    -- 'owner'|'user'
+    last_scanned_at   TEXT,
+    consecutive_skips INTEGER NOT NULL DEFAULT 0,
+    predicted_json    TEXT,             -- frozen preview at create/edit (A9)
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_searches_user ON searches (user_id, status);
+
+-- Signed one-time links: invites AND logins (email-free auth — links
+-- are delivered manually). Token stored as SHA-256; consumed via
+-- single-statement CAS (WHERE consumed_at IS NULL).
+CREATE TABLE IF NOT EXISTS login_tokens (
+    token_hash  TEXT PRIMARY KEY,
+    user_id     INTEGER NOT NULL,
+    purpose     TEXT NOT NULL DEFAULT 'login',   -- 'invite'|'login'
+    expires_at  TEXT NOT NULL,
+    consumed_at TEXT,
+    created_at  TEXT NOT NULL
+);
 """
 
 
@@ -244,6 +293,10 @@ _MIGRATIONS: tuple[tuple[str, str, str], ...] = (
      "ALTER TABLE alerts ADD COLUMN source TEXT NOT NULL DEFAULT 'searchapi'"),
     ("alerts", "alert_type",
      "ALTER TABLE alerts ADD COLUMN alert_type TEXT NOT NULL DEFAULT 'drop'"),
+    ("scan_runs", "batch_id",
+     "ALTER TABLE scan_runs ADD COLUMN batch_id TEXT"),
+    ("scan_runs", "reserved_json",
+     "ALTER TABLE scan_runs ADD COLUMN reserved_json TEXT"),
 )
 
 
@@ -568,16 +621,46 @@ def insert_scan_run(
     alerts_fired: int,
     status: str,
     summary_json: str | None = None,
+    batch_id: str | None = None,
+    reserved_json: str | None = None,
 ) -> None:
     conn.execute(
         """
         INSERT INTO scan_runs (started_at, finished_at, route_id, trigger,
                                sources, rows_stored, alerts_fired, status,
-                               summary_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               summary_json, batch_id, reserved_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (started_at, finished_at, route_id, trigger, sources,
-         rows_stored, alerts_fired, status, summary_json),
+         rows_stored, alerts_fired, status, summary_json,
+         batch_id, reserved_json),
+    )
+
+
+def bootstrap_owner(conn: sqlite3.Connection, *,
+                    route_id: str = "spain-nairobi") -> None:
+    """Idempotent C1 bootstrap: the owner user (id=1) and the grandfathered
+    mission search MUST exist before the batch runner enumerates, in the
+    SAME deploy — otherwise the first batch cron scans nothing and exits 0
+    (silent mission stop, red-team C1). INSERT OR IGNORE only.
+    """
+    now = _now_iso()
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO users (user_id, email, display_name, role,
+                                     session_version, invited_by, created_at)
+        VALUES (1, NULL, 'owner', 'owner', 1, NULL, ?)
+        """,
+        (now,),
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO searches
+            (search_id, user_id, status, is_public, notify, priority,
+             created_at, updated_at)
+        VALUES (?, 1, 'active', 1, 'every_run', 'owner', ?, ?)
+        """,
+        (route_id, now, now),
     )
 
 

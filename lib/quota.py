@@ -308,10 +308,16 @@ class QuotaLedger:
     # -- reservations (M2 enforcement, on the CAS proven by
     #    scripts/probe_ledger_cas.py: 6/6 races, exactly one winner) ----------
 
-    def reserve(self, run_id: str, search_id: str, cost) -> bool:
+    def reserve(self, run_id: str, search_id: str, cost, *,
+                enforce_per_search_cap: bool = True) -> bool:
         """Reserve a CostVector for one search. All-or-nothing: if any
         line fails its guard, every line already held for this
         (run, search) flips to 'skipped' and False returns.
+
+        `enforce_per_search_cap=False` is the OWNER exception: the
+        mission search may exceed the guest-sized per-search cap (it is
+        planned first and still bounded by pool availability + margin,
+        so it cannot starve the pool either).
 
         The SQL guard re-verifies raw availability even though the
         planner pre-checked — a concurrent local/manual run can never
@@ -354,7 +360,8 @@ class QuotaLedger:
                      now, line.units, cap, run_id, line.source),
                 )
             else:  # monthly
-                per_search = pool["per_search_cap"]
+                per_search = (pool["per_search_cap"]
+                              if enforce_per_search_cap else None)
                 if per_search is not None and line.units > per_search:
                     LOG.warning("reserve %s/%s: %d units exceeds "
                                 "per_search_cap %d", search_id, line.source,
