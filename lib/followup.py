@@ -63,9 +63,13 @@ class FollowupResult:
 def select_candidates(conn, route: RouteConfig, *, today: date | None = None) -> list[dict]:
     """Return a list of candidate-itinerary dicts ready for point queries.
 
-    Reads from the SearchAPI source of calendar_snapshots specifically
-    (Sky Scrapper's departure curve doesn't carry return-date info, so
-    we can't drive (dep, ret) candidate selection from it).
+    Source-AGNOSTIC: any calendar source that recorded both dep & ret
+    dates can nominate a candidate (kiwi and aviasales discovery rows,
+    googleflights/serpapi verification write-backs, legacy searchapi).
+    It filtered to searchapi until 2026-07-07 — after that source was
+    retired from CI, new searches would NEVER grow candidates and the
+    owner's pool was silently starving as pre-retirement rows aged out
+    of the window (red-team finding A1).
 
     Mode is selected by config: price-threshold if both
     `followup.watch_below_price` and `followup.drop_above_price` are
@@ -86,7 +90,8 @@ def select_candidates(conn, route: RouteConfig, *, today: date | None = None) ->
     # can fetch for EVERY itinerary in one GROUP BY — instead of one
     # history query per row. On the Turso HTTP backend each query is a
     # network round trip; with ~180 itineraries the per-row version made
-    # quote recomputation take ~20s.
+    # quote recomputation take ~20s. Minimum is across ALL sources: a
+    # cheap fare seen by any discovery rail is worth verifying.
     min_by_itin: dict[tuple, int] = {}
     if price_mode:
         for r in conn.execute(
@@ -94,20 +99,29 @@ def select_candidates(conn, route: RouteConfig, *, today: date | None = None) ->
             SELECT origin, destination, departure_date, return_date,
                    MIN(price) AS min_price
             FROM calendar_snapshots
-            WHERE route_id = ? AND source = ?
+            WHERE route_id = ?
             GROUP BY origin, destination, departure_date, return_date
             """,
-            (route.name, SEARCHAPI_SOURCE),
+            (route.name,),
         ).fetchall():
             key = (r["origin"], r["destination"],
                    r["departure_date"], r["return_date"])
             min_by_itin[key] = r["min_price"]
 
+    # latest_calendar_snapshot_per_itinerary(source=None) yields one row
+    # per (itinerary, source); collapse to one candidate per itinerary,
+    # keeping the most recent observation across sources (its price is
+    # the "current" price the drop_above filter judges).
+    best_row_by_itin: dict[tuple, object] = {}
+    for row in latest_calendar_snapshot_per_itinerary(conn, route.name):
+        key = (row["origin"], row["destination"],
+               row["departure_date"], row["return_date"])
+        prev = best_row_by_itin.get(key)
+        if prev is None or row["snapshot_at"] > prev["snapshot_at"]:
+            best_row_by_itin[key] = row
+
     out: list[dict] = []
-    # Source-filter to SearchAPI: those are the rows with both dep & ret.
-    for row in latest_calendar_snapshot_per_itinerary(
-        conn, route.name, source=SEARCHAPI_SOURCE,
-    ):
+    for row in best_row_by_itin.values():
         stay = row["stay_days"]
         if stay < min_stay or stay > max_stay:
             continue
@@ -155,7 +169,7 @@ def select_candidates(conn, route: RouteConfig, *, today: date | None = None) ->
             route.name,
             row["origin"], row["destination"],
             row["departure_date"], row["return_date"],
-            source=SEARCHAPI_SOURCE,
+            source=None,  # any source — searchapi retired (A1)
         )
         drop_pct = route.alerts.drop_threshold_pct
         min_obs = route.alerts.min_observations
@@ -269,8 +283,18 @@ def run_followup(
         if max_calls is not None and sa_calls >= max_calls:
             LOG.info("followup stopping at SearchAPI max_calls=%d", max_calls)
             break
-        outbound = date.fromisoformat(c["departure_date"])
-        return_ = date.fromisoformat(c["return_date"])
+        # A malformed or one-way-sentinel date ('') must skip THIS
+        # candidate, not crash the whole batch (red-team B3). Round-trip
+        # verification requires both dates; one-way execution lands in M6.
+        try:
+            outbound = date.fromisoformat(c["departure_date"])
+            return_ = date.fromisoformat(c["return_date"])
+        except (ValueError, TypeError, KeyError) as exc:
+            LOG.warning("followup skipping candidate with unusable dates "
+                        "%s->%s dep=%r ret=%r: %s",
+                        c.get("origin"), c.get("destination"),
+                        c.get("departure_date"), c.get("return_date"), exc)
+            continue
 
         # ---- Primary point-query client (SearchAPI, or any duck-typed
         # client exposing point_query + source_id, e.g. GoogleFlights) ----

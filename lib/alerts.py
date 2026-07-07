@@ -24,13 +24,92 @@ from typing import Iterable
 from .config import RouteConfig
 from .db import (
     AlertRow,
-    calendar_history_for_itinerary,
     insert_alert_rows,
     latest_calendar_snapshot_per_itinerary,
 )
-from .searchapi_io import SOURCE_ID as SEARCHAPI_SOURCE
 
 LOG = logging.getLogger(__name__)
+
+# (source, origin, destination, departure_date, return_date)
+_ItinKey = tuple
+
+
+def _batch_prev_min(conn, route_id: str) -> dict[_ItinKey, int]:
+    """All-time minimum per (source, itinerary) STRICTLY BEFORE that
+    group's latest snapshot — the new_low reference. One query instead of
+    one per row: on the Turso HTTP backend each query is a network round
+    trip, and a kiwi-discovered search has hundreds of itineraries
+    (red-team A8: ~900 round-trips per search on the per-row version).
+    """
+    out: dict[_ItinKey, int] = {}
+    for r in conn.execute(
+        """
+        SELECT cs.source, cs.origin, cs.destination,
+               cs.departure_date, cs.return_date,
+               MIN(cs.price) AS prev_min
+        FROM calendar_snapshots cs
+        JOIN (
+            SELECT source, origin, destination, departure_date, return_date,
+                   MAX(snapshot_at) AS latest
+            FROM calendar_snapshots
+            WHERE route_id = ?
+            GROUP BY source, origin, destination, departure_date, return_date
+        ) m
+          ON m.source = cs.source AND m.origin = cs.origin
+         AND m.destination = cs.destination
+         AND m.departure_date = cs.departure_date
+         AND m.return_date = cs.return_date
+        WHERE cs.route_id = ? AND cs.snapshot_at < m.latest
+        GROUP BY cs.source, cs.origin, cs.destination,
+                 cs.departure_date, cs.return_date
+        """,
+        (route_id, route_id),
+    ).fetchall():
+        out[(r["source"], r["origin"], r["destination"],
+             r["departure_date"], r["return_date"])] = r["prev_min"]
+    return out
+
+
+def _batch_window_history(conn, route_id: str, since_iso: str,
+                          ) -> dict[_ItinKey, list[tuple[str, int]]]:
+    """(snapshot_at, price) per (source, itinerary) inside the baseline
+    window, oldest-first — the drop-rule inputs, one query for all rows."""
+    out: dict[_ItinKey, list[tuple[str, int]]] = {}
+    for r in conn.execute(
+        """
+        SELECT source, origin, destination, departure_date, return_date,
+               snapshot_at, price
+        FROM calendar_snapshots
+        WHERE route_id = ? AND snapshot_at >= ?
+        ORDER BY snapshot_at ASC
+        """,
+        (route_id, since_iso),
+    ).fetchall():
+        key = (r["source"], r["origin"], r["destination"],
+               r["departure_date"], r["return_date"])
+        out.setdefault(key, []).append((r["snapshot_at"], r["price"]))
+    return out
+
+
+def _batch_alerted_min(conn, route_id: str, since_iso: str,
+                       ) -> dict[_ItinKey, int]:
+    """Lowest already-fired alert price per (source, itinerary) inside the
+    window. `min_alerted <= current` is exactly the old per-row
+    EXISTS(price <= current) dedupe."""
+    out: dict[_ItinKey, int] = {}
+    for r in conn.execute(
+        """
+        SELECT source, origin, destination, departure_date, return_date,
+               MIN(price) AS min_alerted
+        FROM alerts
+        WHERE route_id = ? AND fired_at >= ?
+        GROUP BY source, origin, destination, departure_date, return_date
+        """,
+        (route_id, since_iso),
+    ).fetchall():
+        out[(r["source"], r["origin"], r["destination"],
+             r["departure_date"], r["return_date"])] = r["min_alerted"]
+    return out
 
 
 def evaluate(
@@ -49,9 +128,17 @@ def evaluate(
     fired_at = _now_iso()
 
     # One row per (source, itinerary). Alerts fire per-source so we
-    # don't conflate Sky Scrapper noise with SearchAPI baselines.
+    # don't conflate one source's noise with another's baselines.
     latest = latest_calendar_snapshot_per_itinerary(conn, route.name)
     LOG.info("alerts route=%s latest_rows=%d", route.name, len(latest))
+
+    # Batched pulls (3 queries total) replacing the per-row lookups —
+    # identical semantics, hundreds fewer Turso round-trips (A8).
+    prev_min_map = _batch_prev_min(conn, route.name)
+    history_map = _batch_window_history(conn, route.name,
+                                        baseline_since.isoformat())
+    alerted_min_map = _batch_alerted_min(conn, route.name,
+                                         baseline_since.isoformat())
 
     # Alerts must respect the CURRENT search window — the DB keeps
     # out-of-window history (by design), but a great fare you can't
@@ -76,6 +163,12 @@ def evaluate(
         itin_key = (src, row["origin"], row["destination"],
                     row["departure_date"], row["return_date"])
 
+        def _already_alerted_batched(price: int) -> bool:
+            """A prior alert at <= this price inside the window mutes it;
+            a genuine FURTHER drop still fires (new signal)."""
+            min_alerted = alerted_min_map.get(itin_key)
+            return min_alerted is not None and min_alerted <= price
+
         # --- NEW-LOW alert: latest price strictly below the previous
         # all-time minimum for this itinerary+source. Needs only ONE
         # prior observation, so it fires from the second scan onward —
@@ -89,27 +182,11 @@ def evaluate(
         # one pass, observed 2026-07-05).
         new_low_bar = route.followup.watch_below_price
         if new_low_bar is not None and row["price"] > new_low_bar:
-            prev_min_row = None
+            prev_min = None
         else:
-            prev_min_row = conn.execute(
-                """
-                SELECT MIN(price) FROM calendar_snapshots
-                WHERE route_id = ? AND source = ?
-                  AND origin = ? AND destination = ?
-                  AND departure_date = ? AND return_date = ?
-                  AND snapshot_at < ?
-                """,
-                (route.name, src, row["origin"], row["destination"],
-                 row["departure_date"], row["return_date"], row["snapshot_at"]),
-            ).fetchone()
-        prev_min = prev_min_row[0] if prev_min_row else None
+            prev_min = prev_min_map.get(itin_key)
         if prev_min is not None and row["price"] < prev_min:
-            if not _already_alerted(
-                conn, route.name, src,
-                row["origin"], row["destination"],
-                row["departure_date"], row["return_date"],
-                price=row["price"], since=baseline_since,
-            ):
+            if not _already_alerted_batched(row["price"]):
                 new_alerts.append(AlertRow(
                     fired_at=fired_at,
                     route_id=route.name,
@@ -127,15 +204,9 @@ def evaluate(
                     alert_type="new_low",
                 ))
                 fired_keys.add(itin_key)
-        history = calendar_history_for_itinerary(
-            conn,
-            route.name,
-            row["origin"], row["destination"],
-            row["departure_date"], row["return_date"],
-            since=baseline_since,
-            source=src,
-        )
-        prior = [r["price"] for r in history if r["snapshot_at"] < row["snapshot_at"]]
+        history = history_map.get(itin_key, [])
+        prior = [price for snap_at, price in history
+                 if snap_at < row["snapshot_at"]]
         if len(prior) < min_obs:
             continue
         median = statistics.median(prior)
@@ -151,12 +222,7 @@ def evaluate(
         # the condition — 76 duplicate rows from 3 signals, once.
         if itin_key in fired_keys:
             continue
-        if _already_alerted(
-            conn, route.name, src,
-            row["origin"], row["destination"],
-            row["departure_date"], row["return_date"],
-            price=row["price"], since=baseline_since,
-        ):
+        if _already_alerted_batched(row["price"]):
             continue
         new_alerts.append(AlertRow(
             fired_at=fired_at,
@@ -186,35 +252,6 @@ def evaluate(
                 f"-{a.drop_pct:.1f}%)"
             )
     return new_alerts
-
-
-def _already_alerted(
-    conn, route_id: str, source: str,
-    origin: str, destination: str,
-    departure_date: str, return_date: str,
-    *, price: int, since: date,
-) -> bool:
-    """True if an alert already fired for this itinerary at <= this price
-    within the baseline window. Prevents duplicate alerts on re-runs.
-
-    We compare on price <= current so a genuine *further* drop still
-    fires (it's new signal), but a flat or higher price on the same
-    itinerary stays quiet.
-    """
-    row = conn.execute(
-        """
-        SELECT 1 FROM alerts
-        WHERE route_id = ? AND source = ?
-          AND origin = ? AND destination = ?
-          AND departure_date = ? AND return_date = ?
-          AND price <= ?
-          AND fired_at >= ?
-        LIMIT 1
-        """,
-        (route_id, source, origin, destination,
-         departure_date, return_date, price, since.isoformat()),
-    ).fetchone()
-    return row is not None
 
 
 def _append_log(log_path: Path, alerts: Iterable[AlertRow]) -> None:

@@ -261,3 +261,42 @@ def test_followup_writes_calendar_row_for_verified_price(tmp_path: Path):
     assert cal[0]["price"] == 567             # the cheapest option
     assert cal[0]["stay_days"] == 63          # Sep15 -> Nov17
     assert pq == 2                            # both ranks still in point_queries
+
+
+def test_candidates_from_kiwi_only_history(tmp_path: Path):
+    """Candidate selection must be source-agnostic. Until 2026-07-07 it
+    filtered to source='searchapi' — retired from CI — so a search whose
+    history came only from kiwi/googleflights discovery would NEVER grow
+    verification candidates and its alert stream starved (red-team A1)."""
+    db = tmp_path / "t.db"
+    rows = []
+    for src in ("kiwi", "googleflights"):
+        r = _row(datetime(2026, 5, 1), "2026-09-05", "2026-11-08", 64, 580)
+        rows.append(CalendarRow(**{**r.__dict__, "source": src}))
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, _route())
+        insert_calendar_rows(conn, rows)
+        candidates = select_candidates(conn, _route(), today=date(2026, 5, 16))
+    assert len(candidates) == 1              # one itinerary, deduped across sources
+    assert candidates[0]["departure_date"] == "2026-09-05"
+    assert candidates[0]["all_time_min"] == 580
+
+
+def test_candidates_deduped_across_sources_latest_wins(tmp_path: Path):
+    """One candidate per itinerary even when several sources observed it;
+    the most recent observation supplies the current price."""
+    db = tmp_path / "t.db"
+    base = _row(datetime(2026, 5, 1), "2026-09-05", "2026-11-08", 64, 580)
+    newer = _row(datetime(2026, 5, 15), "2026-09-05", "2026-11-08", 64, 720)
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, _route())
+        insert_calendar_rows(conn, [
+            CalendarRow(**{**base.__dict__, "source": "kiwi"}),
+            CalendarRow(**{**newer.__dict__, "source": "googleflights"}),
+        ])
+        candidates = select_candidates(conn, _route(), today=date(2026, 5, 16))
+    assert len(candidates) == 1
+    assert candidates[0]["snapshot_price"] == 720   # latest across sources
+    assert candidates[0]["all_time_min"] == 580     # min across sources
