@@ -32,6 +32,11 @@ GitHub Actions cron (Mon/Wed/Sat)          Vercel (Next.js 16)
   autocommit HTTP API). *Predicted = guaranteed upper bound* — a run can
   spend less than quoted, never more; searches that don't fit are
   skipped with a recorded reason, never silently degraded.
+  **This is the core of the project — the full design is in
+  [docs/ENGINE.md](docs/ENGINE.md)**: how to shadow quota meters you
+  don't own, reserve whole jobs against them with lock-free CAS, and
+  survive resets you're never told about. Nothing in it is
+  flight-specific.
 - **Auth**: signed one-time links (invite = login), hand-rolled HMAC
   sessions, no passwords, no email dependency, users in our own DB.
 - **Alerts**: 15% drops vs the 30-day per-itinerary median AND new
@@ -45,6 +50,11 @@ GitHub Actions cron (Mon/Wed/Sat)          Vercel (Next.js 16)
 | **Kiwi** (RapidAPI) | 300/mo free → $5/mo for 20k (a config switch) | Discovery: one range-search sweeps a multi-week band, ~50 cheapest itineraries |
 | **SerpAPI** | 250/mo free | Managed verification — the contingency rail when the browser dies |
 | **Aviasales** (Travelpayouts) | soft-unlimited (cached 2-7d) | Broad cached sweep; carriers Google skips |
+
+Both trip types ride the full stack: round-trip and one-way each get
+Kiwi discovery, Google Flights verification, the SerpAPI contingency,
+and Aviasales corroboration — with per-source upper bounds quoted at
+creation time.
 | **SearchAPI.io** | 2 one-time credits left | Local break-glass for booking day; never in CI |
 
 ## Quick start (local development)
@@ -76,12 +86,13 @@ preview provably equal to the Python planner's geometry.
 run_batch.py             # multi-search batch runner (what CI executes)
 run_scan.py              # legacy single-route runner (local fallback)
 routes/<name>.yaml       # seed config (DB is the source of truth)
+docs/ENGINE.md           # the quota engine design — start here
 lib/                     # planner, quota ledger, source clients,
                          # alerts, scan ops, route store
 scripts/                 # CI probes, summaries, notifications, secrets
 web/                     # Next.js app (Vercel): demo, searches, ops
 ui/                      # legacy Streamlit dashboard (retiring)
-tests/                   # 145+ offline fixture-driven tests
+tests/                   # 165+ offline fixture-driven tests
 ```
 
 ## Honest limits
