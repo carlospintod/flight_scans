@@ -276,9 +276,19 @@ class KiwiClient:
         tot = r.headers.get("x-ratelimit-requests-limit")
         if rem is None and tot is None:
             return
+
+        def _to_units(v: str | None) -> int | None:
+            # RapidAPI sends "-1" when over quota — that IS 0 remaining
+            # (the old isdigit() parse dropped it to None, which made
+            # exhausted-state snapshots look like missing data).
+            try:
+                return max(0, int(v)) if v is not None else None
+            except ValueError:
+                return None
+
         self.latest_quota = {
-            "remaining": int(rem) if rem is not None and rem.isdigit() else None,
-            "limit_total": int(tot) if tot is not None and tot.isdigit() else None,
+            "remaining": _to_units(rem),
+            "limit_total": _to_units(tot),
             "raw": {k: v for k, v in r.headers.items()
                     if k.lower().startswith("x-ratelimit")},
         }

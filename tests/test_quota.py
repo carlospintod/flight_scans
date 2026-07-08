@@ -477,3 +477,60 @@ def test_rate_limit_429_does_not_floor(conn):
     # provider_view = 200 anchor - 1 (charged-before-call spend); the
     # point is it was NOT floored to 0 by the rate-limit 429.
     assert ledger.pool_state("kiwi").provider_view == 199
+
+
+def test_needs_reset_probe_after_floor_past_reset_day(conn, monkeypatch):
+    """The floor-deadlock guard: a floored pool whose anchor predates the
+    expected reset day needs ONE probe call — otherwise 'never presume
+    resets' keeps kiwi dead forever after the real reset (found
+    2026-07-07 tracing the one-way search's first-run timeline)."""
+    import lib.quota as quota_mod
+    from datetime import datetime, timezone
+
+    class _FakeNow(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 7, 11, 6, 0, tzinfo=tz or timezone.utc)
+
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()   # kiwi reset_anchor_day=10
+    # Floored on Jul 8 (before the Jul 10 reset).
+    conn.execute(
+        "INSERT INTO pool_anchors (source, baseline_remaining, limit_total, "
+        "last_spend_event_id, origin, baseline_at) VALUES "
+        "('kiwi', 0, 300, 0, 'quota_429_floor', '2026-07-08T05:30:00Z')")
+    monkeypatch.setattr(quota_mod, "datetime", _FakeNow)
+    assert ledger.needs_reset_probe("kiwi") is True
+    # Fresh positive anchor (post-probe) -> no more probing.
+    ledger.record_anchor("kiwi", remaining=300, limit_total=300,
+                         origin="reset_probe")
+    assert ledger.needs_reset_probe("kiwi") is False
+
+
+def test_no_reset_probe_before_reset_day(conn, monkeypatch):
+    """Floored on Wed Jul 8, checked Wed Jul 8 (before the ~10th reset):
+    the pool is genuinely exhausted — no probe, floor stands."""
+    import lib.quota as quota_mod
+    from datetime import datetime, timezone
+
+    class _FakeNow(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 7, 8, 6, 0, tzinfo=tz or timezone.utc)
+
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    conn.execute(
+        "INSERT INTO pool_anchors (source, baseline_remaining, limit_total, "
+        "last_spend_event_id, origin, baseline_at) VALUES "
+        "('kiwi', 0, 300, 0, 'quota_429_floor', '2026-07-08T05:30:00Z')")
+    monkeypatch.setattr(quota_mod, "datetime", _FakeNow)
+    assert ledger.needs_reset_probe("kiwi") is False
+
+
+def test_no_reset_probe_when_pool_healthy(conn):
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    ledger.record_anchor("kiwi", remaining=250, limit_total=300,
+                         origin="header")
+    assert ledger.needs_reset_probe("kiwi") is False

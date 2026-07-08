@@ -133,6 +133,45 @@ def main() -> int:
         if available != sources:
             LOG.info("sources narrowed to available clients: %s", available)
 
+        # Reset probe: a floored monthly pool whose anchor predates its
+        # expected reset day gets ONE recorded probe call to fetch fresh
+        # headers — otherwise 'never presume resets' deadlocks the pool
+        # forever (headers need calls, calls need reservations, the
+        # floored pool refuses reservations).
+        kw = raw_clients.get("kiwi")
+        if kw is not None and ledger.needs_reset_probe("kiwi"):
+            from datetime import timedelta as _td
+            probe_since = _now_iso()
+            ev = ledger.record_spend(run_id=None, search_id=None,
+                                     source="kiwi", units=1,
+                                     op="reset_probe")
+            try:
+                kw.one_way_search(
+                    origin="MAD", destination="LHR",
+                    depart_date=(datetime.now(timezone.utc)
+                                 + _td(days=45)).date(),
+                    currency="EUR", limit=1)
+                ledger.mark(ev, "ok")
+            except Exception as exc:  # noqa: BLE001
+                ledger.mark(ev, "429" if "429" in str(exc) else "error")
+                LOG.info("kiwi reset probe: still exhausted (%s)", exc)
+            # The client captured this response's headers into
+            # quota_snapshots — promote ONLY a snapshot from the probe
+            # itself (an older positive one would silently undo the
+            # floor if the probe 429'd).
+            snap = conn.execute(
+                "SELECT remaining, limit_total FROM quota_snapshots "
+                "WHERE source='kiwi' AND remaining IS NOT NULL "
+                "  AND checked_at >= ? "
+                "ORDER BY checked_at DESC LIMIT 1",
+                (probe_since,)).fetchone()
+            if snap is not None:
+                ledger.record_anchor("kiwi", remaining=snap["remaining"],
+                                     limit_total=snap["limit_total"],
+                                     origin="reset_probe")
+                LOG.info("kiwi re-anchored via reset probe: remaining=%s",
+                         snap["remaining"])
+
         # serpapi's /account endpoint is FREE — anchor its pool at run
         # start so contingency reservations have a real baseline (the
         # key has often never made a metered call).

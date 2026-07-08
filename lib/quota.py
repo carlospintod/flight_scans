@@ -168,6 +168,36 @@ class QuotaLedger:
                         "positive (%s) — floored pool to 0 (stale anchor)",
                         source, state.provider_view)
 
+    def needs_reset_probe(self, source: str) -> bool:
+        """True when a monthly pool looks exhausted BUT its anchor
+        predates the most recent expected reset day — the one situation
+        where 'never presume resets' would deadlock: headers only arrive
+        from calls, calls need reservations, and the floored pool refuses
+        reservations. The caller then spends ONE recorded probe call to
+        fetch fresh headers (found 2026-07-07: the 429 floor would have
+        left kiwi dead past its Friday reset)."""
+        pool = self._conn.execute(
+            "SELECT pool_kind, reset_anchor_day FROM quota_pools "
+            "WHERE source = ? AND active = 1", (source,)
+        ).fetchone()
+        if (pool is None or pool["pool_kind"] != "monthly"
+                or pool["reset_anchor_day"] is None):
+            return False
+        state = self.pool_state(source)
+        if state is None or state.effective_available is None:
+            return False
+        if state.effective_available > 0:
+            return False
+        # Most recent expected reset date from the anchor day-of-month.
+        today = datetime.now(timezone.utc).date()
+        day = min(pool["reset_anchor_day"], 28)
+        if today.day >= day:
+            expected_reset = today.replace(day=day)
+        else:
+            prev_month = (today.replace(day=1) - timedelta(days=1))
+            expected_reset = prev_month.replace(day=min(day, 28))
+        return (state.baseline_at or "") < expected_reset.isoformat()
+
     def capture_anchors_from_snapshots(self, since_iso: str) -> int:
         """After a run: promote fresh provider observations (written by
         the clients into quota_snapshots during the run) into anchors.
