@@ -22,8 +22,14 @@ def _now_iso() -> str:
 
 
 def run_aviasales_sweep(conn, av_client, route, *, dry_run: bool,
-                        pairs: list | None = None) -> int:
-    """One cheap_prices call per (origin, destination); persist rows.
+                        pairs: list | None = None,
+                        months: list | None = None) -> int:
+    """Aviasales cached sweep; persist rows.
+
+    Round-trip: one cheap_prices call per (origin, destination).
+    One-way routes: one one_way_month_prices call per (pair, month) —
+    `months` is the RunPlan's "YYYY-MM" list (quote == execution), and
+    rows land with the '' return sentinel / stay_days=0.
 
     `pairs`: explicit (origin, destination) list from the RunPlan. When
     None, defaults to the full route cross-product (legacy behavior).
@@ -38,6 +44,43 @@ def run_aviasales_sweep(conn, av_client, route, *, dry_run: bool,
     stored = 0
     if pairs is None:
         pairs = [(o, d) for o in route.origins for d in route.destinations]
+    if route.is_one_way:
+        for origin, destination in pairs:
+            for month in (months or []):
+                try:
+                    resp = av_client.one_way_month_prices(
+                        origin=origin, destination=destination,
+                        month=month, currency=route.currency,
+                    )
+                except AviasalesError as exc:
+                    LOG.warning("aviasales one-way %s->%s %s err=%s",
+                                origin, destination, month, exc)
+                    continue
+                rows = []
+                for q in resp.quotes:
+                    if q.return_date:
+                        continue  # one-way cache only
+                    try:
+                        date.fromisoformat(q.departure_date)
+                    except (ValueError, TypeError):
+                        continue
+                    rows.append(CalendarRow(
+                        snapshot_at=snapshot_at,
+                        route_id=route.name,
+                        source=AV_SOURCE,
+                        origin=q.origin or origin,
+                        destination=q.destination or destination,
+                        departure_date=q.departure_date,
+                        return_date="",
+                        stay_days=0,
+                        price=q.price,
+                        currency=q.currency or route.currency,
+                        is_lowest_price=False,
+                    ))
+                stored += insert_calendar_rows(conn, rows)
+                LOG.info("aviasales one-way sweep %s->%s %s rows=%d",
+                         origin, destination, month, len(rows))
+        return stored
     for origin, destination in pairs:
         try:
             resp = av_client.cheap_prices(
@@ -198,11 +241,23 @@ def run_kiwi_followup(conn, kw_client, route, *, dry_run: bool,
     stored = 0
     MAX_RANKS = 3
     for c in candidates:
+        # B3-style guard: this is a ROUND-TRIP search — a one-way ''
+        # sentinel (or any malformed date) must skip the candidate, not
+        # crash the batch. Normally unreachable (the planner never
+        # routes one-way candidates here), but cheap insurance.
+        try:
+            dep_d = date.fromisoformat(c["departure_date"])
+            ret_d = date.fromisoformat(c["return_date"])
+        except (ValueError, TypeError, KeyError) as exc:
+            LOG.warning("kiwi followup skipping candidate with unusable "
+                        "dates dep=%r ret=%r: %s",
+                        c.get("departure_date"), c.get("return_date"), exc)
+            continue
         try:
             resp = kw_client.round_trip_search(
                 origin=c["origin"], destination=c["destination"],
-                depart_date=date.fromisoformat(c["departure_date"]),
-                return_date=date.fromisoformat(c["return_date"]),
+                depart_date=dep_d,
+                return_date=ret_d,
                 currency=route.currency,
             )
         except KiwiError as exc:

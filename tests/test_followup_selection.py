@@ -342,3 +342,118 @@ def test_cached_only_itinerary_still_nominates(tmp_path: Path):
         candidates = select_candidates(conn, _route(), today=date(2026, 5, 16))
     assert len(candidates) == 1
     assert candidates[0]["snapshot_price"] == 580
+
+
+# ---------------------------------------------------------------------------
+# One-way (M7): sentinel-aware selection + execution
+
+
+def _one_way_route(*, watch=600, drop=800) -> RouteConfig:
+    return RouteConfig(
+        name="t",
+        origins=("MAD",),
+        destinations=("NBO",),
+        search_window=SearchWindow(
+            earliest_departure=date(2026, 9, 1),
+            latest_return=date(2027, 5, 31),
+        ),
+        stay=StayPreferences(min_days=0, max_days=0),
+        currency="EUR",
+        sweep=SweepParams(14, 14, 3, 14),
+        followup=FollowupParams(watch_below_price=watch, drop_above_price=drop),
+        alerts=AlertParams(15, 30, 4),
+        trip_type="one_way",
+    )
+
+
+def _ow_row(snapshot: datetime, dep: str, price: int,
+            source: str = "kiwi") -> CalendarRow:
+    return CalendarRow(
+        snapshot_at=snapshot.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        route_id="t", source=source, origin="MAD", destination="NBO",
+        departure_date=dep, return_date="", stay_days=0,
+        price=price, currency="EUR", is_lowest_price=False,
+    )
+
+
+def test_one_way_sentinel_rows_survive_selection(tmp_path: Path):
+    """Regression for the M6 gap: fromisoformat('') silently dropped
+    EVERY one-way row, so the (new in M7) one-way verification rail
+    would have looked enabled but never fired."""
+    db = tmp_path / "t.db"
+    route = _one_way_route()
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        insert_calendar_rows(conn, [
+            _ow_row(datetime(2026, 7, 1), "2026-09-20", 310),
+            _ow_row(datetime(2026, 7, 2), "2026-09-20", 330),
+            # never under the watch bar -> not a candidate
+            _ow_row(datetime(2026, 7, 1), "2026-09-25", 900),
+        ])
+        candidates = select_candidates(conn, route, today=date(2026, 7, 3))
+    assert [(c["departure_date"], c["return_date"]) for c in candidates] \
+        == [("2026-09-20", "")]
+
+
+def test_round_trip_route_still_drops_sentinel_rows(tmp_path: Path):
+    """A round-trip route must never verify one-way sentinel rows, even
+    when its stay filter would let stay_days=0 through."""
+    db = tmp_path / "t.db"
+    route = _route(min_stay=0, max_stay=90)
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        insert_calendar_rows(conn, [
+            CalendarRow(
+                snapshot_at="2026-07-01T00:00:00Z", route_id="t",
+                source="kiwi", origin="MAD", destination="NBO",
+                departure_date="2026-09-20", return_date="", stay_days=0,
+                price=310, currency="EUR", is_lowest_price=False,
+            ),
+        ])
+        candidates = select_candidates(conn, route, today=date(2026, 7, 3))
+    assert candidates == []
+
+
+def test_one_way_followup_queries_none_return_and_writes_sentinel(tmp_path: Path):
+    """One-way verification end-to-end: the '' candidate becomes
+    point_query(return_=None), and the verified price lands in
+    calendar_snapshots with the ''/stay 0 sentinel so the one-way curve
+    reflects fresh scans (the round-trip freeze bug, one-way edition)."""
+    from lib.followup import run_followup
+    from lib.searchapi_io import FlightOption, PointResponse
+
+    captured = {}
+
+    class FakeGF:
+        source_id = "googleflights"
+
+        def point_query(self, **kwargs):
+            captured.update(kwargs)
+            return PointResponse(raw={}, best_flights=(
+                FlightOption(price=301, total_minutes=1105, stops=1,
+                             carriers="Etihad"),
+            ))
+
+    cands = [{"origin": "MAD", "destination": "NBO",
+              "departure_date": "2026-09-20", "return_date": ""}]
+    db = tmp_path / "t.db"
+    route = _one_way_route()
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        res = run_followup(conn=conn, client=FakeGF(), route=route,
+                           candidates=cands)
+        cal = conn.execute(
+            "SELECT return_date, stay_days, price FROM calendar_snapshots "
+            "WHERE route_id='t' AND source='googleflights'").fetchall()
+        pq = conn.execute(
+            "SELECT return_date FROM point_queries "
+            "WHERE source='googleflights'").fetchall()
+    assert captured["return_"] is None
+    assert res.itineraries_queried == 1
+    assert len(cal) == 1
+    assert (cal[0]["return_date"], cal[0]["stay_days"], cal[0]["price"]) \
+        == ("", 0, 301)
+    assert [r["return_date"] for r in pq] == [""]

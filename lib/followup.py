@@ -150,13 +150,20 @@ def select_candidates(conn, route: RouteConfig, *, today: date | None = None) ->
         # outside the CURRENT window. Old snapshots persist in the DB
         # after the window is narrowed; without this filter they'd still
         # be point-queried (the "179 candidates" surprise).
+        #
+        # One-way routes: rows carry the '' return sentinel — accept it
+        # (return_=None downstream); latest_dep already equals
+        # latest_return because min_stay is 0. A round-trip route still
+        # drops sentinel rows here (fromisoformat('') raises).
         try:
             dep_d = date.fromisoformat(row["departure_date"])
-            ret_d = date.fromisoformat(row["return_date"])
+            ret_d = (None if route.is_one_way and not row["return_date"]
+                     else date.fromisoformat(row["return_date"]))
         except (ValueError, TypeError):
             continue
-        if (dep_d < sw.earliest_departure or dep_d > latest_dep
-                or ret_d > sw.latest_return):
+        if dep_d < sw.earliest_departure or dep_d > latest_dep:
+            continue
+        if ret_d is not None and ret_d > sw.latest_return:
             continue
 
         if price_mode:
@@ -303,12 +310,13 @@ def run_followup(
         if max_calls is not None and sa_calls >= max_calls:
             LOG.info("followup stopping at SearchAPI max_calls=%d", max_calls)
             break
-        # A malformed or one-way-sentinel date ('') must skip THIS
-        # candidate, not crash the whole batch (red-team B3). Round-trip
-        # verification requires both dates; one-way execution lands in M6.
+        # A malformed date must skip THIS candidate, not crash the whole
+        # batch (red-team B3). The one-way '' sentinel is NOT malformed:
+        # it maps to return_=None and runs a one-way point query (M7).
         try:
             outbound = date.fromisoformat(c["departure_date"])
-            return_ = date.fromisoformat(c["return_date"])
+            ret_raw = c["return_date"]
+            return_ = date.fromisoformat(ret_raw) if ret_raw else None
         except (ValueError, TypeError, KeyError) as exc:
             LOG.warning("followup skipping candidate with unusable dates "
                         "%s->%s dep=%r ret=%r: %s",
@@ -359,14 +367,13 @@ def run_followup(
                 # 2026-07-06: hero stuck at a June-9 532 EUR row).
                 if rows:
                     best = rows[0]
-                    try:
-                        stay = (
-                            date.fromisoformat(c["return_date"])
-                            - date.fromisoformat(c["departure_date"])
-                        ).days
-                    except (ValueError, TypeError):
-                        stay = 0
-                    if stay > 0:
+                    # One-way ('' sentinel, return_ is None): stay 0 IS
+                    # the valid shape — without this branch verified
+                    # one-way prices would never reach the discovery
+                    # board (the round-trip freeze bug all over again).
+                    stay = ((return_ - outbound).days
+                            if return_ is not None else 0)
+                    if return_ is None or stay > 0:
                         insert_calendar_rows(conn, [CalendarRow(
                             snapshot_at=snapshot_at,
                             route_id=route.name,

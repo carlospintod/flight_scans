@@ -577,3 +577,16 @@ def test_no_reset_probe_when_pool_healthy(conn):
     ledger.record_anchor("kiwi", remaining=250, limit_total=300,
                          origin="header")
     assert ledger.needs_reset_probe("kiwi") is False
+
+
+def test_every_aviasales_price_method_is_metered():
+    """Same guard as the kiwi *_search one (2026-07-08): any public
+    *_prices method on AviasalesClient missing from METERED['aviasales']
+    would pass through the guard unmetered."""
+    from lib.aviasales_api import AviasalesClient
+    price_methods = {name for name in vars(AviasalesClient)
+                     if name.endswith("_prices")
+                     and not name.startswith("_")}
+    assert price_methods, "expected AviasalesClient to define price methods"
+    missing = price_methods - set(METERED["aviasales"])
+    assert not missing, f"unmetered AviasalesClient price methods: {missing}"

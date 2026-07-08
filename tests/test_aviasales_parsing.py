@@ -144,3 +144,42 @@ def test_parses_v1_cheap_nested_shape():
 def test_empty_nested_shape_is_handled():
     payload = {"success": True, "currency": "eur", "data": {"NBO": {}}}
     assert _parse_quotes(payload, "EUR") == []
+
+
+def test_one_way_month_prices_params_and_sentinel_parse():
+    """/aviasales/v3/prices_for_dates one_way=true: month-granular
+    departure_at, items without return_at parse to return_date=None
+    (shape probed live 2026-07-08, MAD->NBO 2026-09)."""
+    from lib.aviasales_api import AviasalesClient
+
+    seen: dict = {}
+
+    class _Resp:
+        ok = True
+        status_code = 200
+        headers: dict = {}
+
+        @staticmethod
+        def json():
+            return {"success": True, "data": [
+                {"origin": "MAD", "destination": "NBO",
+                 "departure_at": "2026-09-06T21:50:00+02:00",
+                 "price": 260, "airline": "EY", "flight_number": "104"},
+            ]}
+
+    class _Session:
+        def get(self, url, params=None, headers=None, timeout=None):
+            seen["url"] = url
+            seen.update(params or {})
+            return _Resp()
+
+    client = AviasalesClient(token="t", session=_Session())
+    resp = client.one_way_month_prices(origin="MAD", destination="NBO",
+                                       month="2026-09", currency="EUR")
+    assert seen["url"].endswith("/aviasales/v3/prices_for_dates")
+    assert seen["one_way"] == "true"
+    assert seen["departure_at"] == "2026-09"
+    q = resp.quotes[0]
+    assert q.departure_date == "2026-09-06"
+    assert q.return_date is None
+    assert q.price == 260

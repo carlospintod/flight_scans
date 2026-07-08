@@ -354,3 +354,44 @@ def test_new_low_fires_on_meaningful_improvement(tmp_path: Path):
         ])
         fired = evaluate(conn=conn, route=ROUTE, log_path=log_path, today=today)
     assert len(fired) == 1 and fired[0].price == 555
+
+
+def test_one_way_verification_rows_alert_per_source(tmp_path: Path):
+    """One-way rows ('' sentinel) written by a VERIFICATION source
+    (M7: googleflights/serpapi) must flow through the evaluator:
+    per-source series, return date never parsed, new_low fires."""
+    one_way_route = RouteConfig(
+        name="t", origins=("MAD",), destinations=("NBO",),
+        search_window=SearchWindow(
+            earliest_departure=date(2026, 6, 1),
+            latest_return=date(2027, 5, 31)),
+        stay=StayPreferences(min_days=0, max_days=0),
+        currency="EUR", sweep=SweepParams(14, 14, 3, 14),
+        followup=FollowupParams(),
+        alerts=AlertParams(15, 30, 4),
+        trip_type="one_way",
+    )
+
+    def _ow(price: int, snapshot_at: datetime) -> CalendarRow:
+        return CalendarRow(
+            snapshot_at=snapshot_at.replace(microsecond=0).isoformat() + "Z",
+            route_id="t", source="googleflights", origin="MAD",
+            destination="NBO", departure_date="2026-09-20",
+            return_date="", stay_days=0,
+            price=price, currency="EUR", is_lowest_price=False,
+        )
+
+    db_path = tmp_path / "t.db"
+    log_path = tmp_path / "alerts.log"
+    with connect(db_path) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, one_way_route)
+        insert_calendar_rows(conn, [
+            _ow(340, datetime(2026, 6, 10)),
+            _ow(301, datetime(2026, 6, 14)),  # -39 EUR: meaningful new low
+        ])
+        fired = evaluate(conn=conn, route=one_way_route, log_path=log_path,
+                         today=date(2026, 6, 15))
+    assert [a.alert_type for a in fired] == ["new_low"]
+    assert fired[0].price == 301
+    assert fired[0].return_date == ""

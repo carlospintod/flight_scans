@@ -151,6 +151,42 @@ class AviasalesClient:
             )),
         )
 
+    # --- one-way: cheapest cached ticket per departure day in a month --
+
+    def one_way_month_prices(
+        self,
+        *,
+        origin: str,
+        destination: str,
+        month: str,
+        currency: str = DEFAULT_CURRENCY,
+    ) -> PriceResponse:
+        """Cheapest cached ONE-WAY ticket per departure day of `month`
+        ("YYYY-MM").
+
+        /aviasales/v3/prices_for_dates with one_way=true groups by date:
+        at most one ticket per departure day, no return_at on the items
+        (probed 2026-07-08: MAD->NBO 2026-09 -> one item per cached day).
+        limit=100 covers any month.
+        """
+        params: dict[str, Any] = {
+            "origin": origin,
+            "destination": destination,
+            "departure_at": month,
+            "currency": currency.lower(),
+            "one_way": "true",
+            "limit": 100,
+            "sorting": "price",
+        }
+        data = self._request("/aviasales/v3/prices_for_dates", params)
+        return PriceResponse(
+            raw=data,
+            quotes=tuple(_parse_quotes(
+                data, currency,
+                origin_default=origin, destination_default=destination,
+            )),
+        )
+
     # --- cheap: lowest current price per (origin, destination) ---------
 
     def cheap_prices(

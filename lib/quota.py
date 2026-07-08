@@ -51,7 +51,8 @@ METERED: dict[str, dict[str, int]] = {
     "serpapi": {"point_query": 1},
     "searchapi": {"point_query": 1, "calendar": 1},
     "googleflights": {"point_query": 1},
-    "aviasales": {"cheap_prices": 1},
+    "aviasales": {"cheap_prices": 1, "prices_for_dates": 1,
+                  "latest_prices": 1, "one_way_month_prices": 1},
     "skyscanner": {"point_query": 2, "search_airport": 1},
 }
 

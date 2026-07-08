@@ -33,9 +33,14 @@ def main() -> int:
         (2, 2, 90, 14, "round_trip"), (1, 1, 365, 90, "round_trip"),
         (3, 1, 21, 21, "round_trip"), (1, 1, 22, 7, "round_trip"),
         (1, 1, 42, 10, "round_trip"), (2, 1, 63, 5, "round_trip"),
-        # one-way: departures span the whole window; discovery-only.
+        # one-way: departures span the whole window; multi-source since
+        # M7 (gf verification cap + serpapi contingency + aviasales
+        # months-x-pairs corroboration).
         (1, 1, 45, 0, "one_way"), (1, 1, 21, 0, "one_way"),
         (1, 1, 22, 0, "one_way"), (2, 1, 90, 0, "one_way"),
+        # single-month window and a year-rollover window (Sep -> Jan)
+        # pin the TS month arithmetic.
+        (1, 1, 10, 0, "one_way"), (1, 1, 120, 0, "one_way"),
     ]
     for n_o, n_d, span, min_stay, trip in grid:
         earliest = base

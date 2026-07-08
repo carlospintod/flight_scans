@@ -78,3 +78,39 @@ def test_quota_normalization(monkeypatch):
     assert q["remaining"] == 93
     assert q["limit_total"] == 100
     assert q["raw"]["this_month_usage"] == 7
+
+
+def test_one_way_params_type_2_and_no_return_date():
+    """One-way = type 2 with return_date OMITTED entirely — an empty
+    value makes SerpAPI answer with an error payload."""
+    from datetime import date
+
+    client = SerpApiClient(api_key="test-key")
+    seen: dict = {}
+
+    class _Resp:
+        ok = True
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"best_flights": []}
+
+    class _Session:
+        def get(self, url, params=None, timeout=None):
+            seen.clear()
+            seen.update(params or {})
+            return _Resp()
+
+    client._session = _Session()
+    client.point_query(origin="MAD", destination="NBO",
+                       outbound=date(2026, 9, 20), return_=None,
+                       currency="EUR")
+    assert seen["type"] == "2"
+    assert "return_date" not in seen
+
+    client.point_query(origin="MAD", destination="NBO",
+                       outbound=date(2026, 9, 20),
+                       return_=date(2026, 11, 20), currency="EUR")
+    assert seen["type"] == "1"
+    assert seen["return_date"] == "2026-11-20"

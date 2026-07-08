@@ -360,3 +360,97 @@ def test_predict_upper_bounds_matches_band_geometry(tmp_path: Path):
     )
     assert est["kiwi"] == len(plan.kiwi_bands)
     assert est["aviasales"] == 2
+
+
+def _one_way_route(**overrides) -> RouteConfig:
+    base = dict(
+        name="t",
+        origins=("MAD", "BCN"),
+        destinations=("NBO",),
+        search_window=SearchWindow(
+            earliest_departure=date(2026, 9, 12),
+            latest_return=date(2026, 10, 15),
+        ),
+        stay=StayPreferences(min_days=0, max_days=0),
+        currency="EUR",
+        sweep=SweepParams(),
+        followup=FollowupParams(watch_below_price=600, drop_above_price=800),
+        alerts=AlertParams(15, 30, 4),
+        trip_type="one_way",
+    )
+    base.update(overrides)
+    return RouteConfig(**base)
+
+
+def _ow_cal_row(dep: str, price: int,
+                snap: str = "2026-07-01T00:00:00Z") -> CalendarRow:
+    return CalendarRow(
+        snapshot_at=snap, route_id="t", source="kiwi",
+        origin="MAD", destination="NBO",
+        departure_date=dep, return_date="", stay_days=0,
+        price=price, currency="EUR", is_lowest_price=False,
+    )
+
+
+def test_plan_one_way_multi_source(tmp_path: Path):
+    """One-way gets the full free stack (M7): gf verification via the
+    ladder, serpapi contingency in the cost vector, aviasales month
+    corroboration — and NO kiwi point candidates (scarce pool)."""
+    from lib.planner import cost_vector
+
+    route = _one_way_route()
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        insert_calendar_rows(conn, [
+            _ow_cal_row("2026-09-20", 310),
+            _ow_cal_row("2026-09-27", 350),
+        ])
+        caps = Caps(googleflights=25, serpapi=7)
+        plan = build_run_plan(
+            conn, route,
+            sources=["kiwi", "googleflights", "serpapi", "aviasales"],
+            caps=caps, today=TODAY)
+
+    assert plan.followup_source == "googleflights"
+    assert [c["return_date"] for c in plan.followup_candidates] == ["", ""]
+    assert plan.kiwi_candidates == ()
+    assert plan.aviasales_pairs == (("MAD", "NBO"), ("BCN", "NBO"))
+    assert plan.aviasales_months == ("2026-09", "2026-10")
+    assert plan.calls_by_source["aviasales"] == 4     # 2 pairs x 2 months
+    assert plan.calls_by_source["googleflights"] == 2
+    cv = cost_vector(plan, caps=caps)
+    contingency = [ln for ln in cv.lines if ln.kind == "contingency"]
+    assert len(contingency) == 1
+    assert contingency[0].source == "serpapi"
+    assert contingency[0].units == 2    # min(candidates, serpapi cap)
+
+
+def test_predict_upper_bounds_bounds_one_way_plan(tmp_path: Path):
+    """The creation-form quote stays a guaranteed upper bound for a
+    one-way plan's real geometry (kiwi/aviasales exact when today is
+    before the window; verification quoted at cap)."""
+    from lib.planner import predict_upper_bounds
+
+    route = _one_way_route()
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        insert_calendar_rows(conn, [_ow_cal_row("2026-09-20", 310)])
+        caps = Caps(googleflights=25, serpapi=7)
+        plan = build_run_plan(
+            conn, route,
+            sources=["kiwi", "googleflights", "serpapi", "aviasales"],
+            caps=caps, today=TODAY)
+    bounds = predict_upper_bounds(
+        n_origins=2, n_destinations=1,
+        earliest_departure=date(2026, 9, 12),
+        latest_return=date(2026, 10, 15),
+        min_stay_days=0, trip_type="one_way")
+    assert bounds["kiwi"] == len(plan.kiwi_bands)
+    assert bounds["kiwi"] >= plan.calls_by_source["kiwi"]
+    assert bounds["googleflights"] >= plan.calls_by_source["googleflights"]
+    assert bounds["aviasales"] == plan.calls_by_source["aviasales"]
+    assert bounds["serpapi_contingency"] >= 1

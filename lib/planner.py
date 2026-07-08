@@ -77,10 +77,11 @@ def predict_upper_bounds(
 
     Kiwi discovery geometry matches build_run_plan exactly: one band per
     started `kiwi_band_days` chunk of the departure window, per
-    (origin, destination) pair. For one-way (discovery-only), that is the
-    whole cost — no verification, aviasales, or contingency. For
-    round-trip, verification (googleflights) is quoted at its cap and the
-    contingency line mirrors cost_vector's rule.
+    (origin, destination) pair. Both trip types quote verification
+    (googleflights) at its cap with the contingency line mirroring
+    cost_vector's rule. Aviasales corroboration: 1 call per pair
+    (round-trip cheap_prices) or 1 call per pair per window month
+    (one-way one_way_month_prices).
     """
     one_way = trip_type == "one_way"
     # One-way departures span the whole window (no return leg to fit).
@@ -90,8 +91,15 @@ def predict_upper_bounds(
     bands_per_pair = -(-window_days // kiwi_band_days) if window_days else 0
     pairs = n_origins * n_destinations
     if one_way:
-        return {"kiwi": bands_per_pair * pairs, "googleflights": 0,
-                "serpapi_contingency": 0, "aviasales": 0}
+        months = 0 if not window_days else (
+            (latest_dep.year - earliest_departure.year) * 12
+            + latest_dep.month - earliest_departure.month + 1)
+        return {
+            "kiwi": bands_per_pair * pairs,
+            "googleflights": gf_cap,
+            "serpapi_contingency": min(gf_cap, serpapi_contingency),
+            "aviasales": months * pairs,
+        }
     return {
         "kiwi": bands_per_pair * pairs,
         "googleflights": gf_cap,
@@ -142,8 +150,9 @@ class Caps:
     skyscanner: int | None = None
     kiwi: int | None = DEFAULT_KIWI_CAP
     googleflights: int | None = 30   # free but polite — page renders
-    # 100 renewing searches/month; 13 scheduled runs x 7 ~= 91 keeps a
-    # margin for manual dispatches.
+    # 250 renewing searches/month (re-verified from /account 2026-07-07);
+    # 13 scheduled runs x 7 ~= 91 leaves ample margin for manual
+    # dispatches and multi-search batches.
     serpapi: int | None = 7
 
 
@@ -176,6 +185,10 @@ class RunPlan:
     followup_source: str = "searchapi"
     # Kiwi discovery: one range-search call per band (max ~3-week bands).
     kiwi_bands: tuple[KiwiBand, ...] = ()
+    # One-way only: the "YYYY-MM" months the aviasales corroboration
+    # sweeps (one call per pair per month). Quote == execution: the
+    # runner iterates exactly this list.
+    aviasales_months: tuple[str, ...] = ()
 
 
 def build_run_plan(
@@ -223,7 +236,7 @@ def build_run_plan(
 
     # ---- Followup verification: free ladder ----
     # First enabled source wins: googleflights (free, needs a local
-    # browser) > serpapi (managed, 100/mo renewing) > searchapi
+    # browser) > serpapi (managed, 250/mo renewing) > searchapi
     # (one-time credits, break-glass).
     followup_source = "searchapi"
     followup_cap = caps.searchapi_followup
@@ -236,11 +249,12 @@ def build_run_plan(
             followup_source = cand_source
             followup_cap = cand_cap
             break
-    # One-way v1 is discovery-only (kiwi one-way range + aviasales feed
-    # the cheapest-per-departure-day curve). Point verification uses
-    # (dep, ret) candidates, which one-way rows don't have — skip it.
+    # Round-trip candidates are (dep, ret) pairs; one-way candidates
+    # carry the '' return sentinel, which select_candidates and the
+    # executors map to a one-way point query (return_=None). Both trip
+    # types get the same free verification ladder.
     followup_candidates: list[dict] = []
-    if followup_source in src and not route.is_one_way:
+    if followup_source in src:
         cands = select_candidates(conn, route, today=today)
         if followup_cap is not None and len(cands) > followup_cap:
             notes.append(
@@ -281,6 +295,10 @@ def build_run_plan(
 
     # ---- Kiwi point candidates (only when kiwi is the followup fallback,
     # i.e. selected WITHOUT googleflights) ----
+    # One-way stays gated off DELIBERATELY: run_kiwi_followup is a
+    # round-trip search (it would crash on the '' sentinel), and kiwi
+    # point checks would double-spend the scarce 300/mo discovery pool —
+    # one-way verification rides the free rails only.
     kiwi_candidates: list[dict] = []
     if "kiwi" in src and "googleflights" not in src and not route.is_one_way:
         kc = select_candidates(conn, route, today=today)
@@ -294,14 +312,25 @@ def build_run_plan(
             kc = kc[:kiwi_point_cap]
         kiwi_candidates = kc
 
-    # ---- Aviasales pairs (1 cheap_prices call per origin-destination) ----
-    # Skipped for one-way: /v1/prices/cheap serves round-trip cache only;
-    # Kiwi's /one-way is the one-way discovery rail.
+    # ---- Aviasales cached corroboration ----
+    # Round-trip: 1 cheap_prices call per (origin, destination).
+    # One-way: 1 one_way_month_prices call per (pair, window month) —
+    # /aviasales/v3/prices_for_dates one_way=true returns the cheapest
+    # cached ticket per departure day of that month (probed 2026-07-08).
     aviasales_pairs: list[tuple[str, str]] = []
-    if "aviasales" in src and not route.is_one_way:
+    aviasales_months: list[str] = []
+    if "aviasales" in src:
         aviasales_pairs = [
             (o, d) for o in route.origins for d in route.destinations
         ]
+        if route.is_one_way:
+            sw = route.search_window
+            m = max(sw.earliest_departure, today)
+            m = date(m.year, m.month, 1)
+            while m <= sw.latest_return:
+                aviasales_months.append(m.strftime("%Y-%m"))
+                m = (date(m.year + 1, 1, 1) if m.month == 12
+                     else date(m.year, m.month + 1, 1))
 
     # ---- Sky Scrapper pairs (1 curve call/pair + airport lookups) ----
     skyscanner_pairs: list[tuple[str, str]] = []
@@ -335,7 +364,9 @@ def build_run_plan(
         "serpapi": (
             len(followup_candidates) if followup_source == "serpapi" else 0
         ),
-        "aviasales": len(aviasales_pairs),
+        "aviasales": len(aviasales_pairs) * (
+            len(aviasales_months) if route.is_one_way else 1
+        ),
         "kiwi": len(kiwi_bands) + len(kiwi_candidates),
         "skyscanner": len(skyscanner_pairs) + skyscanner_lookups,
     }
@@ -358,6 +389,7 @@ def build_run_plan(
         notes=tuple(notes),
         followup_source=followup_source,
         kiwi_bands=tuple(kiwi_bands),
+        aviasales_months=tuple(aviasales_months),
     )
 
 

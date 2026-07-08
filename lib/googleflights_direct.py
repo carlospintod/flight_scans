@@ -170,26 +170,30 @@ class GoogleFlightsClient:
         origin: str,
         destination: str,
         outbound: date,
-        return_: date,
+        return_: date | None,
         currency: str = "EUR",
         adults: int = 1,
         dump_html_to=None,
     ) -> PointResponse:
-        """Fetch + parse one round-trip result page. Free; ~5-8s.
+        """Fetch + parse one result page. Free; ~5-8s.
 
-        `dump_html_to`: optional Path — write the rendered DOM there for
-        diagnostics (CI probes, empty-result investigations).
+        `return_=None` runs a one-way query (single leg, trip="one-way");
+        otherwise round-trip. `dump_html_to`: optional Path — write the
+        rendered DOM there for diagnostics (CI probes, empty-result
+        investigations).
         """
         from fast_flights import FlightQuery, Passengers, create_query
 
+        legs = [FlightQuery(date=outbound.isoformat(),
+                            from_airport=origin, to_airport=destination)]
+        if return_ is not None:
+            legs.append(FlightQuery(date=return_.isoformat(),
+                                    from_airport=destination,
+                                    to_airport=origin))
         q = create_query(
-            flights=[
-                FlightQuery(date=outbound.isoformat(),
-                            from_airport=origin, to_airport=destination),
-                FlightQuery(date=return_.isoformat(),
-                            from_airport=destination, to_airport=origin),
-            ],
-            trip="round-trip", seat="economy",
+            flights=legs,
+            trip="round-trip" if return_ is not None else "one-way",
+            seat="economy",
             passengers=Passengers(adults=adults),
             currency=currency, language="en-US",
         )

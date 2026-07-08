@@ -61,7 +61,7 @@ class SerpApiClient:
         key = os.environ.get(var, "").strip()
         if not key:
             raise RuntimeError(
-                f"{var} is not set. Sign up free at serpapi.com (100 searches"
+                f"{var} is not set. Sign up free at serpapi.com (250 searches"
                 "/month) and put the key in .env or the CI secrets."
             )
         return cls(api_key=key)
@@ -72,24 +72,30 @@ class SerpApiClient:
         origin: str,
         destination: str,
         outbound: date,
-        return_: date,
+        return_: date | None,
         currency: str,
         adults: int = 1,
         extra: dict[str, Any] | None = None,
     ) -> PointResponse:
-        """Single round-trip search. Returns parsed best_flights[0..]."""
+        """Single point search; one-way when return_ is None.
+
+        Returns parsed best_flights[0..]. One-way is type=2 and the
+        return_date key must be OMITTED entirely — an empty value makes
+        SerpAPI answer with an error payload.
+        """
         params: dict[str, Any] = {
             "engine": "google_flights",
             "api_key": self._api_key,
             "departure_id": origin,
             "arrival_id": destination,
             "outbound_date": outbound.isoformat(),
-            "return_date": return_.isoformat(),
-            "type": "1",  # 1 = round trip
+            "type": "1" if return_ is not None else "2",  # 1=round trip, 2=one way
             "currency": currency,
             "adults": adults,
             "hl": "en",
         }
+        if return_ is not None:
+            params["return_date"] = return_.isoformat()
         if extra:
             params.update(extra)
         LOG.info("serpapi GET %s->%s dep=%s ret=%s",

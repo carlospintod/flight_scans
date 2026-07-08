@@ -171,9 +171,9 @@
    },
    "expected": {
     "kiwi": 3,
-    "googleflights": 0,
-    "serpapi_contingency": 0,
-    "aviasales": 0
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 2
    }
   },
   {
@@ -187,9 +187,9 @@
    },
    "expected": {
     "kiwi": 2,
-    "googleflights": 0,
-    "serpapi_contingency": 0,
-    "aviasales": 0
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 2
    }
   },
   {
@@ -203,9 +203,9 @@
    },
    "expected": {
     "kiwi": 2,
-    "googleflights": 0,
-    "serpapi_contingency": 0,
-    "aviasales": 0
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 2
    }
   },
   {
@@ -219,9 +219,41 @@
    },
    "expected": {
     "kiwi": 10,
-    "googleflights": 0,
-    "serpapi_contingency": 0,
-    "aviasales": 0
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 8
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 1,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2026-09-22",
+    "minStayDays": 0,
+    "tripType": "one_way"
+   },
+   "expected": {
+    "kiwi": 1,
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 1
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 1,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2027-01-10",
+    "minStayDays": 0,
+    "tripType": "one_way"
+   },
+   "expected": {
+    "kiwi": 6,
+    "googleflights": 25,
+    "serpapi_contingency": 7,
+    "aviasales": 5
    }
   }
  ]

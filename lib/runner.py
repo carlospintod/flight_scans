@@ -82,16 +82,17 @@ def execute_search(*, conn, route, plan, clients, caps,
 
     # --- Aviasales cached sweep ---
     if plan.aviasales_pairs and clients.get("aviasales") is not None:
+        n_av = len(plan.aviasales_pairs) * (
+            len(plan.aviasales_months) if route.is_one_way else 1)
         try:
             stored = run_aviasales_sweep(
                 conn, clients["aviasales"], route, dry_run=False,
-                pairs=list(plan.aviasales_pairs))
-            out.record("aviasales", attempted=len(plan.aviasales_pairs),
-                       stored=stored)
+                pairs=list(plan.aviasales_pairs),
+                months=list(plan.aviasales_months))
+            out.record("aviasales", attempted=n_av, stored=stored)
         except Exception as exc:  # noqa: BLE001
             out.degraded = True
-            out.record("aviasales", attempted=len(plan.aviasales_pairs),
-                       error=str(exc))
+            out.record("aviasales", attempted=n_av, error=str(exc))
             LOG.error("aviasales failed (%s): %s", route.name, exc)
 
     # --- Alerts (drop + new_low) ---
