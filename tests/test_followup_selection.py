@@ -457,3 +457,70 @@ def test_one_way_followup_queries_none_return_and_writes_sentinel(tmp_path: Path
     assert (cal[0]["return_date"], cal[0]["stay_days"], cal[0]["price"]) \
         == ("", 0, 301)
     assert [r["return_date"] for r in pq] == [""]
+
+
+def test_round_trip_sentinel_candidate_skipped_not_downgraded(tmp_path: Path):
+    """A '' candidate on a ROUND-TRIP route must be skipped (B3), never
+    silently executed as a one-way query — the client must not be
+    called at all."""
+    from lib.followup import run_followup
+
+    calls = []
+
+    class FakeGF:
+        source_id = "googleflights"
+
+        def point_query(self, **kwargs):
+            calls.append(kwargs)
+            raise AssertionError("must not be called")
+
+    cands = [{"origin": "MAD", "destination": "NBO",
+              "departure_date": "2026-09-20", "return_date": ""}]
+    db = tmp_path / "t.db"
+    route = _route(min_stay=0, max_stay=90)
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        res = run_followup(conn=conn, client=FakeGF(), route=route,
+                           candidates=cands)
+    assert calls == []
+    assert res.itineraries_queried == 0
+
+
+def test_skyscanner_skipped_for_one_way_candidates(tmp_path: Path):
+    """The skyscanner adapter is round-trip only; a one-way candidate
+    must skip it (an unguarded return_=None would raise AttributeError
+    past the SkyScrapperError catch and kill the whole batch) while the
+    primary client still runs."""
+    from lib.followup import run_followup
+    from lib.searchapi_io import FlightOption, PointResponse
+
+    sky_calls = []
+
+    class FakeSky:
+        def point_query(self, **kwargs):
+            sky_calls.append(kwargs)
+            raise AssertionError("must not be called for one-way")
+
+    class FakeGF:
+        source_id = "googleflights"
+
+        def point_query(self, **kwargs):
+            return PointResponse(raw={}, best_flights=(
+                FlightOption(price=301, total_minutes=1105, stops=1,
+                             carriers="Etihad"),
+            ))
+
+    cands = [{"origin": "MAD", "destination": "NBO",
+              "departure_date": "2026-09-20", "return_date": ""}]
+    db = tmp_path / "t.db"
+    route = _one_way_route()
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        res = run_followup(conn=conn, client=FakeGF(), route=route,
+                           candidates=cands,
+                           skyscanner_client=FakeSky(),
+                           skyscanner_max_calls=None)
+    assert sky_calls == []
+    assert res.itineraries_queried == 1

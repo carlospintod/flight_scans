@@ -311,12 +311,19 @@ def run_followup(
             LOG.info("followup stopping at SearchAPI max_calls=%d", max_calls)
             break
         # A malformed date must skip THIS candidate, not crash the whole
-        # batch (red-team B3). The one-way '' sentinel is NOT malformed:
-        # it maps to return_=None and runs a one-way point query (M7).
+        # batch (red-team B3). On a ONE-WAY route the '' sentinel is not
+        # malformed: it maps to return_=None and runs a one-way point
+        # query (M7). On a round-trip route '' stays a skip — never
+        # silently downgrade a round-trip verification to one-way.
         try:
             outbound = date.fromisoformat(c["departure_date"])
             ret_raw = c["return_date"]
-            return_ = date.fromisoformat(ret_raw) if ret_raw else None
+            if ret_raw:
+                return_ = date.fromisoformat(ret_raw)
+            elif route.is_one_way:
+                return_ = None
+            else:
+                raise ValueError("empty return_date on a round-trip route")
         except (ValueError, TypeError, KeyError) as exc:
             LOG.warning("followup skipping candidate with unusable dates "
                         "%s->%s dep=%r ret=%r: %s",
@@ -428,8 +435,12 @@ def run_followup(
             sa_calls += 1
 
         # ---- Sky Scrapper ----
+        # Round-trip only: the adapter's point_query requires a return
+        # date (a one-way return_=None would raise AttributeError past
+        # the SkyScrapperError catch and kill the whole batch).
         if (
             skyscanner_client is not None
+            and return_ is not None
             and (skyscanner_max_calls is None or sky_calls + 2 <= skyscanner_max_calls)
         ):
             try:

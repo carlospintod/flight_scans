@@ -1,4 +1,4 @@
-"""SerpAPI client — managed Google Flights data, free 100 searches/month.
+"""SerpAPI client — managed Google Flights data, free 250 searches/month.
 
 Why it exists: the free renewing tier is the cloud verification rail for
 GitHub Actions scans. Unlike the local googleflights scraper it works

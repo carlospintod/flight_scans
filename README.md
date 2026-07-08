@@ -50,12 +50,12 @@ GitHub Actions cron (Mon/Wed/Sat)          Vercel (Next.js 16)
 | **Kiwi** (RapidAPI) | 300/mo free → $5/mo for 20k (a config switch) | Discovery: one range-search sweeps a multi-week band, ~50 cheapest itineraries |
 | **SerpAPI** | 250/mo free | Managed verification — the contingency rail when the browser dies |
 | **Aviasales** (Travelpayouts) | soft-unlimited (cached 2-7d) | Broad cached sweep; carriers Google skips |
+| **SearchAPI.io** | 2 one-time credits left | Local break-glass for booking day; never in CI |
 
 Both trip types ride the full stack: round-trip and one-way each get
 Kiwi discovery, Google Flights verification, the SerpAPI contingency,
 and Aviasales corroboration — with per-source upper bounds quoted at
 creation time.
-| **SearchAPI.io** | 2 one-time credits left | Local break-glass for booking day; never in CI |
 
 ## Quick start (local development)
 

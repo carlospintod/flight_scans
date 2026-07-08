@@ -454,3 +454,40 @@ def test_predict_upper_bounds_bounds_one_way_plan(tmp_path: Path):
     assert bounds["googleflights"] >= plan.calls_by_source["googleflights"]
     assert bounds["aviasales"] == plan.calls_by_source["aviasales"]
     assert bounds["serpapi_contingency"] >= 1
+
+
+def test_plan_one_way_searchapi_rung_stays_gated(tmp_path: Path):
+    """The searchapi adapter is round-trip only — a one-way route whose
+    ladder lands on searchapi must plan ZERO followup candidates (with a
+    note) instead of routing '' candidates into an adapter that would
+    raise AFTER the ledger charged (review finding, 2026-07-08)."""
+    route = _one_way_route()
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        insert_calendar_rows(conn, [_ow_cal_row("2026-09-20", 310)])
+        plan = build_run_plan(
+            conn, route, sources=["kiwi", "searchapi"],
+            caps=Caps(searchapi_sweep=0), today=TODAY)
+    assert plan.followup_source == "searchapi"
+    assert plan.followup_candidates == ()
+    assert plan.calls_by_source["searchapi"] == 0
+    assert any("round-trip only" in n for n in plan.notes)
+
+
+def test_plan_one_way_kiwi_point_fallback_stays_gated(tmp_path: Path):
+    """Without googleflights in sources, round-trip routes get kiwi
+    point-followup — one-way routes must NOT (round-trip search + the
+    scarce 300/mo pool). Pins the planner gate the multi-source test
+    can't reach (its sources include googleflights)."""
+    route = _one_way_route()
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        insert_calendar_rows(conn, [_ow_cal_row("2026-09-20", 310)])
+        plan = build_run_plan(
+            conn, route, sources=["kiwi"], caps=Caps(), today=TODAY)
+    assert plan.kiwi_candidates == ()
+    assert plan.calls_by_source["kiwi"] == len(plan.kiwi_bands)

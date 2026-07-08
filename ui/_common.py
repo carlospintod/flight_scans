@@ -1583,6 +1583,7 @@ def run_all(
     plan_followup_arg = list(plan.followup_candidates) if plan is not None else None
     plan_kiwi_arg = list(plan.kiwi_candidates) if plan is not None else None
     plan_aviasales_pairs = list(plan.aviasales_pairs) if plan is not None else None
+    plan_aviasales_months = list(plan.aviasales_months) if plan is not None else None
 
     out: dict = {"sweep": None, "followup": None, "alerts": [],
                  "aviasales_rows": 0, "kiwi_rows": 0, "kiwi_band_rows": 0,
@@ -1680,7 +1681,9 @@ def run_all(
         ) as s:
             def _av_sweep():
                 return _run_aviasales_sweep(
-                    conn, av, route, dry_run=dry_run, pairs=plan_aviasales_pairs)
+                    conn, av, route, dry_run=dry_run,
+                    pairs=plan_aviasales_pairs,
+                    months=plan_aviasales_months)
             result, err, log = _capture(_av_sweep)
             out["aviasales_rows"] = result or 0
             out["logs"]["aviasales"] = log

@@ -60,8 +60,9 @@ Every metered client method is wrapped by `GuardedClient`, a proxy that
 INSERTs a `spend_events` row *before* the HTTP request and marks it
 `ok`/`empty`/`429`/`error` after. Failed calls stay charged, because
 providers meter failed calls too. If the insert fails, the call does
-not happen — fail closed. One row per HTTP attempt: internal retries go
-through the guard again.
+not happen — fail closed. One row per metered client call; the browser
+rail's single in-call reload retry rides the same charge (its pool is a
+per-run politeness budget, not a provider meter).
 
 `METERED` maps method name → worst-case units. A method not listed
 passes through unmetered, which is why introspection tests pin every

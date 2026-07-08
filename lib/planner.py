@@ -252,9 +252,15 @@ def build_run_plan(
     # Round-trip candidates are (dep, ret) pairs; one-way candidates
     # carry the '' return sentinel, which select_candidates and the
     # executors map to a one-way point query (return_=None). Both trip
-    # types get the same free verification ladder.
+    # types get the free verification ladder — EXCEPT the searchapi
+    # rung, whose adapter is round-trip only (break-glass source, 2
+    # credits left: not worth an unverified one-way param).
     followup_candidates: list[dict] = []
-    if followup_source in src:
+    if route.is_one_way and followup_source == "searchapi":
+        if "searchapi" in src:
+            notes.append("one-way verification needs googleflights or "
+                         "serpapi (searchapi adapter is round-trip only)")
+    elif followup_source in src:
         cands = select_candidates(conn, route, today=today)
         if followup_cap is not None and len(cands) > followup_cap:
             notes.append(

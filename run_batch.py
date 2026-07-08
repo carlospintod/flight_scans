@@ -63,10 +63,13 @@ def _log_search_id(search_id: str) -> str:
 
 
 def _estimate_seconds(plan) -> int:
+    # One-way aviasales sweeps run per (pair, month); months is () for
+    # round-trip, so the multiplier collapses to 1.
+    av_calls = len(plan.aviasales_pairs) * (len(plan.aviasales_months) or 1)
     return (EST_SEARCH_OVERHEAD_S
             + len(plan.kiwi_bands) * EST_KIWI_BAND_S
             + len(plan.followup_candidates) * EST_GF_CANDIDATE_S
-            + len(plan.aviasales_pairs) * EST_AVIASALES_PAIR_S)
+            + av_calls * EST_AVIASALES_PAIR_S)
 
 
 def main() -> int:
