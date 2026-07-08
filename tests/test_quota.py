@@ -12,6 +12,7 @@ import pytest
 from lib.db import connect, ensure_schema, record_quota
 from lib.quota import (
     GuardedClient,
+    METERED,
     POOL_SEEDS,
     QuotaExceeded,
     QuotaLedger,
@@ -198,6 +199,48 @@ def test_empty_result_marked_empty(conn):
     guarded.range_search()
     assert conn.execute("SELECT result FROM spend_events").fetchone()[0] \
         == "empty"
+
+
+def test_guarded_one_way_range_search_is_metered(conn):
+    """Regression (2026-07-08 cron): one_way_range_search was missing
+    from METERED['kiwi'], so one-way discovery bypassed the guard —
+    uncharged HTTP, no budget stop, no MONTHLY-429 floor."""
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+
+    class _OneWay:
+        source_id = "kiwi"
+
+        def __init__(self):
+            self.calls = 0
+
+        def one_way_range_search(self, **kw):
+            self.calls += 1
+            return _FakeResp(options=[1])
+
+    fake = _OneWay()
+    guarded = GuardedClient(fake, ledger=ledger, source="kiwi",
+                            run_id="r", search_id="s", shadow=False,
+                            budget_units=1)
+    guarded.one_way_range_search(origin="MAD")
+    ev = conn.execute("SELECT op, result FROM spend_events").fetchone()
+    assert (ev["op"], ev["result"]) == ("one_way_range_search", "ok")
+    with pytest.raises(QuotaExceeded):
+        guarded.one_way_range_search(origin="MAD")
+    assert fake.calls == 1
+
+
+def test_every_kiwi_search_method_is_metered():
+    """Any public *_search method on KiwiClient that METERED['kiwi']
+    doesn't list passes through the guard unmetered — the exact hole
+    that let one-way discovery spend uncharged on 2026-07-08."""
+    from lib.kiwi_rapidapi import KiwiClient
+    search_methods = {name for name in vars(KiwiClient)
+                      if name.endswith("_search")
+                      and not name.startswith("_")}
+    assert search_methods, "expected KiwiClient to define search methods"
+    missing = search_methods - set(METERED["kiwi"])
+    assert not missing, f"unmetered KiwiClient search methods: {missing}"
 
 
 def test_shadow_run_lifecycle_and_spend_grouping(conn):

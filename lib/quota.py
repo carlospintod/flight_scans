@@ -46,7 +46,8 @@ POOL_SEEDS: tuple[tuple, ...] = (
 # these BEFORE the call. Methods not listed pass through unmetered
 # (source_id, check_quota, context-manager protocol...).
 METERED: dict[str, dict[str, int]] = {
-    "kiwi": {"range_search": 1, "round_trip_search": 1, "one_way_search": 1},
+    "kiwi": {"range_search": 1, "round_trip_search": 1, "one_way_search": 1,
+             "one_way_range_search": 1},
     "serpapi": {"point_query": 1},
     "searchapi": {"point_query": 1, "calendar": 1},
     "googleflights": {"point_query": 1},
