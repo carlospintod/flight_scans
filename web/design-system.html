@@ -1,0 +1,642 @@
+<style>
+  /* ============================================================
+     PHOSPHOR — the flight_scans design system, rendered in itself.
+     Single-theme by design: the app declares "dark is the only theme."
+     Tokens are the literal @theme tokens from web/src/app/globals.css.
+     ============================================================ */
+  :root {
+    --bg: #0a0b10;
+    --bg-2: #0f1018;
+    --bg-3: #151620;
+    --line: #1e1f32;
+    --line-bright: #2c2d44;
+    --matrix: #00ff41;
+    --matrix-dim: #00b830;
+    --cyan: #00d4ff;
+    --amber: #ffcc00;
+    --danger: #ff4455;
+    --fg-bright: #e4e6f0;
+    --fg: #c8cad8;
+    --fg-mid: #8e91a8;
+    --fg-dim: #585b72;
+    --radius: 4px;
+    --glow: 0 0 14px rgb(0 255 65 / 0.18);
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --shell: 68rem;
+  }
+
+  * { box-sizing: border-box; }
+
+  .ph {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--sans);
+    line-height: 1.5;
+    position: relative;
+    min-height: 100%;
+    padding: 0 1rem 5rem;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* faint phosphor scanlines — static, no motion */
+  .ph::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom, rgb(0 255 65 / 0.015) 0 1px, transparent 1px 3px);
+    z-index: 100;
+  }
+
+  .wrap { max-width: var(--shell); margin: 0 auto; }
+  .mono { font-family: var(--mono); }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---- terminal window header ---- */
+  .term {
+    margin: 2.5rem auto 0;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg-2);
+  }
+  .term-bar {
+    display: flex; align-items: center; gap: .5rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-3);
+    padding: .55rem .75rem;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .term-title {
+    margin-left: .5rem;
+    font-family: var(--mono);
+    font-size: 11px; letter-spacing: .06em;
+    color: var(--fg-dim);
+  }
+  .term-body { padding: 1.75rem 1.5rem 2rem; }
+  @media (min-width: 640px) { .term-body { padding: 2.25rem 2.25rem; } }
+
+  .boot { font-family: var(--mono); font-size: 12px; color: var(--fg-dim); }
+  .boot .prompt { color: var(--matrix); }
+
+  .brand {
+    font-family: var(--mono);
+    font-weight: 600; letter-spacing: 2px;
+    color: var(--fg-bright);
+    font-size: clamp(1.6rem, 4vw, 2.25rem);
+    margin: .9rem 0 0;
+    text-wrap: balance;
+  }
+  .brand .hl { color: var(--matrix); }
+  .cursor::after {
+    content: "_"; color: var(--matrix);
+    animation: blink 1.1s step-end infinite;
+  }
+  @keyframes blink { 0%,49%{opacity:1} 50%,100%{opacity:0} }
+  @media (prefers-reduced-motion: reduce) { .cursor::after { animation: none; } }
+
+  .lede {
+    margin: .85rem 0 0; max-width: 46ch;
+    font-size: .95rem; line-height: 1.6; color: var(--fg);
+  }
+  .lede b { color: var(--fg-bright); font-weight: 600; }
+
+  /* flight path signature */
+  .path {
+    position: relative; height: 2.5rem; margin-top: 1.5rem;
+    display: flex; align-items: center; gap: .75rem;
+    font-family: var(--mono); font-size: 11px; color: var(--fg-mid);
+  }
+  .path .rule { flex: 1; border-top: 1px dashed var(--line-bright); }
+  .jet {
+    position: absolute; top: 0; left: 0;
+    font-family: var(--mono); font-size: 13px; line-height: 1.15;
+    color: var(--matrix); white-space: pre;
+    text-shadow: 0 0 10px rgb(0 255 65 / 0.5);
+    animation: fly 7s linear infinite;
+  }
+  @keyframes fly {
+    0% { transform: translateX(-8%); opacity: 0; }
+    12%,88% { opacity: 1; }
+    100% { transform: translateX(720%); opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .jet { animation: none; left: 42%; }
+  }
+
+  /* ---- section rhythm ---- */
+  section.blk { margin-top: 3.25rem; }
+  .wrap > .blk:first-of-type { margin-top: 2.75rem; }
+  .head {
+    margin: 0 0 1.1rem;
+    padding-bottom: .35rem;
+    border-bottom: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 2px;
+    color: var(--matrix);
+  }
+  .head .n { color: var(--fg-dim); margin-right: .6rem; }
+
+  .card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg-2);
+    padding: 1rem;
+  }
+
+  .grid { display: grid; gap: .75rem; }
+  .g2 { grid-template-columns: 1fr; }
+  .g3 { grid-template-columns: 1fr; }
+  @media (min-width: 560px) { .g2 { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 720px) { .g3 { grid-template-columns: repeat(3,1fr); } }
+
+  /* principle cards */
+  .prin { display: grid; gap: .5rem; }
+  .prin .k {
+    font-family: var(--mono); font-size: 10px;
+    text-transform: uppercase; letter-spacing: .1em; color: var(--fg-dim);
+  }
+  .prin h3 {
+    margin: 0; font-family: var(--mono); font-size: 14px;
+    font-weight: 600; color: var(--fg-bright);
+  }
+  .prin p { margin: 0; font-size: .82rem; line-height: 1.55; color: var(--fg-mid); }
+
+  /* swatches */
+  .sw { display: grid; grid-template-columns: repeat(2,1fr); gap: .6rem; }
+  @media (min-width: 640px) { .sw { grid-template-columns: repeat(4,1fr); } }
+  .chip {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden; background: var(--bg-2);
+  }
+  .chip .fill { height: 3rem; }
+  .chip .meta { padding: .5rem .55rem .6rem; }
+  .chip .tok { font-family: var(--mono); font-size: 12px; color: var(--fg-bright); }
+  .chip .hex { font-family: var(--mono); font-size: 10px; color: var(--fg-dim); letter-spacing: .04em; }
+  .chip .use { display: block; margin-top: .25rem; font-size: 10.5px; color: var(--fg-mid); line-height: 1.35; }
+
+  /* ladders */
+  .ladder { display: grid; gap: .55rem; }
+  .lrow { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .lrow .lbl {
+    width: 5.5rem; flex-shrink: 0;
+    font-family: var(--mono); font-size: 10px;
+    text-transform: uppercase; letter-spacing: .08em; color: var(--fg-dim);
+  }
+  .step { display: inline-flex; align-items: center; gap: .4rem;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .04em; }
+  .d { width: 8px; height: 8px; border-radius: 50%; }
+  .d.glow { box-shadow: var(--glow); }
+
+  /* type scale rows */
+  .tscale { display: grid; gap: .05rem; }
+  .trow {
+    display: flex; align-items: baseline; gap: 1rem;
+    padding: .55rem 0; border-bottom: 1px solid var(--line);
+  }
+  .trow:last-child { border-bottom: 0; }
+  .trow .tag {
+    width: 5.5rem; flex-shrink: 0;
+    font-family: var(--mono); font-size: 10px; color: var(--fg-dim);
+    letter-spacing: .04em;
+  }
+  .trow .spec {
+    font-family: var(--mono); color: var(--fg-bright); line-height: 1.1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .trow .role { margin-left: auto; font-size: 11px; color: var(--fg-mid); white-space: nowrap; }
+
+  /* component demo */
+  .btn {
+    font-family: var(--mono); font-size: 13px; letter-spacing: .06em;
+    border-radius: var(--radius); padding: .5rem 1rem; cursor: pointer;
+    background: var(--bg-2); transition: box-shadow .15s, border-color .15s;
+  }
+  .btn:focus-visible { outline: 2px solid var(--matrix-dim); outline-offset: 2px; }
+  .btn.pri { border: 1px solid var(--matrix-dim); color: var(--matrix); font-weight: 600; }
+  .btn.pri:hover { box-shadow: var(--glow); }
+  .btn.sec { border: 1px solid var(--line-bright); color: var(--fg-bright); }
+  .btn.sec:hover { border-color: var(--matrix-dim); }
+  .btn.dgr { border: 1px solid var(--line); color: rgb(255 68 85 / .8); }
+  .btn.dgr:hover { border-color: var(--danger); }
+  .row { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
+
+  .field { display: grid; gap: .25rem; }
+  .field label {
+    font-family: var(--mono); font-size: 10px;
+    text-transform: uppercase; letter-spacing: .08em; color: var(--fg-dim);
+  }
+  .field input {
+    width: 100%; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--bg); padding: .5rem .625rem;
+    font-family: var(--mono); font-size: 13px; color: var(--fg-bright);
+    outline: none;
+  }
+  .field input:focus { border-color: var(--matrix-dim); }
+
+  .pill {
+    display: inline-block; border-radius: var(--radius);
+    padding: .12rem .4rem; font-family: var(--mono); font-size: 10px;
+    text-transform: uppercase; letter-spacing: .08em; background: transparent;
+  }
+  .pill.new { border: 1px solid var(--matrix-dim); color: var(--matrix); }
+  .pill.drop { border: 1px solid var(--cyan); color: var(--cyan); }
+  .pill.pub { border: 1px solid var(--cyan); color: var(--cyan); }
+  .pill.paused { border: 1px solid var(--fg-dim); color: var(--fg-dim); }
+  .pill.skip { border: 1px solid var(--amber); color: var(--amber); }
+
+  .seg { display: inline-flex; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); }
+  .seg button {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .06em;
+    padding: .45rem 1rem; border: 0; cursor: pointer;
+  }
+  .seg .on { background: var(--bg-3); color: var(--matrix); }
+  .seg .off { background: var(--bg-2); color: var(--fg-mid); }
+  .seg .off:hover { color: var(--fg); }
+
+  /* price hero demo */
+  .hero { border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-2); padding: 1.5rem; }
+  .hero .eyebrow {
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: .5rem;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--fg-dim);
+  }
+  .hero .stamp { display: inline-flex; align-items: center; gap: .4rem; letter-spacing: .04em; color: var(--fg-mid); text-transform: none; }
+  .hero .priceline { display: flex; align-items: baseline; gap: 1.25rem; flex-wrap: wrap; margin-top: .6rem; }
+  .hero .price {
+    font-family: var(--mono); font-size: 3rem; font-weight: 600; color: var(--matrix);
+    text-shadow: 0 0 18px rgb(0 255 65 / 0.35); line-height: 1;
+  }
+  .hero .price .cur { font-size: 1.5rem; color: var(--matrix-dim); margin-left: .4rem; }
+  .hero .route { font-family: var(--mono); font-size: 1.25rem; color: var(--fg-bright); }
+  .hero .kv {
+    margin-top: .85rem; display: grid; gap: .1rem .5rem; grid-template-columns: 1fr;
+    font-family: var(--mono); font-size: 13px; color: var(--fg);
+  }
+  @media (min-width:560px){ .hero .kv { grid-template-columns: 1fr 1fr; } }
+  .hero .kv .key { color: var(--fg-dim); }
+  .hero .src { margin-top: .85rem; font-family: var(--mono); font-size: 11px; color: var(--fg-dim); }
+
+  /* table */
+  .tbl-wrap { overflow-x: auto; }
+  table.t { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 13px; }
+  table.t th {
+    text-align: left; padding: .5rem 1rem .5rem 0;
+    border-bottom: 1px solid var(--line-bright);
+    font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-dim); font-weight: 400;
+  }
+  table.t td { padding: .5rem 1rem .5rem 0; border-bottom: 1px solid var(--line); color: var(--fg); white-space: nowrap; }
+  table.t tr:hover td { background: var(--bg-3); }
+  .ok { color: var(--matrix-dim); }
+  .deg { color: var(--amber); }
+  .fail { color: var(--danger); }
+  .val { color: var(--fg-bright); }
+
+  .empty { font-family: var(--mono); font-size: 14px; color: var(--fg-mid); }
+
+  /* glyph grid */
+  .glyphs { display: grid; grid-template-columns: repeat(2,1fr); gap: .55rem; }
+  @media (min-width: 560px){ .glyphs { grid-template-columns: repeat(3,1fr); } }
+  @media (min-width: 820px){ .glyphs { grid-template-columns: repeat(4,1fr); } }
+  .gly { display: flex; align-items: baseline; gap: .6rem; font-family: var(--mono); font-size: 12px; }
+  .gly .sym { color: var(--matrix); width: 1.5rem; font-size: 14px; }
+  .gly .mean { color: var(--fg-mid); }
+
+  /* chart mock */
+  .chart { border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-2); padding: 1rem; }
+  .chart svg { display: block; width: 100%; height: auto; }
+  .ramp { display: flex; margin-top: .75rem; border-radius: var(--radius); overflow: hidden; }
+  .ramp span { flex: 1; height: 1.25rem; }
+  .ramp-lbls { display: flex; justify-content: space-between; margin-top: .35rem; font-family: var(--mono); font-size: 10px; color: var(--fg-dim); }
+
+  /* do/dont */
+  .dd { display: grid; gap: .4rem; }
+  .dd .line { display: flex; gap: .55rem; font-size: .85rem; line-height: 1.5; }
+  .dd .mk { font-family: var(--mono); flex-shrink: 0; width: 1rem; }
+  .dd .do .mk { color: var(--matrix); }
+  .dd .no .mk { color: var(--danger); }
+  .dd .line span:last-child { color: var(--fg); }
+
+  .voicebox { border-left: 2px solid var(--matrix-dim); padding: .3rem 0 .3rem 1rem; }
+  .voicebox .refrain { font-family: var(--mono); font-size: 14px; color: var(--fg-bright); }
+  .voicebox .refrain .lt { color: var(--matrix); }
+  .voicebox .sub { margin-top: .35rem; font-size: .82rem; color: var(--fg-mid); }
+
+  .foot {
+    max-width: var(--shell); margin: 4rem auto 0;
+    border-top: 1px solid var(--line); padding-top: 1.25rem;
+    font-family: var(--mono); font-size: 11px; color: var(--fg-dim); line-height: 1.6;
+  }
+  .note { font-family: var(--mono); font-size: 11px; color: var(--fg-dim); margin-top: .75rem; }
+</style>
+
+<div class="ph">
+  <div class="wrap">
+
+    <!-- ============ HERO ============ -->
+    <div class="term">
+      <div class="term-bar">
+        <span class="dot" style="background:rgb(255 68 85 / .7)"></span>
+        <span class="dot" style="background:rgb(255 204 0 / .7)"></span>
+        <span class="dot" style="background:rgb(0 255 65 / .7)"></span>
+        <span class="term-title">flight_scans — design.system</span>
+      </div>
+      <div class="term-body">
+        <div class="boot"><span class="prompt">$</span> ./distill --design-system<span class="cursor"></span></div>
+        <h1 class="brand">PHOSPHOR<span style="color:var(--matrix)">_</span></h1>
+        <p class="lede">The system behind <b>flight_scans</b>: a flight tracker that reads like a
+          terminal you trust. Dark like a shell, monospace for everything that carries data,
+          one phosphor-green accent that only ever means <b>live, cheap, or go</b> — and copy
+          that states the mechanism instead of selling.</p>
+        <div class="path">
+          <span>MAD</span>
+          <span class="rule"></span>
+          <span>NBO</span>
+          <pre class="jet" aria-hidden="true">  __|__
+&gt;=(_)=&gt;</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ PRINCIPLES ============ -->
+    <section class="blk">
+      <h2 class="head">Principles</h2>
+      <div class="grid g3">
+        <div class="card prin"><span class="k">01</span><h3>Mono is the data voice</h3>
+          <p>Plex Mono carries every label, number, table, and button. Sans appears only when English wraps to two-plus sentences.</p></div>
+        <div class="card prin"><span class="k">02</span><h3>Green is an accent</h3>
+          <p>Matrix green marks live / cheap / act — the hero price, headings, primary text, link hover. Never a paragraph or a table body.</p></div>
+        <div class="card prin"><span class="k">03</span><h3>Every color is a status</h3>
+          <p>No decorative color. One green→amber→red ladder expresses freshness, run health, and budget alike.</p></div>
+        <div class="card prin"><span class="k">04</span><h3>Depth is background steps</h3>
+          <p>Three grounds — page, surface, raised — do the work of shadows. The only shadow is the green glow, and it means "act now."</p></div>
+        <div class="card prin"><span class="k">05</span><h3>Honesty is a design element</h3>
+          <p>The product states its own limits in fixed places. Disclaimers instruct verification; they never apologize.</p></div>
+        <div class="card prin"><span class="k">06</span><h3>No theater beyond the terminal</h3>
+          <p>A blinking cursor, one flying jet, nothing else. Charts don't animate; feedback is an inline caption, never a toast.</p></div>
+      </div>
+    </section>
+
+    <!-- ============ COLOR ============ -->
+    <section class="blk">
+      <h2 class="head"><span class="n">·</span>Color tokens</h2>
+      <div class="sw">
+        <div class="chip"><div class="fill" style="background:#0a0b10;border-bottom:1px solid var(--line)"></div><div class="meta"><div class="tok">bg</div><div class="hex tnum">#0A0B10</div><span class="use">page floor · input wells</span></div></div>
+        <div class="chip"><div class="fill" style="background:#0f1018"></div><div class="meta"><div class="tok">bg-2</div><div class="hex tnum">#0F1018</div><span class="use">cards · header · buttons</span></div></div>
+        <div class="chip"><div class="fill" style="background:#151620"></div><div class="meta"><div class="tok">bg-3</div><div class="hex tnum">#151620</div><span class="use">raised · hover · selected</span></div></div>
+        <div class="chip"><div class="fill" style="background:#2c2d44"></div><div class="meta"><div class="tok">line-bright</div><div class="hex tnum">#2C2D44</div><span class="use">emphasis rules</span></div></div>
+        <div class="chip"><div class="fill" style="background:#00ff41"></div><div class="meta"><div class="tok">matrix</div><div class="hex tnum">#00FF41</div><span class="use">live · cheap · go</span></div></div>
+        <div class="chip"><div class="fill" style="background:#00b830"></div><div class="meta"><div class="tok">matrix-dim</div><div class="hex tnum">#00B830</div><span class="use">green at rest · borders · fills</span></div></div>
+        <div class="chip"><div class="fill" style="background:#00d4ff"></div><div class="meta"><div class="tok">cyan</div><div class="hex tnum">#00D4FF</div><span class="use">informational · drops · public</span></div></div>
+        <div class="chip"><div class="fill" style="background:#ffcc00"></div><div class="meta"><div class="tok">amber</div><div class="hex tnum">#FFCC00</div><span class="use">aging · degraded · caution</span></div></div>
+        <div class="chip"><div class="fill" style="background:#ff4455"></div><div class="meta"><div class="tok">danger</div><div class="hex tnum">#FF4455</div><span class="use">error · dead · destructive</span></div></div>
+        <div class="chip"><div class="fill" style="background:#e4e6f0"></div><div class="meta"><div class="tok">fg-bright</div><div class="hex tnum">#E4E6F0</div><span class="use">values · H1 · prices</span></div></div>
+        <div class="chip"><div class="fill" style="background:#8e91a8"></div><div class="meta"><div class="tok">fg-mid</div><div class="hex tnum">#8E91A8</div><span class="use">secondary · empty states</span></div></div>
+        <div class="chip"><div class="fill" style="background:#585b72"></div><div class="meta"><div class="tok">fg-dim</div><div class="hex tnum">#585B72</div><span class="use">footnotes · labels · headers</span></div></div>
+      </div>
+
+      <div class="grid g3" style="margin-top:1rem">
+        <div class="card">
+          <div class="prin"><span class="k">Freshness</span></div>
+          <div class="ladder" style="margin-top:.7rem">
+            <div class="lrow"><span class="lbl">Fresh ≤4d</span><span class="step"><span class="d glow" style="background:var(--matrix)"></span><span style="color:var(--fg-mid)">last scan today</span></span></div>
+            <div class="lrow"><span class="lbl">Aging &gt;4d</span><span class="step"><span class="d" style="background:var(--amber)"></span><span style="color:var(--amber)">last scan 6d ago</span></span></div>
+            <div class="lrow"><span class="lbl">Stale &gt;8d</span><span class="step"><span class="d" style="background:var(--danger)"></span><span style="color:var(--danger)">re-check first</span></span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="prin"><span class="k">Run health</span></div>
+          <div class="ladder" style="margin-top:.7rem">
+            <div class="lrow"><span class="lbl">ok</span><span class="step ok" style="color:var(--matrix-dim)">stored 29 prices</span></div>
+            <div class="lrow"><span class="lbl">degraded</span><span class="step" style="color:var(--amber)">one rail failed</span></div>
+            <div class="lrow"><span class="lbl">skipped</span><span class="step" style="color:var(--amber)">budget intact</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="prin"><span class="k">Budget</span></div>
+          <div class="ladder" style="margin-top:.7rem">
+            <div class="lrow" style="display:grid;gap:.45rem">
+              <div><div style="font-family:var(--mono);font-size:10px;color:var(--fg-dim);margin-bottom:.25rem">&gt;40% — healthy</div><div style="height:4px;border-radius:4px;background:var(--bg-3)"><div style="width:72%;height:100%;border-radius:4px;background:var(--matrix-dim)"></div></div></div>
+              <div><div style="font-family:var(--mono);font-size:10px;color:var(--fg-dim);margin-bottom:.25rem">&gt;15% — low</div><div style="height:4px;border-radius:4px;background:var(--bg-3)"><div style="width:28%;height:100%;border-radius:4px;background:var(--amber)"></div></div></div>
+              <div><div style="font-family:var(--mono);font-size:10px;color:var(--fg-dim);margin-bottom:.25rem">&lt;15% — critical</div><div style="height:4px;border-radius:4px;background:var(--bg-3)"><div style="width:8%;height:100%;border-radius:4px;background:var(--danger)"></div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note">Success is <span style="color:var(--matrix-dim)">matrix-dim</span>, not full matrix — bright green is reserved for money and alerts.</p>
+    </section>
+
+    <!-- ============ TYPE ============ -->
+    <section class="blk">
+      <h2 class="head"><span class="n">·</span>Type — mono-first pixel ladder</h2>
+      <div class="card">
+        <div class="tscale">
+          <div class="trow"><span class="tag">10px</span><span class="spec mono" style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--fg-dim)">earliest departure</span><span class="role">micro-labels · th · dt</span></div>
+          <div class="trow"><span class="tag">11px</span><span class="spec mono" style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--matrix)">Cheapest per departure day</span><span class="role">section headings · badges</span></div>
+          <div class="trow"><span class="tag">12px</span><span class="spec mono" style="font-size:12px;color:var(--danger)">link expired — ask for a fresh one</span><span class="role">status · error messages</span></div>
+          <div class="trow"><span class="tag">13px</span><span class="spec mono" style="font-size:13px;color:var(--fg)">MAD → NBO · 434 EUR · 1 stop</span><span class="role">table bodies · inputs</span></div>
+          <div class="trow"><span class="tag">14 · sm</span><span class="spec mono" style="font-size:14px;font-weight:600;color:var(--matrix)">▶ START TRACKING</span><span class="role">nav brand · primary buttons</span></div>
+          <div class="trow"><span class="tag">18 · lg</span><span class="spec mono" style="font-size:18px;color:var(--fg-bright)">YOUR SEARCHES</span><span class="role">utility-page H1 (caps)</span></div>
+          <div class="trow"><span class="tag">24 · 2xl</span><span class="spec mono" style="font-size:24px;font-weight:600;color:var(--fg-bright)">Flexible on both ends</span><span class="role">marketing H1 (sentence)</span></div>
+          <div class="trow"><span class="tag">48 · 5xl</span><span class="spec mono" style="font-size:44px;font-weight:600;color:var(--matrix);text-shadow:0 0 18px rgb(0 255 65 / .35);line-height:1">434</span><span class="role">the single hero price</span></div>
+        </div>
+      </div>
+      <p class="note">IBM Plex Mono is the data voice; IBM Plex Sans is reserved for multi-sentence prose. Weight 400 default, 600 for brand / headings / prices / primary buttons.</p>
+    </section>
+
+    <!-- ============ COMPONENTS ============ -->
+    <section class="blk">
+      <h2 class="head"><span class="n">·</span>Components</h2>
+
+      <div class="grid g2">
+        <div class="card" style="display:grid;gap:.9rem">
+          <div class="prin"><span class="k">Buttons</span></div>
+          <div class="row">
+            <button class="btn pri">▶ START TRACKING</button>
+            <button class="btn sec">SAVE CONFIG</button>
+            <button class="btn dgr">DELETE ACCOUNT…</button>
+          </div>
+          <p class="note" style="margin:0">Primary glows on hover (exclusive to CTAs). Verb glyph: <span style="color:var(--matrix)">▶</span> run · <span style="color:var(--matrix)">+</span> create. Destructive never fires on first click.</p>
+        </div>
+
+        <div class="card" style="display:grid;gap:.9rem">
+          <div class="prin"><span class="k">Trip toggle · input</span></div>
+          <div class="seg">
+            <button class="on">ROUND TRIP</button>
+            <button class="off">ONE WAY</button>
+          </div>
+          <div class="field">
+            <label>from</label>
+            <input value="MAD" spellcheck="false" aria-label="origin airport" />
+          </div>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-top:.75rem">
+        <div class="card" style="display:grid;gap:.7rem">
+          <div class="prin"><span class="k">Status pills</span></div>
+          <div class="row">
+            <span class="pill new">new low</span>
+            <span class="pill drop">drop</span>
+            <span class="pill pub">public demo</span>
+            <span class="pill paused">paused</span>
+            <span class="pill skip">skipped</span>
+          </div>
+          <p class="note" style="margin:0">Border and text share one semantic color; fill stays transparent.</p>
+        </div>
+        <div class="card" style="display:grid;gap:.7rem">
+          <div class="prin"><span class="k">Empty state</span></div>
+          <p class="empty">No one-way prices inside the window yet — the next scan fills this in.</p>
+          <p class="note" style="margin:0">Always "No X yet — &lt;what fills it, when&gt;". No icons, no CTA, placed where the data would be.</p>
+        </div>
+      </div>
+
+      <!-- price hero -->
+      <div style="margin-top:.75rem">
+        <div class="hero">
+          <div class="eyebrow">
+            <span>Cheapest observed · 60–90 day stay</span>
+            <span class="stamp"><span class="d glow" style="background:var(--matrix)"></span>last scan today</span>
+          </div>
+          <div class="priceline">
+            <span class="price">434<span class="cur">EUR</span></span>
+            <span class="route">MAD → NBO</span>
+          </div>
+          <div class="kv">
+            <div><span class="key">out&nbsp;&nbsp;</span>Sat, 12 Sep 2026</div>
+            <div><span class="key">back&nbsp;</span>Tue, 17 Nov 2026</div>
+            <div><span class="key">stay&nbsp;</span>66 days</div>
+            <div><span class="key">via&nbsp;&nbsp;</span>Etihad · 1 stop</div>
+          </div>
+          <div class="src">source: googleflights · verified 4h ago</div>
+        </div>
+        <p class="note">The one bold moment: 48px matrix price + glow, currency stepped down to matrix-dim, everything around it quiet.</p>
+      </div>
+
+      <!-- table -->
+      <div style="margin-top:1.25rem">
+        <div class="prin" style="margin-bottom:.6rem"><span class="k">Scan history</span></div>
+        <div class="tbl-wrap">
+          <table class="t">
+            <thead><tr><th>started</th><th>trigger</th><th>status</th><th>prices</th><th>alerts</th></tr></thead>
+            <tbody>
+              <tr><td class="val">2026-07-11 05:23</td><td>cron</td><td class="ok">ok</td><td>31</td><td style="color:var(--matrix)">1</td></tr>
+              <tr><td class="val">2026-07-08 07:43</td><td>cron</td><td class="ok">ok</td><td>29</td><td>0</td></tr>
+              <tr><td class="val">2026-07-06 16:49</td><td>dispatch</td><td class="deg">degraded</td><td>12</td><td>0</td></tr>
+              <tr><td class="val">2026-07-04 05:23</td><td>cron</td><td class="fail">failed</td><td>—</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CHARTS ============ -->
+    <section class="blk">
+      <h2 class="head"><span class="n">·</span>Charts</h2>
+      <div class="grid g2">
+        <div class="chart">
+          <svg viewBox="0 0 600 200" role="img" aria-label="one-way price curve, cheapest per departure day">
+            <!-- grid -->
+            <g stroke="#1e1f32" stroke-width="1">
+              <line x1="0" y1="40" x2="600" y2="40"/>
+              <line x1="0" y1="90" x2="600" y2="90"/>
+              <line x1="0" y1="140" x2="600" y2="140"/>
+              <line x1="0" y1="190" x2="600" y2="190"/>
+            </g>
+            <!-- area -->
+            <path d="M0,120 L86,96 L171,150 L257,70 L343,104 L428,60 L514,110 L600,44 L600,190 L0,190 Z"
+                  fill="rgb(0 255 65 / 0.06)"/>
+            <!-- line -->
+            <path d="M0,120 L86,96 L171,150 L257,70 L343,104 L428,60 L514,110 L600,44"
+                  fill="none" stroke="#00ff41" stroke-width="2" stroke-linejoin="round"/>
+            <!-- emphasized endpoint -->
+            <circle cx="600" cy="44" r="4" fill="#00ff41" style="filter:drop-shadow(0 0 6px rgb(0 255 65 / .7))"/>
+          </svg>
+          <p class="note" style="margin-top:.6rem">Price line = matrix stroke 2 + area <span class="tnum">rgba(0,255,65,.06)</span>, faint <span style="color:var(--fg-dim)">line</span> grid, glowing endpoint. Animation off.</p>
+        </div>
+        <div class="chart">
+          <div class="prin"><span class="k">Price ramp — cheap → expensive</span></div>
+          <div class="ramp" style="margin-top:.6rem">
+            <span style="background:var(--matrix)"></span>
+            <span style="background:var(--cyan)"></span>
+            <span style="background:var(--amber)"></span>
+            <span style="background:var(--danger)"></span>
+          </div>
+          <div class="ramp-lbls"><span>cheapest</span><span>most expensive</span></div>
+          <div class="prin" style="margin-top:1.1rem"><span class="k">Per-source series</span></div>
+          <div class="ladder" style="margin-top:.55rem">
+            <div class="lrow"><span class="step"><span class="d" style="background:#00ff41"></span><span style="color:var(--fg-mid)">googleflights</span></span><span class="step"><span class="d" style="background:#00d4ff"></span><span style="color:var(--fg-mid)">serpapi</span></span></div>
+            <div class="lrow"><span class="step"><span class="d" style="background:#b57bff"></span><span style="color:var(--fg-mid)">kiwi</span></span><span class="step"><span class="d" style="background:#ff8c42"></span><span style="color:var(--fg-mid)">aviasales</span></span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ VOICE ============ -->
+    <section class="blk">
+      <h2 class="head"><span class="n">·</span>Voice</h2>
+      <div class="grid g2">
+        <div class="card" style="display:grid;gap:1.1rem">
+          <div class="voicebox">
+            <div class="refrain">a scan can spend <span class="lt">less</span>, never more</div>
+            <div class="sub">Cost is always a guaranteed upper bound — the ≤N notation plus this refrain. Contingency spend is footnoted "only if the primary rail fails".</div>
+          </div>
+          <div class="voicebox">
+            <div class="refrain">the tracker <span class="lt">hunts</span> the cheapest day</div>
+            <div class="sub">The system is "the tracker" and its verb is "hunt"; the user is "you". Bad news ships with the remedy in the same sentence.</div>
+          </div>
+          <div class="voicebox">
+            <div class="refrain">Not a booking site.</div>
+            <div class="sub">Honesty is a genre: the footer, the "Honest limits" section, stale flags, named blind spots. Disclaimers instruct verification, never apologize.</div>
+          </div>
+        </div>
+        <div class="card" style="display:grid;gap:.9rem">
+          <div class="prin"><span class="k">Glyph vocabulary</span></div>
+          <div class="glyphs">
+            <div class="gly"><span class="sym">▶</span><span class="mean">run</span></div>
+            <div class="gly"><span class="sym">+</span><span class="mean">create</span></div>
+            <div class="gly"><span class="sym">→</span><span class="mean">route · forward</span></div>
+            <div class="gly"><span class="sym">←</span><span class="mean">back</span></div>
+            <div class="gly"><span class="sym" style="color:var(--matrix)">✓</span><span class="mean">pass</span></div>
+            <div class="gly"><span class="sym" style="color:var(--danger)">✗</span><span class="mean">fail</span></div>
+            <div class="gly"><span class="sym">·</span><span class="mean">separator</span></div>
+            <div class="gly"><span class="sym">—</span><span class="mean">pivot · null</span></div>
+            <div class="gly"><span class="sym">≤</span><span class="mean">upper bound</span></div>
+            <div class="gly"><span class="sym">~</span><span class="mean">approx</span></div>
+            <div class="gly"><span class="sym">$</span><span class="mean">prompt</span></div>
+            <div class="gly"><span class="sym">_</span><span class="mean">cursor</span></div>
+          </div>
+          <p class="note" style="margin:0">Never: emojis, exclamation marks, "please / sorry / welcome", or superlatives. Prices are bare integer + ISO code — <span class="mono val">434 EUR</span>, no symbol, no decimals.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DO / DON'T ============ -->
+    <section class="blk">
+      <h2 class="head"><span class="n">·</span>Do / Don't</h2>
+      <div class="grid g2">
+        <div class="card dd">
+          <div class="line do"><span class="mk">✓</span><span>Reach for a token's <em>meaning</em> — if it isn't live / cheap / go, it isn't matrix.</span></div>
+          <div class="line do"><span class="mk">✓</span><span>Wrap any wide element in an overflow-x scroller before shipping.</span></div>
+          <div class="line do"><span class="mk">✓</span><span>End pages and complex widgets with the fine-print closer.</span></div>
+          <div class="line do"><span class="mk">✓</span><span>State the fact and the remedy in an error.</span></div>
+        </div>
+        <div class="card dd">
+          <div class="line no"><span class="mk">✗</span><span>Colour body text or a table body green.</span></div>
+          <div class="line no"><span class="mk">✗</span><span>Add a spinner, toast, or modal — swap a label, show a caption.</span></div>
+          <div class="line no"><span class="mk">✗</span><span>Glow anything amber, red, or cyan. Glow means "live".</span></div>
+          <div class="line no"><span class="mk">✗</span><span>Apologise in an error message.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="foot">
+      PHOSPHOR · distilled from web/src — the literal @theme tokens, component recipes, and copy in the shipping app.<br/>
+      Full spec: docs/DESIGN.md · engine: docs/ENGINE.md · dark is the only theme, by design.
+    </div>
+
+  </div>
+</div>
