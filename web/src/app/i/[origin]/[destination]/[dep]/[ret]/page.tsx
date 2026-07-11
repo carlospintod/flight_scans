@@ -52,14 +52,14 @@ export default async function ItineraryPage({
       <div>
         <Link
           href="/"
-          className="font-mono text-[11px] uppercase tracking-wider text-fg-dim hover:text-matrix"
+          className="font-mono text-[11px] uppercase tracking-wider text-hint hover:text-signature"
         >
           ← radar
         </Link>
-        <h1 className="mt-2 font-mono text-2xl text-fg-bright">
+        <h1 className="mt-2 font-mono text-2xl text-text-bright">
           {origin} → {destination}
         </h1>
-        <p className="mt-1 font-mono text-[13px] text-fg-mid">
+        <p className="mt-1 font-mono text-[13px] text-text-mid">
           out {fmtDateLong(dep)} · back {fmtDateLong(ret)} · {stay} day stay
         </p>
       </div>
@@ -80,14 +80,14 @@ export default async function ItineraryPage({
           <div className="grid gap-3 sm:grid-cols-3">
             {detail.map((d) => (
               <Card key={d.rank}>
-                <div className="font-mono text-2xl font-semibold text-fg-bright">
+                <div className="font-mono text-2xl font-semibold text-text-bright">
                   {d.price}{" "}
-                  <span className="text-sm text-fg-dim">{d.currency}</span>
+                  <span className="text-sm text-hint">{d.currency}</span>
                 </div>
-                <div className="mt-1 font-mono text-[13px] text-fg">
+                <div className="mt-1 font-mono text-[13px] text-text">
                   {d.carriers}
                 </div>
-                <div className="mt-1 font-mono text-[11px] text-fg-dim">
+                <div className="mt-1 font-mono text-[11px] text-hint">
                   {fmtStops(d.stops)} · {fmtDuration(d.totalMinutes)}
                   {d.isSelfTransfer && (
                     <span className="ml-1 text-amber">· self-transfer</span>

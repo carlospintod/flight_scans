@@ -30,18 +30,18 @@ export function TriggerScan() {
       <button
         onClick={fire}
         disabled={state.kind === "busy"}
-        className="rounded-card border border-matrix-dim bg-bg-2 px-4 py-2.5 font-mono text-sm font-semibold tracking-wider text-matrix hover:shadow-glow disabled:opacity-40"
+        className="rounded-card border border-signature-dim bg-bg2 px-4 py-2.5 font-mono text-sm font-semibold tracking-wider text-signature hover:shadow-glow-sig disabled:opacity-40"
       >
         {state.kind === "busy" ? "DISPATCHING..." : "▶ TRIGGER SCAN NOW"}
       </button>
       {state.kind === "done" && (
-        <span className="font-mono text-[12px] text-fg-mid">
+        <span className="font-mono text-[12px] text-text-mid">
           dispatched —{" "}
           <a
             href={state.url}
             target="_blank"
             rel="noreferrer"
-            className="text-matrix-dim underline hover:text-matrix"
+            className="text-cyan99 underline hover:text-signature"
           >
             watch the run
           </a>{" "}
@@ -49,7 +49,7 @@ export function TriggerScan() {
         </span>
       )}
       {state.kind === "error" && (
-        <span className="font-mono text-[12px] text-danger">
+        <span className="font-mono text-[12px] text-red">
           {state.message}
         </span>
       )}

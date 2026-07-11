@@ -1,14 +1,14 @@
 # flight_scans
 
-A flexible-date flight price tracker with a search mechanism mainstream
-tools don't offer: **both your departure and your return float freely
+A flexible-date flight price tracker with a search mechanism Google Flights
+and Skyscanner don't offer: **both your departure and your return float freely
 inside a window, bounded by a min/max trip length.** The tracker hunts
 the cheapest `(departure, return)` combination across thousands of date
-pairs, three times a week, on a $0/month stack — and tells you the exact
+pairs, three times a week, on a €0/month stack. It tells you the exact
 API budget of every search **before** it runs, as a guaranteed upper
 bound.
 
-First corridor: **Spain (MAD/BCN) → Nairobi (NBO)** — live as the public
+First corridor: **Spain (MAD/BCN) → Nairobi (NBO)**, live as the public
 demo on the web app. The system is multi-user (invite-only) and fully
 route-agnostic.
 
@@ -29,10 +29,10 @@ GitHub Actions cron (Mon/Wed/Sat)          Vercel (Next.js 16)
 - **Quota ledger** (`lib/quota.py`): charge-before-call spend events, one
   per HTTP attempt; provider headers re-anchor pools; reservations are
   single-statement compare-and-swap (no transactions needed on Turso's
-  autocommit HTTP API). *Predicted = guaranteed upper bound* — a run can
+  autocommit HTTP API). *Predicted = guaranteed upper bound.* A run can
   spend less than quoted, never more; searches that don't fit are
   skipped with a recorded reason, never silently degraded.
-  **This is the core of the project — the full design is in
+  **This is the core of the project. The full design is in
   [docs/ENGINE.md](docs/ENGINE.md)**: how to shadow quota meters you
   don't own, reserve whole jobs against them with lock-free CAS, and
   survive resets you're never told about. Nothing in it is
@@ -48,13 +48,13 @@ GitHub Actions cron (Mon/Wed/Sat)          Vercel (Next.js 16)
 |---|---|---|
 | **Google Flights direct** | free, politeness-bounded | Verification: headless Chromium on the CI runner parses public result pages (probed: works from Actions IPs) |
 | **Kiwi** (RapidAPI) | 300/mo free → $5/mo for 20k (a config switch) | Discovery: one range-search sweeps a multi-week band, ~50 cheapest itineraries |
-| **SerpAPI** | 250/mo free | Managed verification — the contingency rail when the browser dies |
+| **SerpAPI** | 250/mo free | Managed verification, the contingency rail when the browser dies |
 | **Aviasales** (Travelpayouts) | soft-unlimited (cached 2-7d) | Broad cached sweep; carriers Google skips |
 | **SearchAPI.io** | 2 one-time credits left | Local break-glass for booking day; never in CI |
 
 Both trip types ride the full stack: round-trip and one-way each get
 Kiwi discovery, Google Flights verification, the SerpAPI contingency,
-and Aviasales corroboration — with per-source upper bounds quoted at
+and Aviasales corroboration, with per-source upper bounds quoted at
 creation time.
 
 ## Quick start (local development)
@@ -86,7 +86,7 @@ preview provably equal to the Python planner's geometry.
 run_batch.py             # multi-search batch runner (what CI executes)
 run_scan.py              # legacy single-route runner (local fallback)
 routes/<name>.yaml       # seed config (DB is the source of truth)
-docs/ENGINE.md           # the quota engine design — start here
+docs/ENGINE.md           # the quota engine design; start here
 lib/                     # planner, quota ledger, source clients,
                          # alerts, scan ops, route store
 scripts/                 # CI probes, summaries, notifications, secrets
@@ -97,11 +97,11 @@ tests/                   # 165+ offline fixture-driven tests
 
 ## Honest limits
 
-Not a booking site — prices are observations from free sources and can
+Not a booking site. Prices are observations from free sources and can
 be hours old; verify before paying. Some sources scrape public pages
 politely (tens of queries per scan). Free-tier capacity is deliberately
 small (the owner + a couple of guest searches) until the $5 Kiwi switch
-flips. Saudia doesn't appear in Google Flights on the MAD-NBO corridor —
+flips. Saudia doesn't appear in Google Flights on the MAD-NBO corridor,
 a known blind spot.
 
 ## Tests

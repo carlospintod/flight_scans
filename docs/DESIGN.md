@@ -1,5 +1,14 @@
 # Phosphor — the flight_scans design system
 
+> **2026-07-12: superseded in part.** The token layer migrated to
+> **Phosphor v4 "build × measure"** (the 99 umbrella system): Mocha
+> grounds, `signature` mauve as the brand accent, matrix green retired to
+> `good` (live/cheap/fresh only — the three ladders keep their meanings).
+> See `MIGRATION-NOTES.md` (repo root) for the mapping and decisions;
+> token values live in `web/src/app/globals.css`. The recipes, voice and
+> ladder semantics below still hold; hex values and `matrix` class names
+> are historical until this doc's rewrite.
+
 The interface has one idea: **a flight tracker that reads like a terminal
 you trust.** Dark like a shell, monospace for everything that carries
 data, a single phosphor-green accent that only ever means *live, cheap,

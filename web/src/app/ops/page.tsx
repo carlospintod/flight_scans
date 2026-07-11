@@ -44,7 +44,7 @@ export default async function OpsPage() {
 
   return (
     <div className="space-y-10">
-      <h1 className="font-mono text-lg text-fg-bright">
+      <h1 className="font-mono text-lg text-text-bright">
         OPS · {ROUTE_ID}
       </h1>
 
@@ -66,7 +66,7 @@ export default async function OpsPage() {
           {config ? (
             <ConfigEditor initial={config} />
           ) : (
-            <p className="font-mono text-sm text-fg-mid">
+            <p className="font-mono text-sm text-text-mid">
               No config row in the DB yet — run one scan first.
             </p>
           )}
@@ -83,33 +83,33 @@ export default async function OpsPage() {
                 : null;
             const barColor =
               pct === null
-                ? "bg-fg-dim"
+                ? "bg-hint"
                 : pct > 0.4
-                  ? "bg-matrix-dim"
+                  ? "bg-good"
                   : pct > 0.15
                     ? "bg-amber"
-                    : "bg-danger";
+                    : "bg-red";
             return (
               <Card key={q.source}>
-                <div className="font-mono text-[11px] uppercase tracking-wider text-fg-mid">
+                <div className="font-mono text-[11px] uppercase tracking-wider text-text-mid">
                   {QUOTA_LABELS[q.source] ?? q.source}
                 </div>
-                <div className="mt-1 font-mono text-2xl text-fg-bright">
+                <div className="mt-1 font-mono text-2xl text-text-bright">
                   {q.remaining ?? "?"}
-                  <span className="text-sm text-fg-dim">
+                  <span className="text-sm text-hint">
                     {" "}
                     / {q.limitTotal ?? "?"}
                   </span>
                 </div>
                 {pct !== null && (
-                  <div className="mt-2 h-1 w-full rounded bg-bg-3">
+                  <div className="mt-2 h-1 w-full rounded-card bg-bg3">
                     <div
-                      className={`h-1 rounded ${barColor}`}
+                      className={`h-1 rounded-card ${barColor}`}
                       style={{ width: `${Math.round(pct * 100)}%` }}
                     />
                   </div>
                 )}
-                <div className="mt-2 font-mono text-[10px] text-fg-dim">
+                <div className="mt-2 font-mono text-[10px] text-hint">
                   checked {ageDays(q.checkedAt)}d ago
                   {q.resetsAt &&
                     ` · resets ${q.resetsAt.slice(0, 10)}`}
@@ -118,7 +118,7 @@ export default async function OpsPage() {
             );
           })}
           {quotas.length === 0 && (
-            <p className="font-mono text-sm text-fg-mid">
+            <p className="font-mono text-sm text-text-mid">
               No quota snapshots yet — they refresh as scans run.
             </p>
           )}
@@ -130,7 +130,7 @@ export default async function OpsPage() {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse font-mono text-[12px]">
             <thead>
-              <tr className="border-b border-line-bright text-left text-[10px] uppercase tracking-wider text-fg-dim">
+              <tr className="border-b border-border-bright text-left text-[10px] uppercase tracking-wider text-hint">
                 <th className="py-2 pr-4">Started</th>
                 <th className="py-2 pr-4">Trigger</th>
                 <th className="py-2 pr-4">Sources</th>
@@ -141,18 +141,18 @@ export default async function OpsPage() {
             </thead>
             <tbody>
               {scans.map((s) => (
-                <tr key={s.startedAt} className="border-b border-line">
+                <tr key={s.startedAt} className="border-b border-border">
                   <td className="py-2 pr-4 whitespace-nowrap">
                     {s.startedAt.replace("T", " ").replace("Z", "")}
                   </td>
                   <td className="py-2 pr-4">{s.trigger}</td>
-                  <td className="max-w-[220px] truncate py-2 pr-4 text-fg-mid">
+                  <td className="max-w-[220px] truncate py-2 pr-4 text-text-mid">
                     {s.sources}
                   </td>
                   <td className="py-2 pr-4">{s.rowsStored}</td>
                   <td className="py-2 pr-4">
                     {s.alertsFired > 0 ? (
-                      <span className="text-matrix">{s.alertsFired}</span>
+                      <span className="text-good">{s.alertsFired}</span>
                     ) : (
                       0
                     )}
@@ -160,10 +160,10 @@ export default async function OpsPage() {
                   <td
                     className={`py-2 ${
                       s.status === "ok"
-                        ? "text-matrix-dim"
+                        ? "text-good"
                         : s.status === "degraded"
                           ? "text-amber"
-                          : "text-danger"
+                          : "text-red"
                     }`}
                   >
                     {s.status}
@@ -172,7 +172,7 @@ export default async function OpsPage() {
               ))}
               {scans.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-3 text-fg-mid">
+                  <td colSpan={6} className="py-3 text-text-mid">
                     No scans recorded yet.
                   </td>
                 </tr>

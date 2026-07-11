@@ -1,6 +1,6 @@
 export function SectionHeading({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="mb-3 border-b border-line pb-1.5 font-mono text-[11px] font-semibold uppercase tracking-[2px] text-matrix">
+    <h2 className="mb-3 border-b border-border pb-1.5 font-mono text-[11px] font-semibold uppercase tracking-[2px] text-signature">
       {children}
     </h2>
   );
@@ -15,7 +15,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-card border border-line bg-bg-2 p-4 ${className}`}
+      className={`rounded-card border border-border bg-bg2 p-4 ${className}`}
     >
       {children}
     </div>

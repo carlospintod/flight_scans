@@ -36,7 +36,7 @@ export async function SearchRadar({ w }: { w: RouteWindow }) {
     <div className="space-y-10">
       <section>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <h1 className="font-mono text-sm text-fg-mid">
+          <h1 className="font-mono text-sm text-text-mid">
             {w.origins.join("/")} → {w.destinations.join("/")} ·{" "}
             {oneWay
               ? `one-way · depart ${fmtDate(w.earliestDeparture)} – ${fmtDate(w.latestReturn)}`
@@ -67,7 +67,7 @@ export async function SearchRadar({ w }: { w: RouteWindow }) {
           <div className="space-y-4">
             {w.origins.map((origin, i) => (
               <Card key={origin}>
-                <div className="mb-1 font-mono text-[11px] uppercase tracking-wider text-fg-mid">
+                <div className="mb-1 font-mono text-[11px] uppercase tracking-wider text-text-mid">
                   {origin} → {w.destinations.join("/")}
                 </div>
                 <Heatmap cells={grids[i] ?? []} currency={w.currency} />

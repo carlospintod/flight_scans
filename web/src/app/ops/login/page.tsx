@@ -30,7 +30,7 @@ export default function LoginPage() {
 
   return (
     <div className="mx-auto max-w-sm pt-16">
-      <h1 className="mb-6 font-mono text-lg text-fg-bright">
+      <h1 className="mb-6 font-mono text-lg text-text-bright">
         OPERATOR LOGIN
       </h1>
       <form onSubmit={submit} className="space-y-4">
@@ -40,17 +40,17 @@ export default function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           placeholder="password"
           autoFocus
-          className="w-full rounded-card border border-line bg-bg-2 px-3 py-2.5 font-mono text-sm text-fg-bright outline-none focus:border-matrix-dim"
+          className="w-full rounded-card border border-border bg-bg2 px-3 py-2.5 font-mono text-sm text-text-bright outline-none focus:border-signature-dim"
         />
         <button
           type="submit"
           disabled={busy || !password}
-          className="w-full rounded-card border border-matrix-dim bg-bg-2 px-3 py-2.5 font-mono text-sm font-semibold tracking-wider text-matrix hover:shadow-glow disabled:opacity-40"
+          className="w-full rounded-card border border-signature-dim bg-bg2 px-4 py-2.5 font-mono text-sm font-semibold tracking-wider text-signature hover:shadow-glow-sig disabled:opacity-40"
         >
           {busy ? "..." : "ENTER"}
         </button>
         {error && (
-          <p className="font-mono text-[12px] text-danger">{error}</p>
+          <p className="font-mono text-[12px] text-red">{error}</p>
         )}
       </form>
     </div>

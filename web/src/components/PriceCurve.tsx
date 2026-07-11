@@ -14,7 +14,7 @@ export function PriceCurve({
 }) {
   if (points.length === 0) {
     return (
-      <p className="font-mono text-sm text-fg-mid">
+      <p className="font-mono text-sm text-text-mid">
         No one-way prices inside the window yet — the next scan fills this in.
       </p>
     );
@@ -25,26 +25,26 @@ export function PriceCurve({
     tooltip: {
       trigger: "axis",
       backgroundColor: t.bg2,
-      borderColor: t.lineBright,
-      textStyle: { color: t.fg, fontFamily: t.mono, fontSize: 12 },
+      borderColor: t.borderBright,
+      textStyle: { color: t.text, fontFamily: t.mono, fontSize: 12 },
       valueFormatter: (v) => `${v} ${currency}`,
     },
     xAxis: {
       type: "category",
       data: points.map((p) => p.departureDate),
       axisLabel: {
-        color: t.fgMid, fontFamily: t.mono, fontSize: 10, rotate: 45,
+        color: t.textMid, fontFamily: t.mono, fontSize: 10, rotate: 45,
         formatter: (d: string) => d.slice(5),
       },
-      axisLine: { lineStyle: { color: t.line } },
+      axisLine: { lineStyle: { color: t.border } },
     },
     yAxis: {
       type: "value",
       scale: true,
       name: `price (${currency})`,
-      nameTextStyle: { color: t.fgDim, fontFamily: t.mono, fontSize: 10 },
-      axisLabel: { color: t.fgMid, fontFamily: t.mono, fontSize: 10 },
-      splitLine: { lineStyle: { color: t.line } },
+      nameTextStyle: { color: t.hint, fontFamily: t.mono, fontSize: 10 },
+      axisLabel: { color: t.textMid, fontFamily: t.mono, fontSize: 10 },
+      splitLine: { lineStyle: { color: t.border } },
     },
     series: [
       {
@@ -52,8 +52,8 @@ export function PriceCurve({
         smooth: true,
         showSymbol: true,
         symbolSize: 5,
-        lineStyle: { width: 2, color: t.matrix },
-        itemStyle: { color: t.matrix },
+        lineStyle: { width: 2, color: t.good },
+        itemStyle: { color: t.good },
         areaStyle: { color: "rgba(0,255,65,0.06)" },
         data: points.map((p) => p.price),
       },

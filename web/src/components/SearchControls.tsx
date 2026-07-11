@@ -37,7 +37,7 @@ export function SearchControls({
 
   if (status === "ended") {
     return (
-      <span className="font-mono text-[11px] text-fg-dim">
+      <span className="font-mono text-[11px] text-hint">
         window ended — capacity freed
       </span>
     );
@@ -48,17 +48,17 @@ export function SearchControls({
       <button
         onClick={() => patch({ action: status === "active" ? "pause" : "resume" })}
         disabled={busy}
-        className="rounded border border-line-bright px-2.5 py-1 font-mono text-[11px] tracking-wider text-fg hover:border-matrix-dim disabled:opacity-40"
+        className="rounded-card border border-border-bright px-2.5 py-1 font-mono text-[11px] tracking-wider text-text hover:border-signature-dim disabled:opacity-40"
       >
         {status === "active" ? "PAUSE" : "RESUME"}
       </button>
-      <label className="flex items-center gap-1.5 font-mono text-[11px] text-fg-dim">
+      <label className="flex items-center gap-1.5 font-mono text-[11px] text-hint">
         push
         <select
           value={notify}
           disabled={busy}
           onChange={(e) => patch({ notify: e.target.value })}
-          className="rounded border border-line bg-bg px-1.5 py-1 font-mono text-[11px] text-fg outline-none focus:border-matrix-dim"
+          className="rounded-card border border-border bg-bg px-1.5 py-1 font-mono text-[11px] text-text outline-none focus:border-signature-dim"
         >
           <option value="every_run">every run</option>
           <option value="alerts_only">alerts only</option>
@@ -66,7 +66,7 @@ export function SearchControls({
         </select>
       </label>
       {error && (
-        <span className="font-mono text-[11px] text-danger">{error}</span>
+        <span className="font-mono text-[11px] text-red">{error}</span>
       )}
     </div>
   );

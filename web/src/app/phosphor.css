@@ -1,0 +1,132 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Phosphor v4 device subset — vendored from
+   99tools/design-system/components.css (v4.4, 2026-07-12), adapted to
+   this app's Tailwind token names (var(--color-*), var(--font-*)).
+   Marketing-tier devices for the LANDING only: stage/atmos/field,
+   aurora, glow, asides, reveals, terminal window, signals ticker.
+   App UIs stay T1-only — do not spread these classes into tool views.
+   Behaviors: /public/phosphor.js (vendored), loaded on the landing.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── layering shell: full-bleed atmosphere, content above ── */
+.bleed { margin-inline: calc(50% - 50vw); }
+.stage { position: relative; }
+.stage > :not(.atmos):not(.aurora) { position: relative; z-index: 1; }
+.atmos {
+  position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+  -webkit-mask-image: linear-gradient(#000 72%, transparent);
+  mask-image: linear-gradient(#000 72%, transparent);
+}
+.field-canvas { position: absolute; inset: 0; display: block; }
+
+/* ── aurora: the two verbs as slow drifting lights (T0, ≥20s) ── */
+.aurora { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.aurora i {
+  position: absolute; width: 44vw; height: 44vw; min-width: 320px; min-height: 320px;
+  border-radius: 50%; filter: blur(110px); opacity: 0.09;
+}
+.aurora i:first-child { background: var(--color-build); top: -30%; left: -16%; animation: drift-a 28s ease-in-out infinite alternate; }
+.aurora i:last-child { background: var(--color-measure); bottom: -42%; right: -14%; animation: drift-b 36s ease-in-out infinite alternate; }
+@keyframes drift-a { to { transform: translate(7vw, 5vh) scale(1.1); } }
+@keyframes drift-b { to { transform: translate(-6vw, -4vh) scale(0.94); } }
+
+/* ── verb glow (dark privilege) ── */
+.glow-b { text-shadow: 0 0 30px color-mix(in srgb, var(--color-build) 40%, transparent); }
+
+/* ── the two voices: micro label + human asides ── */
+.label99 {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-mid);
+}
+.aside {
+  font-family: var(--font-sans); font-style: italic; font-size: 17px;
+  color: var(--color-text-mid); letter-spacing: 0.01em;
+}
+.aside--s { font-size: 12px; color: var(--color-hint); }
+
+/* ── T2 reveals: gated on html.js (added inline in layout so there is
+      no flash); phosphor.js observes and force-reveals after 1.4s ── */
+html.js .reveal, html.js .reveal-stagger > * {
+  opacity: 0; transform: translateY(14px);
+  transition: opacity 0.55s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+html.js .reveal.in, html.js .reveal-stagger.in > * { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  html.js .reveal, html.js .reveal-stagger > * { opacity: 1 !important; transform: none !important; transition: none !important; }
+}
+
+/* ── terminal window: the console voice, framed ── */
+.term {
+  background: var(--color-bg); border: 1px solid var(--color-border);
+  border-radius: var(--radius-panel); overflow: hidden;
+}
+.term__bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px; background: var(--color-bg2); border-bottom: 1px solid var(--color-border);
+}
+.term__bar .dots { display: flex; gap: 6px; }
+.term__bar .dots i { width: 10px; height: 10px; border-radius: 50%; opacity: 0.7; }
+.term__bar .dots i:nth-child(1) { background: var(--color-red); }
+.term__bar .dots i:nth-child(2) { background: var(--color-amber); }
+.term__bar .dots i:nth-child(3) { background: var(--color-good); }
+.term__bar .path { font-family: var(--font-mono); font-size: 11px; color: var(--color-hint); letter-spacing: 0.08em; }
+.term__body { padding: 16px; font-family: var(--font-mono); font-size: 13px; line-height: 2; }
+.term .ln { display: block; }
+.term .ln--cmd { color: var(--color-text-bright); font-weight: 500; }
+.term .ln--cmd::before { content: "$ "; color: var(--color-good); font-weight: 600; }
+.term .ln--ok { color: var(--color-soft-green); }
+.term .ln--warn { color: var(--color-amber); }
+.term .ln--err { color: var(--color-soft-red); }
+.term .ln--info { color: var(--color-cyan99); }
+.term .ln--dim { color: var(--color-text-mid); }
+.term .cursor { color: var(--color-good); animation: blink 1s step-end infinite; }
+html.js .term .ln {
+  opacity: 0; transform: translateY(4px);
+  transition: opacity 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition-delay: var(--d, 0ms);
+}
+html.js .term.in .ln { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  html.js .term .ln { opacity: 1 !important; transform: none !important; }
+}
+
+/* ── status dot (ticker head) ── */
+.status-dot {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+}
+.status-dot i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.status-dot--live { color: var(--color-good); }
+.status-dot--live i { box-shadow: 0 0 8px rgb(166 227 161 / 0.55); animation: pulse-good 2.4s ease-in-out infinite; }
+@keyframes pulse-good { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@keyframes reveal { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+/* ── the signals ticker: a price tracker that logs its own signals ── */
+.ticker {
+  position: fixed; right: 16px; bottom: 16px; z-index: 20;
+  width: 264px; max-width: calc(100vw - 32px);
+  background: color-mix(in srgb, var(--color-bg2) 94%, transparent);
+  border: 1px solid var(--color-border); border-radius: var(--radius-panel);
+  font-size: 10px; overflow: hidden; backdrop-filter: blur(6px);
+}
+.ticker__head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 12px; border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-mid); text-transform: uppercase; letter-spacing: 0.08em;
+  font-family: var(--font-mono);
+}
+.ticker__head .status-dot { font-size: 10px; }
+.ticker__head button {
+  margin-left: auto; background: none; border: 0; color: var(--color-hint);
+  font-family: var(--font-mono); font-size: 12px; line-height: 1; padding: 0 2px; cursor: pointer;
+}
+.ticker__head button:hover { color: var(--color-red); }
+.ticker__log { padding: 5px 12px 7px; display: flex; flex-direction: column; gap: 2px; font-family: var(--font-mono); }
+.ticker__log div { color: var(--color-text-mid); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticker__log div b { color: var(--color-signature); font-weight: 500; }
+.ticker__log div.new { animation: reveal 0.3s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@media (max-width: 720px) { .ticker { display: none; } } /* phones: no toys over content */
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora i { animation: none !important; }
+}

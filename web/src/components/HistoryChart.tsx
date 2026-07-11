@@ -5,12 +5,12 @@ import { EChart, chartTheme as t } from "./EChart";
 import type { HistoryPoint } from "@/lib/types";
 
 const SOURCE_COLORS: Record<string, string> = {
-  googleflights: t.matrix,
+  googleflights: t.good,
   serpapi: t.cyan,
   searchapi: t.amber,
-  kiwi: "#b57bff",
-  aviasales: "#ff8c42",
-  skyscanner: t.fgMid,
+  kiwi: t.kiwi,
+  aviasales: t.aviasales,
+  skyscanner: t.textMid,
 };
 
 /** Price-over-time per source for one itinerary — mirrors the Streamlit
@@ -24,7 +24,7 @@ export function HistoryChart({
 }) {
   if (points.length === 0) {
     return (
-      <p className="font-mono text-sm text-fg-mid">
+      <p className="font-mono text-sm text-text-mid">
         No price history for this itinerary yet.
       </p>
     );
@@ -35,27 +35,27 @@ export function HistoryChart({
     grid: { left: 52, right: 16, top: 30, bottom: 40 },
     legend: {
       top: 0,
-      textStyle: { color: t.fgMid, fontFamily: t.mono, fontSize: 11 },
+      textStyle: { color: t.textMid, fontFamily: t.mono, fontSize: 11 },
       itemWidth: 14,
     },
     tooltip: {
       trigger: "axis",
       backgroundColor: t.bg2,
-      borderColor: t.lineBright,
-      textStyle: { color: t.fg, fontFamily: t.mono, fontSize: 12 },
+      borderColor: t.borderBright,
+      textStyle: { color: t.text, fontFamily: t.mono, fontSize: 12 },
       valueFormatter: (v) => `${v} ${currency}`,
     },
     xAxis: {
       type: "time",
-      axisLabel: { color: t.fgMid, fontFamily: t.mono, fontSize: 10 },
-      axisLine: { lineStyle: { color: t.line } },
+      axisLabel: { color: t.textMid, fontFamily: t.mono, fontSize: 10 },
+      axisLine: { lineStyle: { color: t.border } },
       splitLine: { show: false },
     },
     yAxis: {
       type: "value",
       scale: true,
-      axisLabel: { color: t.fgMid, fontFamily: t.mono, fontSize: 10 },
-      splitLine: { lineStyle: { color: t.line } },
+      axisLabel: { color: t.textMid, fontFamily: t.mono, fontSize: 10 },
+      splitLine: { lineStyle: { color: t.border } },
     },
     series: sources.map((s) => ({
       name: s,
@@ -63,7 +63,7 @@ export function HistoryChart({
       showSymbol: true,
       symbolSize: 6,
       lineStyle: { width: 1.5 },
-      color: SOURCE_COLORS[s] ?? t.fg,
+      color: SOURCE_COLORS[s] ?? t.text,
       data: points
         .filter((p) => p.source === s)
         .map((p) => [p.snapshotAt, p.price]),

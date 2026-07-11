@@ -39,30 +39,30 @@ export default function JoinPage() {
 
   return (
     <div className="mx-auto max-w-md pt-16 text-center">
-      <h1 className="cursor-blink font-mono text-xl font-semibold tracking-[2px] text-fg-bright">
+      <h1 className="cursor-blink font-mono text-xl font-semibold tracking-[2px] text-text-bright">
         FLIGHT_SCANS
       </h1>
       {token === null ? (
-        <p className="mt-6 font-mono text-sm text-fg-mid">
+        <p className="mt-6 font-mono text-sm text-text-mid">
           FlightScans is invite-only. If you were sent an invite link,
           make sure you opened it in full — and if your session expired,
           ask the owner for a fresh link.
         </p>
       ) : (
         <>
-          <p className="mt-6 text-sm text-fg">
+          <p className="mt-6 text-sm text-text">
             You&apos;ve been invited to track flexible-date flight prices.
             This link signs you in — it works once.
           </p>
           <button
             onClick={enter}
             disabled={state === "busy"}
-            className="mt-6 rounded-card border border-matrix-dim bg-bg-2 px-6 py-3 font-mono text-sm font-semibold tracking-wider text-matrix hover:shadow-glow disabled:opacity-40"
+            className="mt-6 rounded-card border border-signature-dim bg-bg2 px-4 py-2.5 font-mono text-sm font-semibold tracking-wider text-signature hover:shadow-glow-sig disabled:opacity-40"
           >
             {state === "busy" ? "..." : "ENTER →"}
           </button>
           {typeof state === "object" && (
-            <p className="mt-4 font-mono text-[12px] text-danger">
+            <p className="mt-4 font-mono text-[12px] text-red">
               {state.error}
             </p>
           )}

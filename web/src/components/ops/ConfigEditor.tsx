@@ -43,10 +43,10 @@ export function ConfigEditor({ initial }: { initial: RouteConfigJson }) {
   }
 
   const label =
-    "block font-mono text-[10px] uppercase tracking-wider text-fg-dim mb-1";
+    "block font-mono text-[10px] uppercase tracking-wider text-hint mb-1";
   const input =
-    "w-full rounded-card border border-line bg-bg px-2.5 py-2 font-mono " +
-    "text-[13px] text-fg-bright outline-none focus:border-matrix-dim";
+    "w-full rounded-card border border-border bg-bg px-2.5 py-2 font-mono " +
+    "text-[13px] text-text-bright outline-none focus:border-signature-dim";
 
   return (
     <div className="space-y-4">
@@ -132,22 +132,22 @@ export function ConfigEditor({ initial }: { initial: RouteConfigJson }) {
         <button
           onClick={save}
           disabled={state === "busy"}
-          className="rounded-card border border-line-bright bg-bg-2 px-4 py-2 font-mono text-[13px] font-semibold tracking-wider text-fg-bright hover:border-matrix-dim disabled:opacity-40"
+          className="rounded-card border border-border-bright bg-bg2 px-4 py-2 font-mono text-[13px] font-semibold tracking-wider text-text-bright hover:border-signature-dim disabled:opacity-40"
         >
           {state === "busy" ? "SAVING..." : "SAVE CONFIG"}
         </button>
         {state === "saved" && (
-          <span className="font-mono text-[12px] text-matrix">
+          <span className="font-mono text-[12px] text-good">
             saved — next scan uses these settings
           </span>
         )}
         {typeof state === "object" && (
-          <span className="font-mono text-[12px] text-danger">
+          <span className="font-mono text-[12px] text-red">
             {state.error}
           </span>
         )}
       </div>
-      <p className="font-mono text-[11px] leading-5 text-fg-dim">
+      <p className="font-mono text-[11px] leading-5 text-hint">
         Saved to the cloud DB (routes.config_json). Both the scheduled scans
         and this site read it — origins, alert thresholds and cadence can be
         edited via the JSON in the repo if ever needed.

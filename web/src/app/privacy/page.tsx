@@ -10,7 +10,7 @@ export const metadata = {
 export default function PrivacyPage() {
   return (
     <div className="max-w-2xl space-y-6">
-      <h1 className="font-mono text-lg text-fg-bright">PRIVACY</h1>
+      <h1 className="font-mono text-lg text-text-bright">PRIVACY</h1>
       <Card className="space-y-4 text-sm leading-relaxed">
         <p>
           This is an invite-only hobby tool, not a commercial service.
@@ -18,18 +18,18 @@ export default function PrivacyPage() {
         </p>
         <ul className="list-inside list-disc space-y-2">
           <li>
-            <span className="text-fg-bright">Your name and email</span> —
+            <span className="text-text-bright">Your name and email</span> —
             so the owner knows who an account belongs to. Login works by
             personal links; email is never used for marketing and there is
             no newsletter.
           </li>
           <li>
-            <span className="text-fg-bright">Your searches</span> — the
+            <span className="text-text-bright">Your searches</span> — the
             routes, date windows, and stay lengths you track, plus the
             flight prices collected for them.
           </li>
           <li>
-            <span className="text-fg-bright">Operational records</span> —
+            <span className="text-text-bright">Operational records</span> —
             when scans ran and how much API budget they used.
           </li>
         </ul>
@@ -41,13 +41,13 @@ export default function PrivacyPage() {
           search public yourself.
         </p>
         <p>
-          <span className="text-fg-bright">Deleting your data:</span> the
+          <span className="text-text-bright">Deleting your data:</span> the
           Account page has a delete button that permanently removes your
           account, searches, and every collected price row — immediately,
           no backups kept beyond the database provider&apos;s 1-day
           point-in-time window.
         </p>
-        <p className="font-mono text-[11px] text-fg-dim">
+        <p className="font-mono text-[11px] text-hint">
           Contact: the person who invited you.
         </p>
       </Card>

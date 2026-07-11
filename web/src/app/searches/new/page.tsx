@@ -96,31 +96,31 @@ export default function NewSearchPage() {
   }
 
   const label =
-    "block font-mono text-[10px] uppercase tracking-wider text-fg-dim mb-1";
+    "block font-mono text-[10px] uppercase tracking-wider text-hint mb-1";
   const input =
-    "w-full rounded-card border border-line bg-bg px-2.5 py-2.5 font-mono " +
-    "text-[14px] text-fg-bright outline-none focus:border-matrix-dim";
+    "w-full rounded-card border border-border bg-bg px-2.5 py-2.5 font-mono " +
+    "text-[14px] text-text-bright outline-none focus:border-signature-dim";
 
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <div>
-        <h1 className="font-mono text-lg text-fg-bright">NEW SEARCH</h1>
-        <p className="mt-1 text-sm text-fg-mid">
+        <h1 className="font-mono text-lg text-text-bright">NEW SEARCH</h1>
+        <p className="mt-1 text-sm text-text-mid">
           {oneWay
             ? "One-way: your departure floats across the whole window. The tracker hunts the cheapest day to fly out, every scan."
             : "Both your departure and your return float freely — you set the window and how long you want to stay. The tracker hunts the cheapest combination, every scan."}
         </p>
       </div>
 
-      <div className="inline-flex overflow-hidden rounded-card border border-line">
+      <div className="inline-flex overflow-hidden rounded-card border border-border">
         {(["round_trip", "one_way"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTripType(t)}
             className={`px-4 py-2 font-mono text-[12px] tracking-wider ${
               tripType === t
-                ? "bg-bg-3 text-matrix"
-                : "bg-bg-2 text-fg-mid hover:text-fg"
+                ? "bg-bg3 text-signature"
+                : "bg-bg2 text-text-mid hover:text-text"
             }`}
           >
             {t === "round_trip" ? "ROUND TRIP" : "ONE WAY"}
@@ -178,22 +178,22 @@ export default function NewSearchPage() {
         )}
       </div>
 
-      <div className="rounded-card border border-line bg-bg-2 p-4">
-        <div className="font-mono text-[11px] uppercase tracking-wider text-fg-dim">
+      <div className="rounded-card border border-border bg-bg2 p-4">
+        <div className="font-mono text-[11px] uppercase tracking-wider text-hint">
           What this search costs — guaranteed upper bound
         </div>
         {preview ? (
           <>
-            <p className="mt-2 font-mono text-[13px] text-fg">
+            <p className="mt-2 font-mono text-[13px] text-text">
               ~{preview.kiwi + preview.aviasales} discovery lookups per scan
               · up to {preview.googleflights} verifications per scan ·
               3 scans/week
             </p>
             <details className="mt-2">
-              <summary className="cursor-pointer font-mono text-[11px] text-fg-mid">
+              <summary className="cursor-pointer font-mono text-[11px] text-text-mid">
                 per-source detail
               </summary>
-              <ul className="mt-1 space-y-0.5 font-mono text-[12px] text-fg-mid">
+              <ul className="mt-1 space-y-0.5 font-mono text-[12px] text-text-mid">
                 <li>kiwi discovery ≤{preview.kiwi}/scan</li>
                 <li>google flights verification ≤{preview.googleflights}/scan</li>
                 <li>serpapi contingency ≤{preview.serpapi_contingency}/scan
@@ -202,8 +202,8 @@ export default function NewSearchPage() {
               </ul>
             </details>
             <p className={`mt-3 font-mono text-[12px] ${
-              fits === false ? "text-danger"
-              : fits === true ? "text-matrix" : "text-fg-dim"}`}>
+              fits === false ? "text-red"
+              : fits === true ? "text-good" : "text-hint"}`}>
               {fits === true && "✓ fits the shared capacity"}
               {fits === false &&
                 "✗ over shared capacity — narrow the window or ask the owner"}
@@ -211,7 +211,7 @@ export default function NewSearchPage() {
             </p>
           </>
         ) : (
-          <p className="mt-2 font-mono text-[12px] text-fg-dim">
+          <p className="mt-2 font-mono text-[12px] text-hint">
             fill the form to see the exact budget
           </p>
         )}
@@ -220,14 +220,14 @@ export default function NewSearchPage() {
       <button
         onClick={create}
         disabled={!complete || state === "busy" || fits === false}
-        className="w-full rounded-card border border-matrix-dim bg-bg-2 px-4 py-3 font-mono text-sm font-semibold tracking-wider text-matrix hover:shadow-glow disabled:opacity-40"
+        className="w-full rounded-card border border-signature-dim bg-bg2 px-4 py-2.5 font-mono text-sm font-semibold tracking-wider text-signature hover:shadow-glow-sig disabled:opacity-40"
       >
         {state === "busy" ? "CREATING…" : "▶ START TRACKING"}
       </button>
       {typeof state === "object" && (
-        <p className="font-mono text-[12px] text-danger">{state.error}</p>
+        <p className="font-mono text-[12px] text-red">{state.error}</p>
       )}
-      <p className="font-mono text-[11px] text-fg-dim">
+      <p className="font-mono text-[11px] text-hint">
         First results arrive with the next scheduled scan (Mon/Wed/Sat
         morning). ≤N numbers are hard ceilings — a scan can spend less,
         never more.

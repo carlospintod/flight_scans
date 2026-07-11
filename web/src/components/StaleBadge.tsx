@@ -2,9 +2,9 @@ import { ageDays, freshness } from "@/lib/format";
 import type { ScanRun } from "@/lib/types";
 
 const STYLES = {
-  fresh: { dot: "bg-matrix shadow-glow", text: "text-fg-mid" },
+  fresh: { dot: "bg-good shadow-glow-good", text: "text-text-mid" },
   aging: { dot: "bg-amber", text: "text-amber" },
-  stale: { dot: "bg-danger", text: "text-danger" },
+  stale: { dot: "bg-red", text: "text-red" },
 } as const;
 
 export function StaleBadge({ run }: { run: ScanRun | null }) {

@@ -29,7 +29,7 @@ export function AccountActions({ isOwner }: { isOwner: boolean }) {
     <div className="space-y-3">
       <button
         onClick={logout}
-        className="rounded-card border border-line-bright bg-bg-2 px-4 py-2 font-mono text-[13px] tracking-wider text-fg-bright hover:border-matrix-dim"
+        className="rounded-card border border-border-bright bg-bg2 px-4 py-2 font-mono text-[13px] tracking-wider text-text-bright hover:border-signature-dim"
       >
         SIGN OUT
       </button>
@@ -38,26 +38,26 @@ export function AccountActions({ isOwner }: { isOwner: boolean }) {
           {!confirming ? (
             <button
               onClick={() => setConfirming(true)}
-              className="rounded-card border border-line bg-bg-2 px-4 py-2 font-mono text-[13px] tracking-wider text-danger/80 hover:border-danger"
+              className="rounded-card border border-border bg-bg2 px-4 py-2 font-mono text-[13px] tracking-wider text-red/80 hover:border-red"
             >
               DELETE ACCOUNT…
             </button>
           ) : (
-            <div className="rounded-card border border-danger/50 bg-bg-2 p-3">
-              <p className="font-mono text-[12px] text-fg">
+            <div className="rounded-card border border-red/50 bg-bg2 p-3">
+              <p className="font-mono text-[12px] text-text">
                 This permanently deletes your account, searches, and all
                 collected prices. No undo.
               </p>
               <div className="mt-2 flex gap-2">
                 <button
                   onClick={deleteAccount}
-                  className="rounded-card border border-danger px-3 py-1.5 font-mono text-[12px] tracking-wider text-danger"
+                  className="rounded-card border border-red px-3 py-1.5 font-mono text-[12px] tracking-wider text-red"
                 >
                   DELETE EVERYTHING
                 </button>
                 <button
                   onClick={() => setConfirming(false)}
-                  className="rounded-card border border-line px-3 py-1.5 font-mono text-[12px] tracking-wider text-fg-mid"
+                  className="rounded-card border border-border px-3 py-1.5 font-mono text-[12px] tracking-wider text-text-mid"
                 >
                   CANCEL
                 </button>
@@ -67,7 +67,7 @@ export function AccountActions({ isOwner }: { isOwner: boolean }) {
         </div>
       )}
       {error && (
-        <p className="font-mono text-[12px] text-danger">{error}</p>
+        <p className="font-mono text-[12px] text-red">{error}</p>
       )}
     </div>
   );

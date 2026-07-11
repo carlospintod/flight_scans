@@ -38,18 +38,23 @@ export function EChart({
   return <div ref={ref} style={{ height }} className={className} />;
 }
 
-/** Shared dark-theme fragments matching the GTM99 tokens. */
+/** Shared dark-theme fragments — the ONE place chart hues live, synced
+ *  to the Phosphor v4 tokens in globals.css (canvas needs literal values;
+ *  keep these in step with the @theme block when tokens change). */
 export const chartTheme = {
-  fg: "#c8cad8",
-  fgMid: "#8e91a8",
-  fgDim: "#585b72",
-  line: "#1e1f32",
-  lineBright: "#2c2d44",
-  bg2: "#0f1018",
-  matrix: "#00ff41",
-  matrixDim: "#00b830",
-  cyan: "#00d4ff",
-  amber: "#ffcc00",
-  danger: "#ff4455",
+  text: "#cdd6f4",
+  textMid: "#a6adc8",
+  hint: "#7f849c",
+  border: "#313244",
+  borderBright: "#45475a",
+  bg: "#181825",
+  bg2: "#1e1e2e",
+  good: "#a6e3a1",       /* live / cheap — the price color */
+  softGreen: "#c2ecbe",  /* good, emphasized */
+  cyan: "#89b4fa",
+  amber: "#fab387",
+  red: "#ff6b81",
+  kiwi: "#b57bff",       /* tool-specific series hues (this repo only) */
+  aviasales: "#ff8c42",
   mono: "IBM Plex Mono, ui-monospace, monospace",
 } as const;

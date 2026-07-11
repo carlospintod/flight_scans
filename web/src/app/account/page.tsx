@@ -14,26 +14,26 @@ export default async function AccountPage() {
 
   return (
     <div className="max-w-lg space-y-8">
-      <h1 className="font-mono text-lg text-fg-bright">ACCOUNT</h1>
+      <h1 className="font-mono text-lg text-text-bright">ACCOUNT</h1>
       <Card>
         <dl className="space-y-2 font-mono text-[13px]">
           <div>
-            <dt className="text-[10px] uppercase tracking-wider text-fg-dim">
+            <dt className="text-[10px] uppercase tracking-wider text-hint">
               name
             </dt>
-            <dd className="text-fg-bright">{user.displayName ?? "—"}</dd>
+            <dd className="text-text-bright">{user.displayName ?? "—"}</dd>
           </div>
           <div>
-            <dt className="text-[10px] uppercase tracking-wider text-fg-dim">
+            <dt className="text-[10px] uppercase tracking-wider text-hint">
               email (contact only — login is by link)
             </dt>
-            <dd className="text-fg">{user.email ?? "—"}</dd>
+            <dd className="text-text">{user.email ?? "—"}</dd>
           </div>
           <div>
-            <dt className="text-[10px] uppercase tracking-wider text-fg-dim">
+            <dt className="text-[10px] uppercase tracking-wider text-hint">
               role
             </dt>
-            <dd className="text-fg">{user.role}</dd>
+            <dd className="text-text">{user.role}</dd>
           </div>
         </dl>
       </Card>
@@ -41,7 +41,7 @@ export default async function AccountPage() {
         <SectionHeading>Session & data</SectionHeading>
         <AccountActions isOwner={user.role === "owner"} />
       </section>
-      <p className="font-mono text-[11px] leading-5 text-fg-dim">
+      <p className="font-mono text-[11px] leading-5 text-hint">
         Lost your session on another device? Ask the owner for a fresh
         login link. Deleting your account removes your searches and every
         price row collected for them — permanently.
