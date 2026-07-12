@@ -590,3 +590,42 @@ def test_every_aviasales_price_method_is_metered():
     assert price_methods, "expected AviasalesClient to define price methods"
     missing = price_methods - set(METERED["aviasales"])
     assert not missing, f"unmetered AviasalesClient price methods: {missing}"
+
+
+def test_402_payment_required_floors_pool(conn):
+    """A 402 Payment Required (subscription/plan wall) floors the pool —
+    RapidAPI keeps decrementing + reporting the quota header on a 402, so
+    the header lies about availability. Observed 2026-07-11: kiwi showed
+    286/300 'remaining' while every call 402'd. Fail closed."""
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    ledger.record_anchor("kiwi", remaining=286, limit_total=300, origin="header")
+    fake = _FakeKiwi(fail_with="kiwi HTTP 402: Payment required")
+    guarded = GuardedClient(fake, ledger=ledger, source="kiwi",
+                            run_id="r", search_id="s")
+    with pytest.raises(RuntimeError):
+        guarded.range_search()
+    assert ledger.pool_state("kiwi").provider_view == 0   # floored
+    ev = conn.execute("SELECT result FROM spend_events "
+                      "ORDER BY event_id DESC LIMIT 1").fetchone()
+    assert ev["result"] == "402"
+    origin = conn.execute("SELECT origin FROM pool_anchors "
+                          "ORDER BY anchor_id DESC LIMIT 1").fetchone()[0]
+    assert origin == "quota_402_floor"
+
+
+def test_402_floored_pool_probes_every_run(conn):
+    """A payment-walled pool is disabled until a human fixes billing, so
+    needs_reset_probe returns True regardless of the reset day — the
+    liveness probe self-heals the moment the subscription is restored."""
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()   # kiwi reset_anchor_day=10
+    ledger.record_anchor("kiwi", remaining=0, limit_total=300,
+                         origin="quota_402_floor")
+    # No reset-day monkeypatch needed: the 402 floor short-circuits the
+    # date logic entirely.
+    assert ledger.needs_reset_probe("kiwi") is True
+    # A healthy re-anchor (billing fixed, probe succeeded) stops probing.
+    ledger.record_anchor("kiwi", remaining=300, limit_total=300,
+                         origin="reset_probe")
+    assert ledger.needs_reset_probe("kiwi") is False

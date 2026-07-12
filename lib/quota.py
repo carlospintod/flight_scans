@@ -151,12 +151,17 @@ class QuotaLedger:
             (source, remaining, limit_total, origin, _now_iso()),
         )
 
-    def floor_anchor(self, source: str) -> None:
+    def floor_anchor(self, source: str, *,
+                     origin: str = "quota_429_floor") -> None:
         """Force a monthly pool's baseline to 0 — used when a provider
-        returns a MONTHLY-quota 429 while our anchor still showed
-        availability (a stale seed). Only floors monthly pools, and only
-        when the current provider_view is still positive (so a genuine
-        reset isn't clobbered by a late-arriving 429 from before it)."""
+        signals the pool is unusable while our anchor still showed
+        availability (a stale seed). Two triggers: a MONTHLY-quota 429
+        (provider is really at ~0), or a 402 Payment Required (a
+        subscription/plan wall — RapidAPI keeps decrementing the quota
+        header on 402s, so the header lies about availability). Only
+        floors monthly pools, and only when the current provider_view is
+        still positive (so a genuine reset isn't clobbered by a late
+        signal from before it)."""
         pool = self._conn.execute(
             "SELECT pool_kind FROM quota_pools WHERE source = ?", (source,)
         ).fetchone()
@@ -165,10 +170,10 @@ class QuotaLedger:
         state = self.pool_state(source)
         if state and state.provider_view is not None and state.provider_view > 0:
             self.record_anchor(source, remaining=0, limit_total=None,
-                               origin="quota_429_floor")
-            LOG.warning("quota: %s returned MONTHLY 429 with anchor still "
-                        "positive (%s) — floored pool to 0 (stale anchor)",
-                        source, state.provider_view)
+                               origin=origin)
+            LOG.warning("quota: %s floored to 0 (%s) — anchor was still "
+                        "positive (%s), the header was lying",
+                        source, origin, state.provider_view)
 
     def needs_reset_probe(self, source: str) -> bool:
         """True when a monthly pool looks exhausted BUT its anchor
@@ -190,6 +195,12 @@ class QuotaLedger:
             return False
         if state.effective_available > 0:
             return False
+        # A pool floored for Payment Required (402) is disabled until a
+        # human fixes the subscription — probe EVERY run so it self-heals
+        # the moment billing is restored. The monthly reset-day rule
+        # below doesn't apply: a payment wall isn't tied to the cycle.
+        if state.baseline_origin == "quota_402_floor":
+            return True
         # Most recent expected reset date from the anchor day-of-month.
         today = datetime.now(timezone.utc).date()
         day = min(pool["reset_anchor_day"], 28)
@@ -638,16 +649,24 @@ class GuardedClient:
                 result = attr(*args, **kwargs)
             except Exception as exc:
                 msg = str(exc)
-                label = "429" if "429" in msg else "error"
+                label = "402" if "402" in msg else (
+                    "429" if "429" in msg else "error")
                 try:
                     self._ledger.mark(event_id, label)
-                    # 429-despite-available (design §6.3): a MONTHLY-quota
-                    # 429 means our anchor is stale (provider is really at
-                    # ~0). Force-anchor the pool to 0 so the NEXT run's
+                    # A source signals "unusable" two ways, both of which
+                    # force-anchor the pool to 0 so the NEXT run's
                     # reservations refuse it — fail closed — instead of
-                    # re-reserving units it can't spend. A per-second rate
-                    # limit is NOT exhaustion, so gate on "monthly".
-                    if label == "429" and "monthly" in msg.lower():
+                    # burning the quota on calls that can't succeed:
+                    #   * 402 Payment Required: a subscription/plan wall
+                    #     (RapidAPI still decrements + reports the quota
+                    #     header on a 402, so the header lies — floor it).
+                    #   * MONTHLY-quota 429: our anchor is stale, provider
+                    #     is really at ~0. A per-second rate-limit 429 is
+                    #     NOT exhaustion, so gate that path on "monthly".
+                    if label == "402":
+                        self._ledger.floor_anchor(
+                            self._source, origin="quota_402_floor")
+                    elif label == "429" and "monthly" in msg.lower():
                         self._ledger.floor_anchor(self._source)
                 except Exception:  # noqa: BLE001 — marking must not mask the real error
                     LOG.warning("quota: mark(%s) failed post-error", event_id)
