@@ -29,34 +29,14 @@ from datetime import datetime, timedelta, timezone
 
 LOG = logging.getLogger(__name__)
 
-# Sources deliberately absent (product plan cuts E1-E3): priceline,
-# skyscanner, searchapi (local break-glass, unmodeled), gflights2
-# (deferred to the paid milestone). Adding one later = one INSERT here
-# plus a manual bootstrap anchor from /ops.
-POOL_SEEDS: tuple[tuple, ...] = (
-    # (source, pool_kind, period_limit, reset_anchor_day, safety_margin,
-    #  per_search_cap, per_run_cap)
-    ("kiwi", "monthly", 300, 10, 15, 10, None),
-    ("serpapi", "monthly", 250, None, 25, 7, None),
-    ("aviasales", "rate_only", None, None, 0, None, None),
-    ("googleflights", "per_run", None, None, 0, 25, 30),
-)
-
-# Metered method -> worst-case units per invocation. The guard charges
-# these BEFORE the call. Methods not listed pass through unmetered
-# (source_id, check_quota, context-manager protocol...).
-METERED: dict[str, dict[str, int]] = {
-    "kiwi": {"range_search": 1, "round_trip_search": 1, "one_way_search": 1,
-             "one_way_range_search": 1},
-    "serpapi": {"point_query": 1, "booking_options": 1},
-    "flights_sky": {"search_roundtrip": 1, "search_one_way": 1,
-                    "flight_details": 1, "price_calendar": 1},
-    "searchapi": {"point_query": 1, "calendar": 1},
-    "googleflights": {"point_query": 1},
-    "aviasales": {"cheap_prices": 1, "prices_for_dates": 1,
-                  "latest_prices": 1, "one_way_month_prices": 1},
-    "skyscanner": {"point_query": 2, "search_airport": 1},
-}
+# POOL_SEEDS (pool config) and METERED (metered method -> worst-case
+# units, charged BEFORE the call) are now DERIVED from the declarative
+# source registry (lib/sources.py) — one place per source. Re-exported
+# here so existing `from lib.quota import POOL_SEEDS, METERED` keeps
+# working; a golden test pins them byte-identical to the old literals.
+# The seed schema: (source, pool_kind, period_limit, reset_anchor_day,
+# safety_margin, per_search_cap, per_run_cap).
+from .sources import METERED, POOL_SEEDS  # noqa: E402,F401 (re-export)
 
 
 class QuotaExceeded(RuntimeError):

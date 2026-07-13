@@ -62,20 +62,11 @@ def _log_search_id(search_id: str) -> str:
     return search_id
 
 
-# Role map for whole-role-blackout detection. R4's registry will own
-# this; until then it mirrors the planner's ladders. searchapi is
-# break-glass verification.
-_ROLE_MAP = {
-    "discovery": ("aviasales", "kiwi", "googleflights"),
-    "verification": ("serpapi", "googleflights", "searchapi"),
-}
-
-
 def _source_roles(enabled: list[str]) -> dict[str, list[str]]:
-    """Which enabled sources serve each role — the health layer pages
-    when a whole role loses every live source."""
-    return {role: [s for s in srcs if s in enabled]
-            for role, srcs in _ROLE_MAP.items()}
+    """Which enabled sources serve each role (from the registry) — the
+    health layer pages when a whole role loses every live source."""
+    from lib import sources
+    return sources.role_map(enabled)
 
 
 def _prior_source_health(conn, this_run_id: str):
@@ -99,6 +90,29 @@ def _prior_source_health(conn, this_run_id: str):
                 last_ok_at=v.get("last_ok_at"),
                 effective_available=v.get("available"))
             for s, v in sh.items()}
+
+
+def _prior_confidence(conn, this_run_id: str):
+    """The confidence result from the most recent PRIOR batch run, for
+    drop detection. Returns a ConfidenceResult or None."""
+    from lib.confidence import ConfidenceResult
+    row = conn.execute(
+        "SELECT summary_json FROM ledger_runs WHERE run_id != ? "
+        "AND summary_json IS NOT NULL ORDER BY started_at DESC LIMIT 1",
+        (this_run_id,)).fetchone()
+    if row is None:
+        return None
+    try:
+        c = (json.loads(row["summary_json"]) or {}).get("confidence")
+    except (ValueError, TypeError):
+        return None
+    if not c:
+        return None
+    return ConfidenceResult(
+        level=c.get("level", "no_data"), score=c.get("score", 0),
+        families=c.get("families", []),
+        live_verification=c.get("live_verification", False),
+        note=c.get("note", ""))
 
 
 def _estimate_seconds(plan) -> int:
@@ -438,6 +452,15 @@ def main() -> int:
             prior_health = _prior_source_health(conn, run_id)
             summary["health_alerts"] = health.health_pushes(
                 current_health, prior_health, summary)
+            # Best-price confidence (R5): count independent coverage
+            # families, not endpoints (2026-07-13 audit).
+            from lib import confidence as _conf
+            conf = _conf.assess_confidence(current_health)
+            summary["confidence"] = conf.as_dict()
+            prior_conf = _prior_confidence(conn, run_id)
+            drop = _conf.confidence_drop_push(conf, prior_conf)
+            if drop:
+                summary["health_alerts"].append(drop)
         except Exception as exc:  # noqa: BLE001 — health must never fail a scan
             LOG.warning("health assessment failed (non-fatal): %s", exc)
             summary["source_health"] = {}
