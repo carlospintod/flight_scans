@@ -39,6 +39,17 @@ export interface ScanRun {
   status: string;
 }
 
+export interface SourceHealthCard {
+  source: string;
+  verdict: string; // live|degraded|quota_low|dark|payment_walled|auth_failed|idle|unknown
+  detail: string;
+  attempts: number;
+  ok: number;
+  stored: number;
+  lastOkAt: string | null;
+  available: number | null;
+}
+
 export interface Alert {
   firedAt: string;
   alertType: "drop" | "new_low" | string;

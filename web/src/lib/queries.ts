@@ -7,6 +7,7 @@ import type {
   Itinerary,
   RouteWindow,
   ScanRun,
+  SourceHealthCard,
 } from "./types";
 
 /**
@@ -474,6 +475,41 @@ function findResetSeconds(obj: unknown): number | null {
     if (nested !== null) return nested;
   }
   return null;
+}
+
+/**
+ * Per-source health verdicts from the latest batch run's summary
+ * (written by run_batch via lib/health.assess_sources). Reads the newest
+ * ledger_runs.summary_json — the never-silent panel for /ops.
+ */
+export async function getSourceHealth(): Promise<SourceHealthCard[]> {
+  const rs = await db().execute({
+    sql: `SELECT summary_json FROM ledger_runs
+          WHERE summary_json IS NOT NULL
+          ORDER BY started_at DESC LIMIT 1`,
+    args: [],
+  });
+  const r = rs.rows[0];
+  if (!r) return [];
+  let sh: Record<string, Record<string, unknown>> = {};
+  try {
+    sh = (JSON.parse(String(r["summary_json"])) || {}).source_health || {};
+  } catch {
+    return [];
+  }
+  return Object.entries(sh).map(([source, v]) => ({
+    source,
+    verdict: String(v["verdict"] ?? "unknown"),
+    detail: String(v["detail"] ?? ""),
+    attempts: Number(v["attempts"] ?? 0),
+    ok: Number(v["ok"] ?? 0),
+    stored: Number(v["stored"] ?? 0),
+    lastOkAt: v["last_ok_at"] ? String(v["last_ok_at"]) : null,
+    available:
+      v["available"] === null || v["available"] === undefined
+        ? null
+        : Number(v["available"]),
+  }));
 }
 
 /** Last N scan_runs rows for the ops history table. */

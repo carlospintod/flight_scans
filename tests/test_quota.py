@@ -629,3 +629,51 @@ def test_402_floored_pool_probes_every_run(conn):
     ledger.record_anchor("kiwi", remaining=300, limit_total=300,
                          origin="reset_probe")
     assert ledger.needs_reset_probe("kiwi") is False
+
+
+def test_capture_anchors_does_not_unfloor_payment_walled_pool(conn):
+    """Defense-in-depth (2026-07-13): a pool floored for 402 must be
+    revived ONLY by a successful reset probe, never by a passively
+    captured header snapshot — a 402's frozen header lies."""
+    from lib.db import record_quota
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    ledger.record_anchor("kiwi", remaining=286, limit_total=300, origin="header")
+    ledger.floor_anchor("kiwi", origin="quota_402_floor")
+    assert ledger.pool_state("kiwi").provider_view == 0
+    # A lying 402 header snapshot lands during the run...
+    record_quota(conn, source="kiwi", remaining=285, limit_total=300,
+                 raw_json="{}")
+    promoted = ledger.capture_anchors_from_snapshots("2000-01-01T00:00:00Z")
+    # ...and must NOT resurrect the floored pool.
+    assert ledger.pool_state("kiwi").provider_view == 0
+    assert ledger.pool_state("kiwi").baseline_origin == "quota_402_floor"
+
+
+def test_kiwi_capture_quota_skips_payment_gate():
+    """The root fix: a 402/403 response's rate-limit header is frozen and
+    must never become a quota snapshot."""
+    from lib.kiwi_rapidapi import KiwiClient
+
+    recorded = []
+
+    class _Conn:
+        def execute(self, *a, **k):
+            recorded.append(a)
+            class _C:
+                def fetchone(self_): return None
+                def fetchall(self_): return []
+            return _C()
+
+    class _Resp:
+        def __init__(self, status):
+            self.status_code = status
+            self.headers = {"x-ratelimit-requests-remaining": "285",
+                            "x-ratelimit-requests-limit": "300"}
+
+    client = KiwiClient(api_key="k", db_conn=_Conn())
+    client._capture_quota(_Resp(402))
+    assert client.latest_quota is None        # nothing captured
+    assert recorded == []                     # nothing written
+    client._capture_quota(_Resp(200))
+    assert client.latest_quota["remaining"] == 285   # 2xx still captured

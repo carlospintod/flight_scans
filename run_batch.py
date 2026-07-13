@@ -62,6 +62,45 @@ def _log_search_id(search_id: str) -> str:
     return search_id
 
 
+# Role map for whole-role-blackout detection. R4's registry will own
+# this; until then it mirrors the planner's ladders. searchapi is
+# break-glass verification.
+_ROLE_MAP = {
+    "discovery": ("aviasales", "kiwi", "googleflights"),
+    "verification": ("serpapi", "googleflights", "searchapi"),
+}
+
+
+def _source_roles(enabled: list[str]) -> dict[str, list[str]]:
+    """Which enabled sources serve each role — the health layer pages
+    when a whole role loses every live source."""
+    return {role: [s for s in srcs if s in enabled]
+            for role, srcs in _ROLE_MAP.items()}
+
+
+def _prior_source_health(conn, this_run_id: str):
+    """The source_health from the most recent PRIOR batch run, for
+    transition detection. Returns a dict[str, SourceHealth] or None."""
+    from lib import health as _health
+    row = conn.execute(
+        "SELECT summary_json FROM ledger_runs WHERE run_id != ? "
+        "AND summary_json IS NOT NULL ORDER BY started_at DESC LIMIT 1",
+        (this_run_id,)).fetchone()
+    if row is None:
+        return None
+    try:
+        sh = (json.loads(row["summary_json"]) or {}).get("source_health") or {}
+    except (ValueError, TypeError):
+        return None
+    return {s: _health.SourceHealth(
+                source=s, verdict=v.get("verdict", "unknown"),
+                attempts=v.get("attempts", 0), ok=v.get("ok", 0),
+                stored=v.get("stored", 0), detail=v.get("detail", ""),
+                last_ok_at=v.get("last_ok_at"),
+                effective_available=v.get("available"))
+            for s, v in sh.items()}
+
+
 def _estimate_seconds(plan) -> int:
     # One-way aviasales sweeps run per (pair, month); months is () for
     # round-trip, so the multiplier collapses to 1.
@@ -90,6 +129,7 @@ def main() -> int:
         args.trigger, args.trigger)
 
     from lib import db as db_mod
+    from lib import health
     from lib import route_store
     from lib.clients import guard_clients, make_clients
     from lib.planner import Caps, build_run_plan, cost_vector
@@ -368,6 +408,37 @@ def main() -> int:
             },
             "status": status,
         }
+        # --- source health + never-silent alerts (R1) --------------------
+        # Read what the ledger already recorded and turn it into a verdict
+        # per source, then page on state TRANSITIONS only (a persistent
+        # outage must not re-alarm every scan). This is the layer whose
+        # absence let Kiwi 402 for days unnoticed (2026-07-11).
+        try:
+            current_health = health.assess_sources(conn, ledger=ledger)
+            summary["source_health"] = {
+                s: {"verdict": h.verdict, "detail": h.detail,
+                    "attempts": h.attempts, "ok": h.ok, "stored": h.stored,
+                    "last_ok_at": h.last_ok_at,
+                    "available": h.effective_available}
+                for s, h in current_health.items()}
+            summary["source_roles"] = _source_roles(available)
+            summary["max_consecutive_skips"] = conn.execute(
+                "SELECT COALESCE(MAX(consecutive_skips), 0) FROM searches "
+                "WHERE status = 'active'").fetchone()[0]
+            prior_health = _prior_source_health(conn, run_id)
+            summary["health_alerts"] = health.health_pushes(
+                current_health, prior_health, summary)
+        except Exception as exc:  # noqa: BLE001 — health must never fail a scan
+            LOG.warning("health assessment failed (non-fatal): %s", exc)
+            summary["source_health"] = {}
+            summary["health_alerts"] = []
+        # Persist the summary so the NEXT run can diff health against it.
+        try:
+            conn.execute(
+                "UPDATE ledger_runs SET summary_json = ? WHERE run_id = ?",
+                (json.dumps(summary), run_id))
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("persist summary failed (non-fatal): %s", exc)
         if args.json_summary:
             args.json_summary.write_text(json.dumps(summary, indent=2),
                                          encoding="utf-8")

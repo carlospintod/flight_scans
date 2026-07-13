@@ -5,7 +5,7 @@ import { UserAdmin } from "@/components/ops/UserAdmin";
 import { Card, SectionHeading } from "@/components/Section";
 import { isOpsBreakGlass } from "@/lib/auth";
 import { ageDays } from "@/lib/format";
-import { getQuotas, getScanHistory } from "@/lib/queries";
+import { getQuotas, getScanHistory, getSourceHealth } from "@/lib/queries";
 import { requireUser } from "@/lib/users";
 import type { RouteConfigJson } from "@/lib/config-schema";
 import { db } from "@/lib/db";
@@ -30,9 +30,10 @@ export default async function OpsPage() {
   const owner = await requireUser("owner");
   if (!owner && !(await isOpsBreakGlass())) redirect("/ops/login");
 
-  const [quotas, scans, cfgRow] = await Promise.all([
+  const [quotas, scans, health, cfgRow] = await Promise.all([
     getQuotas(),
     getScanHistory(ROUTE_ID, 10),
+    getSourceHealth(),
     db().execute({
       sql: "SELECT config_json FROM routes WHERE route_id = ?",
       args: [ROUTE_ID],
@@ -71,6 +72,50 @@ export default async function OpsPage() {
             </p>
           )}
         </Card>
+      </section>
+
+      <section>
+        <SectionHeading>Source health</SectionHeading>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {health.map((h) => {
+            const alarm =
+              h.verdict === "payment_walled" ||
+              h.verdict === "dark" ||
+              h.verdict === "auth_failed";
+            const dotColor = alarm
+              ? "bg-red"
+              : h.verdict === "quota_low" || h.verdict === "degraded"
+                ? "bg-amber"
+                : h.verdict === "live"
+                  ? "bg-good"
+                  : "bg-hint";
+            return (
+              <Card key={h.source}>
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-text-mid">
+                    {QUOTA_LABELS[h.source] ?? h.source}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-wider">
+                    <span className={`h-2 w-2 rounded-full ${dotColor}`} />
+                    {h.verdict.replace(/_/g, " ")}
+                  </span>
+                </div>
+                <div className="mt-2 font-mono text-[11px] text-hint">
+                  {h.detail || "—"}
+                </div>
+                <div className="mt-1 font-mono text-[10px] text-hint">
+                  {h.attempts} calls · {h.stored} rows
+                  {h.lastOkAt && ` · last ok ${h.lastOkAt.slice(0, 10)}`}
+                </div>
+              </Card>
+            );
+          })}
+          {health.length === 0 && (
+            <p className="font-mono text-sm text-text-mid">
+              No source health yet — it appears after the next batch run.
+            </p>
+          )}
+        </div>
       </section>
 
       <section>

@@ -8,6 +8,12 @@ Env:   NTFY_TOPIC  — the topic to publish to (treat as a password:
 
 Rules:
   - alerts fired      -> high-priority push with the top alert lines
+  - source health     -> push each pre-computed transition alert (a source
+                          went dark / payment-walled, a whole role lost all
+                          live sources, a scan stored 0 rows, chronic skips).
+                          run_batch computes these (it has the DB + prior
+                          state); this script stays a dumb pusher so it
+                          needs no DB access in CI.
   - job failed / no summary -> ops ping so a broken pipeline is noticed
   - quiet run         -> no push (2-3 scans a week must not train
                           notification blindness)
@@ -36,6 +42,9 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         print(f"no summary ({exc})")
 
+    pushed = False
+
+    # Price alerts.
     if summary and summary.get("alerts_fired"):
         alerts = summary["alerts_fired"]
         cheapest = min(alerts, key=lambda a: a["price"])
@@ -51,14 +60,28 @@ def main() -> int:
             lines.append(f"... and {len(alerts) - 8} more")
         _push(topic, title=title, body="\n".join(lines),
               priority="high", tags="airplane,rotating_light")
-    elif job_status != "success" or summary is None:
+        pushed = True
+
+    # Source-health alerts (pre-computed by run_batch; transition-based).
+    for h in (summary or {}).get("health_alerts", []):
+        _push(topic, title=h.get("title", "Source health"),
+              body=h.get("body", ""),
+              priority=h.get("priority", "default"),
+              tags=h.get("tags", "warning"))
+        pushed = True
+
+    # Broken pipeline.
+    if job_status != "success" or summary is None:
         _push(topic, title="Flight scan needs attention",
               body=f"job status: {job_status}; "
                    f"summary: {'missing' if summary is None else summary.get('status')}. "
                    f"Check the Actions run.",
               priority="default", tags="warning")
-    else:
-        print(f"quiet run (status={summary.get('status')}, 0 alerts) — no push")
+        pushed = True
+
+    if not pushed:
+        print(f"quiet run (status={summary.get('status')}, 0 alerts, "
+              f"healthy) — no push")
     return 0
 
 

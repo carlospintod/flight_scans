@@ -272,6 +272,15 @@ class KiwiClient:
 
     def _capture_quota(self, r: requests.Response) -> None:
         """Pull RapidAPI rate-limit headers; persist a snapshot to DB."""
+        # A 402/403 is a billing/subscription gate that rejects the
+        # request BEFORE the quota counter is touched — its rate-limit
+        # header is frozen at the last value and LIES about availability
+        # (2026-07-13: a 402 header reading 285 was passively promoted to
+        # a "healthy" anchor, resurrecting a dead pool three separate
+        # ways). Never snapshot a payment/auth gate; only a real 2xx or a
+        # genuine rate-limit 429 carries a trustworthy header.
+        if r.status_code in (401, 402, 403):
+            return
         rem = r.headers.get("x-ratelimit-requests-remaining")
         tot = r.headers.get("x-ratelimit-requests-limit")
         if rem is None and tot is None:

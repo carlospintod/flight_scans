@@ -217,6 +217,13 @@ class QuotaLedger:
         Only strictly newer observations become anchors."""
         n = 0
         for source in [s[0] for s in POOL_SEEDS]:
+            # Defense-in-depth: a pool floored for Payment Required must
+            # be revived ONLY by a successful reset probe (which anchors
+            # with origin='reset_probe'), never by a passively-captured
+            # header — a 402's frozen header would otherwise un-floor it.
+            state = self.pool_state(source)
+            if state is not None and state.baseline_origin == "quota_402_floor":
+                continue
             snap = self._conn.execute(
                 """
                 SELECT checked_at, remaining, limit_total FROM quota_snapshots
@@ -649,8 +656,21 @@ class GuardedClient:
                 result = attr(*args, **kwargs)
             except Exception as exc:
                 msg = str(exc)
-                label = "402" if "402" in msg else (
-                    "429" if "429" in msg else "error")
+                low = msg.lower()
+                # Distinct labels so the health layer can tell a billing
+                # wall from a dead key from a transient rate limit — each
+                # needs a different human response.
+                if "402" in msg:
+                    label = "402"
+                elif "401" in msg or "403" in msg:
+                    label = "auth_fail"
+                elif "429" in msg:
+                    # A MONTHLY-quota 429 is exhaustion (label "429",
+                    # floors below); a per-second rate-limit 429 is
+                    # transient and must NOT floor.
+                    label = "429" if "monthly" in low else "rate_limited"
+                else:
+                    label = "error"
                 try:
                     self._ledger.mark(event_id, label)
                     # A source signals "unusable" two ways, both of which
@@ -661,12 +681,11 @@ class GuardedClient:
                     #     (RapidAPI still decrements + reports the quota
                     #     header on a 402, so the header lies — floor it).
                     #   * MONTHLY-quota 429: our anchor is stale, provider
-                    #     is really at ~0. A per-second rate-limit 429 is
-                    #     NOT exhaustion, so gate that path on "monthly".
+                    #     is really at ~0 (label is "429" only when monthly).
                     if label == "402":
                         self._ledger.floor_anchor(
                             self._source, origin="quota_402_floor")
-                    elif label == "429" and "monthly" in msg.lower():
+                    elif label == "429":
                         self._ledger.floor_anchor(self._source)
                 except Exception:  # noqa: BLE001 — marking must not mask the real error
                     LOG.warning("quota: mark(%s) failed post-error", event_id)
