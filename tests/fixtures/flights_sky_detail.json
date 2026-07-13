@@ -1,0 +1,66 @@
+{
+  "data": {
+    "itinerary": {
+      "id": "15083-2402151840--30858,-31825-1-14355-2402160020",
+      "legs": [
+        {
+          "id": "15083-2402151840--30858,-31825-1-14355-2402160020",
+          "origin": { "id": "15083", "displayCode": "ORY", "city": "Paris" },
+          "destination": { "id": "14355", "displayCode": "MSY", "city": "New Orleans" },
+          "segments": [
+            {
+              "id": "seg1",
+              "origin": { "displayCode": "ORY" },
+              "destination": { "displayCode": "EWR" },
+              "duration": 500,
+              "departure": "2024-02-15T18:40:00",
+              "arrival": "2024-02-15T21:00:00",
+              "marketingCarrier": { "name": "French Bee", "displayCode": "BF" },
+              "goodToKnowItems": [
+                { "body": { "value": "You may need to check in again" },
+                  "badge": { "value": "Self transfer", "isHighlighted": true } }
+              ]
+            },
+            {
+              "id": "seg2",
+              "origin": { "displayCode": "EWR" },
+              "destination": { "displayCode": "MSY" },
+              "duration": 190,
+              "departure": "2024-02-15T22:10:00",
+              "arrival": "2024-02-16T00:20:00",
+              "marketingCarrier": { "name": "Spirit Airlines", "displayCode": "NK" }
+            }
+          ],
+          "duration": 760,
+          "stopCount": 1,
+          "departure": "2024-02-15T18:40:00",
+          "arrival": "2024-02-16T00:20:00"
+        }
+      ],
+      "pricingOptions": [
+        {
+          "agents": [
+            { "id": "skyp", "name": "Kiwi.com", "isCarrier": false,
+              "url": "https://www.skyscanner.net/...", "price": 598,
+              "rating": { "value": 3.12, "count": 5049 } }
+          ],
+          "totalPrice": 598,
+          "id": "8JVdsK6G1XjD"
+        },
+        {
+          "agents": [
+            { "id": "bf", "name": "French Bee", "isCarrier": true,
+              "url": "https://frenchbee.com/...", "price": 645 }
+          ],
+          "totalPrice": 645,
+          "id": "airlineDirect"
+        }
+      ],
+      "isTransferRequired": true
+    },
+    "pollingCompleted": true,
+    "bookingSessionId": "06469a93-75c9-4a2b-b6a2-ccdfec68f309"
+  },
+  "status": true,
+  "message": "Successful"
+}

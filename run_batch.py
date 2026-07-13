@@ -114,7 +114,10 @@ def _estimate_seconds(plan) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sources",
-                    default="googleflights,serpapi,aviasales,kiwi")
+                    # kiwi retired 2026-07-13 (proxy = 402 freemium trap;
+                    # official Tequila invitation-gated). Opt-in only:
+                    # add "kiwi" here if a genuinely-free access appears.
+                    default="googleflights,serpapi,aviasales")
     ap.add_argument("--cap", type=int, default=25,
                     help="max googleflights verifications per search")
     ap.add_argument("--trigger", default="local",

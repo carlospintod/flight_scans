@@ -48,7 +48,9 @@ POOL_SEEDS: tuple[tuple, ...] = (
 METERED: dict[str, dict[str, int]] = {
     "kiwi": {"range_search": 1, "round_trip_search": 1, "one_way_search": 1,
              "one_way_range_search": 1},
-    "serpapi": {"point_query": 1},
+    "serpapi": {"point_query": 1, "booking_options": 1},
+    "flights_sky": {"search_roundtrip": 1, "search_one_way": 1,
+                    "flight_details": 1, "price_calendar": 1},
     "searchapi": {"point_query": 1, "calendar": 1},
     "googleflights": {"point_query": 1},
     "aviasales": {"cheap_prices": 1, "prices_for_dates": 1,

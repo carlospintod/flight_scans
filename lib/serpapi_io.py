@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
@@ -26,6 +27,19 @@ import requests
 from .searchapi_io import PointResponse, _parse_best_flights
 
 LOG = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class SellerOption:
+    """One booking option Google Flights lists for an itinerary — the
+    actual seller (an airline or an OTA like Gotogate/Mytrip/Trip.com)
+    and its price. The cheapest of these is often BELOW the headline
+    price shown on best_flights, which is the OTA-coverage the roster
+    was missing (2026-07-13 audit)."""
+    book_with: str
+    price: int
+    currency: str
+    separate_tickets: bool
 
 BASE_URL = "https://serpapi.com/search"
 ACCOUNT_URL = "https://serpapi.com/account"
@@ -115,6 +129,51 @@ class SerpApiClient:
                                payload=data)
         return PointResponse(raw=data, best_flights=tuple(_parse_point(data)))
 
+    def booking_options(
+        self,
+        *,
+        booking_token: str,
+        origin: str,
+        destination: str,
+        outbound: date,
+        return_: date | None,
+        currency: str,
+        adults: int = 1,
+    ) -> list[SellerOption]:
+        """The sellers Google lists for one itinerary — airlines AND OTAs
+        (Gotogate/Mytrip/Trip.com/Kiwi). The cheapest is often an OTA
+        below the best_flights headline price; capturing it is the free
+        OTA-coverage win (no new source). `booking_token` comes from a
+        prior point_query's best_flights[i]['booking_token']."""
+        params: dict[str, Any] = {
+            "engine": "google_flights",
+            "api_key": self._api_key,
+            "departure_id": origin,
+            "arrival_id": destination,
+            "outbound_date": outbound.isoformat(),
+            "type": "1" if return_ is not None else "2",
+            "currency": currency,
+            "adults": adults,
+            "hl": "en",
+            "booking_token": booking_token,
+        }
+        if return_ is not None:
+            params["return_date"] = return_.isoformat()
+        try:
+            r = self._session.get(BASE_URL, params=params,
+                                  timeout=self._timeout_s)
+        except requests.RequestException as exc:
+            raise SerpApiError(0, f"network error: {exc}") from exc
+        try:
+            data = r.json()
+        except ValueError as exc:
+            raise SerpApiError(r.status_code, "non-JSON response") from exc
+        if not r.ok or "error" in data:
+            raise SerpApiError(r.status_code,
+                               str(data.get("error", r.text[:200])),
+                               payload=data)
+        return _parse_booking_options(data, currency)
+
     def check_quota(self) -> dict:
         """Return the current SerpAPI quota (does not count as a search).
 
@@ -157,3 +216,39 @@ def _parse_point(payload: dict) -> list:
     if not options and payload.get("other_flights"):
         options = _parse_best_flights({"best_flights": payload["other_flights"]})
     return options
+
+
+def top_booking_token(resp: PointResponse) -> str | None:
+    """The booking_token of the cheapest itinerary in a point_query
+    response — feed it to booking_options() to fetch its sellers."""
+    best = (resp.raw or {}).get("best_flights") or (resp.raw or {}).get("other_flights")
+    if best and isinstance(best[0], dict):
+        tok = best[0].get("booking_token")
+        return str(tok) if tok else None
+    return None
+
+
+def _parse_booking_options(payload: dict, currency: str) -> list[SellerOption]:
+    """SerpAPI booking_options -> sellers. Each option is `together`
+    (one booking) or `departing`+`returning` (separate tickets, prices
+    summed). `book_with` is the seller (airline or OTA)."""
+    out: list[SellerOption] = []
+    for opt in payload.get("booking_options") or []:
+        if not isinstance(opt, dict):
+            continue
+        together = opt.get("together")
+        if isinstance(together, dict):
+            block, separate = together, bool(together.get("separate_tickets"))
+            price = block.get("price")
+        else:  # separate departing + returning tickets
+            dep, ret = opt.get("departing") or {}, opt.get("returning") or {}
+            block, separate = (dep or ret), True
+            dp, rp = dep.get("price"), ret.get("price")
+            price = ((dp or 0) + (rp or 0)) if (dp or rp) else None
+        book_with = block.get("book_with") if isinstance(block, dict) else None
+        if book_with and isinstance(price, (int, float)) and price > 0:
+            out.append(SellerOption(
+                book_with=str(book_with), price=int(round(price)),
+                currency=currency.upper(), separate_tickets=separate))
+    out.sort(key=lambda s: s.price)
+    return out

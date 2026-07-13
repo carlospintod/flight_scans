@@ -114,3 +114,29 @@ def test_one_way_params_type_2_and_no_return_date():
                        return_=date(2026, 11, 20), currency="EUR")
     assert seen["type"] == "1"
     assert seen["return_date"] == "2026-11-20"
+
+
+def test_booking_options_parses_ota_sellers_cheapest_first():
+    """SerpApi booking_options -> the sellers Google lists for one
+    itinerary (airlines + OTAs). The cheapest is often an OTA below the
+    headline price — the free OTA-coverage win (no new source)."""
+    from lib.serpapi_io import _parse_booking_options
+    payload = {"booking_options": [
+        {"together": {"book_with": "Gotogate", "price": 512,
+                      "separate_tickets": False}},
+        {"together": {"book_with": "Kenya Airways", "price": 567}},
+        {"departing": {"book_with": "Mytrip", "price": 250},
+         "returning": {"book_with": "Mytrip", "price": 240}},
+    ]}
+    sellers = _parse_booking_options(payload, "EUR")
+    # Cheapest first — both OTAs (Mytrip 490 via separate tickets,
+    # Gotogate 512) beat the airline-direct (Kenya 567).
+    assert [s.book_with for s in sellers] == ["Mytrip", "Gotogate", "Kenya Airways"]
+    assert sellers[0].price == 490 and sellers[0].separate_tickets is True
+    assert sellers[0].currency == "EUR"
+    assert sellers[1].book_with == "Gotogate" and sellers[1].separate_tickets is False
+
+
+def test_booking_options_empty():
+    from lib.serpapi_io import _parse_booking_options
+    assert _parse_booking_options({}, "EUR") == []

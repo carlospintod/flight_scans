@@ -24,7 +24,7 @@ on:
     inputs:
       sources:
         description: "Comma-separated sources"
-        default: "googleflights,serpapi,aviasales,kiwi"
+        default: "googleflights,serpapi,aviasales"
         required: false
       cap:
         description: "Max googleflights verifications per search"
@@ -90,13 +90,13 @@ jobs:
           if [ "${{ inputs.mode || 'batch' }}" = "legacy" ]; then
             python run_scan.py \
               --route "${{ inputs.route || 'spain-nairobi' }}" \
-              --sources "${{ inputs.sources || 'googleflights,serpapi,aviasales,kiwi' }}" \
+              --sources "${{ inputs.sources || 'googleflights,serpapi,aviasales' }}" \
               --cap "${{ inputs.cap || '25' }}" \
               --trigger "${{ github.event_name }}" \
               --json-summary summary.json
           else
             python run_batch.py \
-              --sources "${{ inputs.sources || 'googleflights,serpapi,aviasales,kiwi' }}" \
+              --sources "${{ inputs.sources || 'googleflights,serpapi,aviasales' }}" \
               --cap "${{ inputs.cap || '25' }}" \
               --trigger "${{ github.event_name }}" \
               --json-summary summary.json
