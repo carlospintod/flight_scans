@@ -300,8 +300,15 @@ def main() -> int:
                 _skip(f"config unusable: {exc}")
                 continue
 
+            # Pool-aware planning: a floored/exhausted source is dropped
+            # here so it never emits a cost line — one dead pool degrades
+            # this search to its healthy sources instead of the
+            # all-or-nothing reservation skipping the whole search
+            # (2026-07-11: a floored Kiwi silently took down every search).
+            # Recomputed per search so earlier searches' holds count.
+            pool_states = {p.source: p for p in ledger.all_pool_states()}
             plan = build_run_plan(conn, route, sources=available, caps=caps,
-                                  today=date.today())
+                                  today=date.today(), pool_states=pool_states)
             cost = cost_vector(plan, caps=caps)
 
             est = _estimate_seconds(plan)

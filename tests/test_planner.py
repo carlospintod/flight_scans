@@ -491,3 +491,104 @@ def test_plan_one_way_kiwi_point_fallback_stays_gated(tmp_path: Path):
             conn, route, sources=["kiwi"], caps=Caps(), today=TODAY)
     assert plan.kiwi_candidates == ()
     assert plan.calls_by_source["kiwi"] == len(plan.kiwi_bands)
+
+
+def test_pool_aware_narrowing_drops_floored_source(tmp_path: Path):
+    """R2 (2026-07-11 incident): a floored/payment-walled pool is dropped
+    at plan time so it emits NO cost line — the search degrades to its
+    healthy sources instead of the all-or-nothing reservation nuking the
+    whole search (owner included)."""
+    from lib.quota import PoolState
+
+    route = _route()
+    srcs = ["kiwi", "googleflights", "serpapi", "aviasales"]
+    caps = Caps(searchapi_sweep=0, googleflights=30, serpapi=7)
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        # Baseline: kiwi healthy -> discovery bands present.
+        base = build_run_plan(conn, route, sources=srcs, caps=caps, today=TODAY)
+        assert len(base.kiwi_bands) > 0 and base.calls_by_source["kiwi"] > 0
+
+        floored = PoolState(
+            source="kiwi", pool_kind="monthly", period_limit=300,
+            provider_view=0, holds=0, safety_margin=15,
+            effective_available=-15, baseline_at="2026-07-13T00:00:00Z",
+            baseline_origin="quota_402_floor")
+        plan = build_run_plan(conn, route, sources=srcs, caps=caps,
+                              today=TODAY, pool_states={"kiwi": floored})
+        # Kiwi gone, no cost line...
+        assert plan.kiwi_bands == ()
+        assert plan.calls_by_source["kiwi"] == 0
+        # ...but the healthy sources survive -> the search still runs.
+        assert plan.aviasales_pairs != ()
+        assert plan.followup_source == "googleflights"
+        assert len(plan.followup_candidates) >= 0     # verification intact
+        assert any("kiwi dropped" in n for n in plan.notes)
+
+
+def test_narrowing_never_exceeds_estimator_upper_bound(tmp_path: Path):
+    """Narrowing only REDUCES the plan, so the closed-form quote (the
+    all-healthy worst case) stays a guaranteed upper bound — the
+    estimator/predict.ts and its fixture must NOT change in R2."""
+    from lib.quota import PoolState
+    from lib.planner import predict_upper_bounds
+
+    route = _route()
+    srcs = ["kiwi", "googleflights", "serpapi", "aviasales"]
+    caps = Caps(searchapi_sweep=0, googleflights=25, serpapi=7)
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        floored = PoolState(
+            source="kiwi", pool_kind="monthly", period_limit=300,
+            provider_view=0, holds=0, safety_margin=15,
+            effective_available=-15, baseline_at="2026-07-13T00:00:00Z",
+            baseline_origin="quota_402_floor")
+        plan = build_run_plan(conn, route, sources=srcs, caps=caps,
+                              today=TODAY, pool_states={"kiwi": floored})
+        bounds = predict_upper_bounds(
+            n_origins=len(route.origins), n_destinations=len(route.destinations),
+            earliest_departure=route.search_window.earliest_departure,
+            latest_return=route.search_window.latest_return,
+            min_stay_days=route.stay.min_days)
+        # Actual (narrowed) kiwi spend 0 <= quoted upper bound.
+        assert plan.calls_by_source["kiwi"] <= bounds["kiwi"]
+
+
+def test_floored_pool_search_reserves_not_skipped(tmp_path: Path):
+    """End-to-end graceful degrade: floored kiwi -> cost vector has no
+    kiwi line -> reserve() SUCCEEDS (search runs on aviasales+gf+serpapi)
+    instead of skip-the-whole-search. The direct fix for 2026-07-11."""
+    from lib.quota import QuotaLedger
+    from lib.planner import cost_vector
+
+    route = _route()
+    srcs = ["kiwi", "googleflights", "serpapi", "aviasales"]
+    caps = Caps(searchapi_sweep=0, googleflights=30, serpapi=7)
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        # A cheap lead so verification (gf) + serpapi contingency appear.
+        insert_calendar_rows(conn, [_cal_row("2026-09-15", "2026-11-17", 63, 480)])
+        ledger = QuotaLedger(conn)
+        ledger.seed_pools()
+        ledger.record_anchor("serpapi", remaining=200, limit_total=250, origin="header")
+        ledger.record_anchor("kiwi", remaining=286, limit_total=300, origin="header")
+        ledger.floor_anchor("kiwi", origin="quota_402_floor")   # payment wall
+        run = ledger.begin_run(trigger="local")
+
+        pool_states = {p.source: p for p in ledger.all_pool_states()}
+        plan = build_run_plan(conn, route, sources=srcs, caps=caps,
+                              today=TODAY, pool_states=pool_states)
+        cost = cost_vector(plan, caps=caps)
+        assert not any(l.source == "kiwi" for l in cost.lines)   # kiwi gone
+        assert ledger.reserve(run, "spain-nairobi", cost) is True  # NOT skipped
+        # A real reservation exists for a surviving source.
+        held = conn.execute(
+            "SELECT DISTINCT source FROM run_reservations "
+            "WHERE run_id = ? AND state = 'held'", (run,)).fetchall()
+        assert held and all(r["source"] != "kiwi" for r in held)

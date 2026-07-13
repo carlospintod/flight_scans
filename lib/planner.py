@@ -198,11 +198,38 @@ def build_run_plan(
     sources: list[str],
     caps: Caps,
     today: date | None = None,
+    pool_states: dict | None = None,
 ) -> RunPlan:
-    """Compute the exact plan for a run. No API calls, DB reads only."""
+    """Compute the exact plan for a run. No API calls, DB reads only.
+
+    `pool_states`: optional {source: PoolState} (from
+    ledger.all_pool_states()). When given, a monthly source whose pool is
+    floored (a *_floor anchor, e.g. a 402 payment wall) or exhausted
+    (effective_available <= 0) is DROPPED before any cost line is built —
+    so one dead pool degrades the search to its healthy sources instead
+    of the all-or-nothing reservation skipping the WHOLE search (the
+    2026-07-11 failure: a floored Kiwi silently took down every search,
+    owner included). Pure narrowing: it can only REDUCE the plan below
+    the all-healthy upper bound, so the estimator/quote is untouched."""
     today = today or date.today()
-    src = tuple(sources)
     notes: list[str] = []
+    src_list = list(sources)
+    if pool_states:
+        kept = []
+        for s in src_list:
+            st = pool_states.get(s)
+            floored = st is not None and (st.baseline_origin or "").endswith("_floor")
+            exhausted = (st is not None and st.effective_available is not None
+                         and st.effective_available <= 0)
+            if floored or exhausted:
+                why = ("payment/exhaustion floor" if floored
+                       else "pool exhausted")
+                notes.append(f"{s} dropped: {why} "
+                             f"({st.baseline_origin or 'n/a'})")
+                continue
+            kept.append(s)
+        src_list = kept
+    src = tuple(src_list)
 
     # ---- Sweep (SearchAPI grid) ----
     sweep_windows: list[SweepWindow] = []
