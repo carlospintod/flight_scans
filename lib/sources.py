@@ -34,6 +34,7 @@ class SourceSpec:
     id: str
     family: str
     roles: tuple[str, ...]                 # discovery | verification | corroboration
+    env_var: str | None = None             # API key env var (None = keyless)
     metered: dict[str, int] = field(default_factory=dict)
     # POOL_SEEDS payload minus the id, or None if metered-but-unpooled
     # (break-glass / optional sources): (pool_kind, period_limit,
@@ -48,6 +49,7 @@ REGISTRY: tuple[SourceSpec, ...] = (
     # -- pooled sources (order defines POOL_SEEDS order) --
     SourceSpec(
         "kiwi", family=FAMILY_SELF_TRANSFER, roles=("discovery",),
+        env_var="RAPIDAPI_KEY",
         metered={"range_search": 1, "round_trip_search": 1,
                  "one_way_search": 1, "one_way_range_search": 1},
         pool=("monthly", 300, 10, 15, 10, None),
@@ -56,6 +58,7 @@ REGISTRY: tuple[SourceSpec, ...] = (
              "official Tequila invitation-gated. Opt-in only."),
     SourceSpec(
         "serpapi", family=FAMILY_GOOGLE, roles=("verification",),
+        env_var="SERPAPI_KEY",
         metered={"point_query": 1, "booking_options": 1},
         pool=("monthly", 250, None, 25, 7, None),
         failure_mode="clean_429", enabled=True,
@@ -63,6 +66,7 @@ REGISTRY: tuple[SourceSpec, ...] = (
              "price_insights. No card. $25/mo -> 1000 switch."),
     SourceSpec(
         "aviasales", family=FAMILY_CACHED, roles=("discovery", "corroboration"),
+        env_var="TRAVELPAYOUTS_TOKEN",
         metered={"cheap_prices": 1, "prices_for_dates": 1,
                  "latest_prices": 1, "one_way_month_prices": 1},
         pool=("rate_only", None, None, 0, None, None),
@@ -71,6 +75,7 @@ REGISTRY: tuple[SourceSpec, ...] = (
              "never a trusted fare."),
     SourceSpec(
         "googleflights", family=FAMILY_GOOGLE, roles=("verification", "discovery"),
+        env_var=None,
         metered={"point_query": 1},
         pool=("per_run", None, None, 0, 25, 30),
         failure_mode="scraper", enabled=True,
@@ -79,6 +84,7 @@ REGISTRY: tuple[SourceSpec, ...] = (
     # -- metered but UNPOOLED (break-glass / optional, off by default) --
     SourceSpec(
         "flights_sky", family=FAMILY_OTA, roles=("discovery", "verification"),
+        env_var="RAPIDAPI_KEY",
         metered={"search_roundtrip": 1, "search_one_way": 1,
                  "flight_details": 1, "price_calendar": 1},
         pool=None, failure_mode="hard_limit_429", enabled=False,
@@ -87,12 +93,14 @@ REGISTRY: tuple[SourceSpec, ...] = (
              "until no-card confirmed + search-endpoint sample."),
     SourceSpec(
         "skyscanner", family=FAMILY_OTA, roles=("corroboration",),
+        env_var="RAPIDAPI_KEY",
         metered={"point_query": 2, "search_airport": 1},
         pool=None, failure_mode="hard_limit_429", enabled=False,
         note="Sky-Scrapper (apiheya, 20/mo Hard Limit) — OTA breadth + "
              "price calendar. Second backend of the OTA family."),
     SourceSpec(
         "searchapi", family=FAMILY_GOOGLE, roles=("verification",),
+        env_var="SEARCHAPI_KEY",
         metered={"point_query": 1, "calendar": 1},
         pool=None, failure_mode="lifetime_cap", enabled=False,
         note="Break-glass — 100 lifetime then $40/mo. Same Google corpus."),
@@ -135,3 +143,18 @@ def families_of(sources: list[str]) -> set[str]:
     """The distinct coverage families the given sources represent — the
     honest 'how many independent views' count for confidence."""
     return {f for sid in sources if (f := family_of(sid))}
+
+
+def managed_env_vars() -> list[str]:
+    """Distinct API-key env vars the /ops key manager owns (keyless
+    sources excluded). Infra secrets (TURSO_*, SESSION_SECRET) are NOT
+    here — they can't live in the DB they secure."""
+    seen: list[str] = []
+    for s in REGISTRY:
+        if s.env_var and s.env_var not in seen:
+            seen.append(s.env_var)
+    return seen
+
+
+def sources_for_env_var(env_var: str) -> list[str]:
+    return [s.id for s in REGISTRY if s.env_var == env_var]

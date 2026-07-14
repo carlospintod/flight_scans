@@ -168,6 +168,10 @@ def main() -> int:
             # C1: owner + mission search exist in the SAME deploy as the
             # runner — an empty enumeration can never silently stop scans.
             db_mod.bootstrap_owner(conn)
+            # Owner-managed API keys (set in /ops) win over env before any
+            # client is built.
+            from lib.credentials import load_credentials_into_env
+            load_credentials_into_env(conn)
         except Exception as exc:  # noqa: BLE001
             LOG.error("FATAL: schema/bootstrap failed: %s", exc)
             return EXIT_FATAL

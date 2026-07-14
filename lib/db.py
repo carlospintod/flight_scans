@@ -274,6 +274,20 @@ CREATE TABLE IF NOT EXISTS login_tokens (
     consumed_at TEXT,
     created_at  TEXT NOT NULL
 );
+
+-- Owner-managed API keys for the free source APIs (keyed by env var,
+-- e.g. SERPAPI_KEY / RAPIDAPI_KEY / TRAVELPAYOUTS_TOKEN). Low-value
+-- free-tier flight keys (no payment/PII); the scanner loads these into
+-- os.environ at startup (DB overrides env) so from_env() just works.
+-- Written owner-only via /ops; the web NEVER returns the full value
+-- (masked to last 4). Infra secrets (TURSO_*, SESSION_SECRET) are NOT
+-- managed here — they can't live in the DB they secure.
+CREATE TABLE IF NOT EXISTS source_credentials (
+    env_var    TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by INTEGER
+);
 """
 
 

@@ -512,6 +512,62 @@ export async function getSourceHealth(): Promise<SourceHealthCard[]> {
   }));
 }
 
+export interface CredentialRow {
+  envVar: string;
+  label: string;
+  sources: string;
+  isSet: boolean;
+  masked: string; // •••• + last 4; the full value is NEVER returned
+  updatedAt: string | null;
+}
+
+/** The API keys the owner manages in /ops. Infra secrets (TURSO_*,
+ *  SESSION_SECRET) are deliberately NOT here. Mirrors lib/sources.py
+ *  managed_env_vars(). */
+export const MANAGED_KEYS: { envVar: string; label: string; sources: string }[] = [
+  { envVar: "SERPAPI_KEY", label: "SerpApi",
+    sources: "verification — live Google Flights + OTA sellers" },
+  { envVar: "TRAVELPAYOUTS_TOKEN", label: "Travelpayouts / Aviasales",
+    sources: "discovery — cached date scout" },
+  { envVar: "RAPIDAPI_KEY", label: "RapidAPI",
+    sources: "flights-sky + sky-scrapper — the OTA family" },
+  { envVar: "SEARCHAPI_KEY", label: "SearchAPI.io",
+    sources: "verification — break-glass" },
+];
+
+function maskKey(v: string): string {
+  return v ? "••••" + v.slice(-4) : "";
+}
+
+/** Masked status of each managed key. Full values never leave the DB.
+ *  Tolerates a missing table (the Python scanner creates it on the next
+ *  scan) — every key just reads as "not set / using env". */
+export async function getCredentials(): Promise<CredentialRow[]> {
+  const stored = new Map<string, { value: string; updatedAt: string }>();
+  try {
+    const rs = await db().execute(
+      "SELECT env_var, value, updated_at FROM source_credentials",
+    );
+    for (const r of rs.rows) {
+      stored.set(String(r["env_var"]), {
+        value: String(r["value"]),
+        updatedAt: String(r["updated_at"]),
+      });
+    }
+  } catch {
+    /* table not created yet -> all keys read as not-set */
+  }
+  return MANAGED_KEYS.map((k) => {
+    const s = stored.get(k.envVar);
+    return {
+      ...k,
+      isSet: !!s,
+      masked: s ? maskKey(s.value) : "",
+      updatedAt: s?.updatedAt ?? null,
+    };
+  });
+}
+
 export interface SpendRow {
   source: string;
   calls: number;

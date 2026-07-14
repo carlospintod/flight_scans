@@ -69,3 +69,27 @@ def test_every_pooled_source_has_metered_methods():
     for s in sources.REGISTRY:
         if s.pool is not None:
             assert s.metered, f"{s.id} has a pool but no metered methods"
+
+
+def test_managed_env_vars_and_credential_load(tmp_path):
+    from lib.credentials import load_credentials_into_env, mask
+    from lib.db import connect, ensure_schema
+    import os
+
+    assert sources.managed_env_vars() == [
+        "RAPIDAPI_KEY", "SERPAPI_KEY", "TRAVELPAYOUTS_TOKEN", "SEARCHAPI_KEY"]
+    assert "SERPAPI_KEY" not in sources.managed_env_vars()[1:1]  # sanity
+    assert sources.sources_for_env_var("RAPIDAPI_KEY") == [
+        "kiwi", "flights_sky", "skyscanner"]
+
+    with connect(tmp_path / "t.db") as conn:
+        ensure_schema(conn)
+        conn.execute(
+            "INSERT INTO source_credentials (env_var, value, updated_at) "
+            "VALUES ('SERPAPI_KEY', 'sk-secret-1234', '2026-07-14T00:00:00Z')")
+        os.environ.pop("SERPAPI_KEY", None)
+        assert load_credentials_into_env(conn) == 1
+        assert os.environ["SERPAPI_KEY"] == "sk-secret-1234"  # DB wins
+    os.environ.pop("SERPAPI_KEY", None)
+    assert mask("sk-secret-1234") == "••••1234"
+    assert mask("") == ""

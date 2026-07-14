@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { ConfigEditor } from "@/components/ops/ConfigEditor";
+import { CredentialsAdmin } from "@/components/ops/CredentialsAdmin";
 import { TriggerScan } from "@/components/ops/TriggerScan";
 import { UserAdmin } from "@/components/ops/UserAdmin";
 import { Card, SectionHeading } from "@/components/Section";
@@ -60,6 +61,11 @@ export default async function OpsPage() {
         <Card>
           <UserAdmin />
         </Card>
+      </section>
+
+      <section>
+        <SectionHeading>API keys</SectionHeading>
+        <CredentialsAdmin />
       </section>
 
       <section>

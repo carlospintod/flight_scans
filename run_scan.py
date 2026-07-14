@@ -80,6 +80,8 @@ def main() -> int:
     with conn_cm as conn:
         try:
             db_mod.ensure_schema(conn)
+            from lib.credentials import load_credentials_into_env
+            load_credentials_into_env(conn)
             route, cfg_source = route_store.load_effective_route(
                 conn, args.route, REPO / "routes")
         except Exception as exc:  # noqa: BLE001
