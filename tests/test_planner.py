@@ -243,8 +243,13 @@ def test_plan_googleflights_takes_followup_role(tmp_path: Path):
             caps=Caps(searchapi_sweep=0, googleflights=30), today=TODAY,
         )
     assert plan.followup_source == "googleflights"
-    assert len(plan.followup_candidates) == 2
-    assert plan.calls_by_source["googleflights"] == 2
+    # The 2 cheap leads are verified; a discovery grid fills the budget.
+    leads = {(c["departure_date"], c["return_date"])
+             for c in plan.followup_candidates}
+    assert ("2026-09-15", "2026-11-15") in leads
+    assert ("2026-10-01", "2026-12-05") in leads
+    assert len(plan.followup_candidates) >= 2
+    assert plan.calls_by_source["googleflights"] == len(plan.followup_candidates)
     assert plan.calls_by_source["searchapi"] == 0
 
 
@@ -414,17 +419,21 @@ def test_plan_one_way_multi_source(tmp_path: Path):
             caps=caps, today=TODAY)
 
     assert plan.followup_source == "googleflights"
-    assert [c["return_date"] for c in plan.followup_candidates] == ["", ""]
+    # 2 cheap one-way leads + a discovery grid; all carry the '' sentinel.
+    assert all(c["return_date"] == "" for c in plan.followup_candidates)
+    deps = {c["departure_date"] for c in plan.followup_candidates}
+    assert "2026-09-20" in deps and "2026-09-27" in deps
     assert plan.kiwi_candidates == ()
     assert plan.aviasales_pairs == (("MAD", "NBO"), ("BCN", "NBO"))
     assert plan.aviasales_months == ("2026-09", "2026-10")
     assert plan.calls_by_source["aviasales"] == 4     # 2 pairs x 2 months
-    assert plan.calls_by_source["googleflights"] == 2
+    n_gf = len(plan.followup_candidates)
+    assert plan.calls_by_source["googleflights"] == n_gf
     cv = cost_vector(plan, caps=caps)
     contingency = [ln for ln in cv.lines if ln.kind == "contingency"]
     assert len(contingency) == 1
     assert contingency[0].source == "serpapi"
-    assert contingency[0].units == 2    # min(candidates, serpapi cap)
+    assert contingency[0].units == min(n_gf, 7)   # min(candidates, serpapi cap)
 
 
 def test_predict_upper_bounds_bounds_one_way_plan(tmp_path: Path):
@@ -592,3 +601,47 @@ def test_floored_pool_search_reserves_not_skipped(tmp_path: Path):
             "SELECT DISTINCT source FROM run_reservations "
             "WHERE run_id = ? AND state = 'held'", (run,)).fetchall()
         assert held and all(r["source"] != "kiwi" for r in held)
+
+
+def test_googleflights_discovery_grid_fills_when_no_leads(tmp_path: Path):
+    """The 2026-07-14 fix: with Kiwi retired and no cheap aviasales leads,
+    gf must still price a date grid across the window (live discovery),
+    not sit idle. Grid stays within the gf budget (upper bound holds)."""
+    route = _route()   # 2 origins, 60-90 day stay, Sep 1 - Dec 20
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        # No calendar rows -> select_candidates returns nothing.
+        plan = build_run_plan(
+            conn, route, sources=["googleflights", "serpapi", "aviasales"],
+            caps=Caps(searchapi_sweep=0, googleflights=20, serpapi=7),
+            today=TODAY)
+    assert plan.followup_source == "googleflights"
+    cands = plan.followup_candidates
+    assert 0 < len(cands) <= 20                       # filled, within budget
+    assert all(c.get("trigger") == "grid" for c in cands)
+    # Spread across both origins and inside the window.
+    assert {c["origin"] for c in cands} == {"MAD", "BCN"}
+    assert plan.calls_by_source["googleflights"] == len(cands)
+    from lib.planner import predict_upper_bounds
+    b = predict_upper_bounds(
+        n_origins=2, n_destinations=1,
+        earliest_departure=route.search_window.earliest_departure,
+        latest_return=route.search_window.latest_return,
+        min_stay_days=route.stay.min_days)
+    assert len(cands) <= b["googleflights"]           # invariant preserved
+
+
+def test_discovery_grid_one_way_uses_sentinel(tmp_path: Path):
+    route = _one_way_route()
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        plan = build_run_plan(
+            conn, route, sources=["googleflights", "serpapi", "aviasales"],
+            caps=Caps(searchapi_sweep=0, googleflights=10, serpapi=7),
+            today=TODAY)
+    cands = plan.followup_candidates
+    assert cands and all(c["return_date"] == "" for c in cands)   # one-way

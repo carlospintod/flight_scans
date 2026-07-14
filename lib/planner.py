@@ -191,6 +191,44 @@ class RunPlan:
     aviasales_months: tuple[str, ...] = ()
 
 
+def _discovery_grid(route: RouteConfig, *, today: date,
+                    max_points: int) -> list[dict]:
+    """Representative (origin, dest, dep, ret) points sampled evenly
+    across the search window, so Google Flights prices the whole window
+    live — the discovery mechanism now that Kiwi is retired. Round-trip
+    returns pair each departure with dep+min_stay; one-way uses the ''
+    sentinel. Bounded by max_points, split across origin/destination
+    pairs. Shape matches select_candidates so run_followup treats them
+    identically."""
+    from datetime import timedelta as _td
+    sw = route.search_window
+    one_way = route.is_one_way
+    min_stay = route.stay.min_days
+    earliest = max(sw.earliest_departure, today)
+    latest_dep = sw.latest_return if one_way else (
+        sw.latest_return - _td(days=min_stay))
+    pairs = [(o, d) for o in route.origins for d in route.destinations]
+    if not pairs or max_points <= 0 or latest_dep < earliest:
+        return []
+    per_pair = max(1, max_points // len(pairs))
+    span = (latest_dep - earliest).days
+    out: list[dict] = []
+    for o, d in pairs:
+        if per_pair == 1 or span <= 0:
+            deps = [earliest]
+        else:
+            step = span / (per_pair - 1)
+            deps = [earliest + _td(days=round(i * step))
+                    for i in range(per_pair)]
+        for dep in deps:
+            ret = "" if one_way else (dep + _td(days=min_stay)).isoformat()
+            out.append({"origin": o, "destination": d,
+                        "departure_date": dep.isoformat(),
+                        "return_date": ret, "snapshot_price": None,
+                        "trigger": "grid"})
+    return out[:max_points]
+
+
 def build_run_plan(
     conn,
     route: RouteConfig,
@@ -289,6 +327,30 @@ def build_run_plan(
                          "serpapi (searchapi adapter is round-trip only)")
     elif followup_source in src:
         cands = select_candidates(conn, route, today=today)
+        # Google Flights is the live DISCOVERY source now that Kiwi is
+        # retired: when the known cheap leads don't fill the budget,
+        # sample a date grid across the window so gf prices it live. This
+        # is what actually FINDS fares without Kiwi — found 2026-07-14:
+        # thin aviasales-only discovery (2 rows, above the alert bar)
+        # left gf idle and the scan stored nothing. Grid only for the
+        # FREE live rail (never burn metered serpapi on a broad grid).
+        cap = followup_cap if followup_cap is not None else DEFAULT_KIWI_CAP
+        if followup_source == "googleflights" and len(cands) < cap:
+            seen = {(c["origin"], c["destination"], c["departure_date"],
+                     c["return_date"]) for c in cands}
+            grid = _discovery_grid(route, today=today, max_points=cap)
+            added = 0
+            for g in grid:
+                key = (g["origin"], g["destination"],
+                       g["departure_date"], g["return_date"])
+                if key in seen or len(cands) >= cap:
+                    continue
+                cands.append(g)
+                seen.add(key)
+                added += 1
+            if added:
+                notes.append(f"googleflights discovery grid: {added} live "
+                             f"date samples across the window")
         if followup_cap is not None and len(cands) > followup_cap:
             notes.append(
                 f"followup ({followup_source}) capped to {followup_cap} of "
