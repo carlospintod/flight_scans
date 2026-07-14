@@ -6,7 +6,7 @@ import { UserAdmin } from "@/components/ops/UserAdmin";
 import { Card, SectionHeading } from "@/components/Section";
 import { isOpsBreakGlass } from "@/lib/auth";
 import { ageDays } from "@/lib/format";
-import { getQuotas, getScanHistory, getSourceHealth, getSpend } from "@/lib/queries";
+import { getConfidence, getQuotas, getScanHistory, getSourceHealth, getSpend } from "@/lib/queries";
 import { requireUser } from "@/lib/users";
 import type { RouteConfigJson } from "@/lib/config-schema";
 import { db } from "@/lib/db";
@@ -31,11 +31,12 @@ export default async function OpsPage() {
   const owner = await requireUser("owner");
   if (!owner && !(await isOpsBreakGlass())) redirect("/ops/login");
 
-  const [quotas, scans, health, spend, cfgRow] = await Promise.all([
+  const [quotas, scans, health, spend, confidence, cfgRow] = await Promise.all([
     getQuotas(),
     getScanHistory(ROUTE_ID, 10),
     getSourceHealth(),
     getSpend(30),
+    getConfidence(),
     db().execute({
       sql: "SELECT config_json FROM routes WHERE route_id = ?",
       args: [ROUTE_ID],
@@ -122,6 +123,43 @@ export default async function OpsPage() {
           One row per HTTP attempt (spend_events). "failed" = errors +
           rate-limits + payment walls — the never-silent signal.
         </p>
+      </section>
+
+      <section>
+        <SectionHeading>Best-price confidence</SectionHeading>
+        {confidence ? (
+          <div className="rounded-card border border-line bg-bg-2 p-4">
+            <div className="flex items-baseline gap-3">
+              <span
+                className={`font-mono text-2xl font-semibold ${
+                  confidence.level === "high"
+                    ? "text-matrix"
+                    : confidence.level === "medium"
+                      ? "text-cyan"
+                      : confidence.level === "low"
+                        ? "text-amber"
+                        : "text-fg-dim"
+                }`}
+              >
+                {confidence.level.toUpperCase()}
+              </span>
+              <span className="font-mono text-[13px] text-fg-mid">
+                ~{confidence.score}% · {confidence.families.join(" + ") || "no data"}
+              </span>
+            </div>
+            <p className="mt-2 font-mono text-[12px] leading-5 text-fg-mid">
+              {confidence.note}
+            </p>
+            <p className="mt-2 font-mono text-[10px] text-fg-dim">
+              Counts INDEPENDENT coverage families (Google, OTA-metasearch,
+              cached), not endpoints — two Google mirrors are one family.
+            </p>
+          </div>
+        ) : (
+          <p className="font-mono text-sm text-fg-mid">
+            No confidence score yet — it appears after the next batch run.
+          </p>
+        )}
       </section>
 
       <section>

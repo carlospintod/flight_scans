@@ -21,6 +21,80 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def enrich_ota_sellers(conn, serpapi_client, route, *, since: str) -> int:
+    """For the cheapest FRESH live itinerary this scan, ask SerpApi
+    booking_options which sellers Google lists (airlines AND OTAs like
+    Gotogate/Mytrip) — the cheapest is often an OTA BELOW the headline
+    price. If it beats the verified price, store it as a fresh
+    observation (so it feeds "cheapest now" + alerts) with the seller.
+
+    The reliable OTA-coverage win (2026-07-14): no captcha, no new
+    subscription — it rides Google's own index. Best-effort and BOUNDED:
+    it spends from the search's ALREADY-RESERVED serpapi contingency
+    budget (GuardedClient enforces it), so actual serpapi spend still
+    never exceeds the quote. Returns rows stored.
+    """
+    if serpapi_client is None:
+        return 0
+    from .db import CalendarRow, PointRow, insert_calendar_rows, insert_point_rows
+    from .serpapi_io import top_booking_token
+    # Cheapest fresh LIVE observation (exclude cached aviasales leads).
+    row = conn.execute(
+        "SELECT origin, destination, departure_date, return_date, "
+        "stay_days, price FROM calendar_snapshots WHERE route_id = ? "
+        "AND snapshot_at >= ? AND source != 'aviasales' "
+        "ORDER BY price ASC LIMIT 1",
+        (route.name, since)).fetchone()
+    if row is None:
+        return 0
+    try:
+        dep = date.fromisoformat(row["departure_date"])
+        ret = (date.fromisoformat(row["return_date"])
+               if row["return_date"] else None)
+    except (ValueError, TypeError):
+        return 0
+    try:
+        resp = serpapi_client.point_query(
+            origin=row["origin"], destination=row["destination"],
+            outbound=dep, return_=ret, currency=route.currency)
+        token = top_booking_token(resp)
+        if not token:
+            return 0
+        sellers = serpapi_client.booking_options(
+            booking_token=token, origin=row["origin"],
+            destination=row["destination"], outbound=dep, return_=ret,
+            currency=route.currency)
+    except Exception as exc:  # noqa: BLE001 — incl. QuotaExceeded (budget spent)
+        LOG.info("ota enrich %s->%s skipped: %s",
+                 row["origin"], row["destination"], exc)
+        return 0
+    if not sellers:
+        return 0
+    best = sellers[0]                      # parsed cheapest-first
+    if best.price >= row["price"]:
+        return 0                           # no improvement over verified price
+    carriers = (resp.best_flights[0].carriers
+                if resp.best_flights else "")
+    snapshot_at = _now_iso()
+    stored = insert_calendar_rows(conn, [CalendarRow(
+        snapshot_at=snapshot_at, route_id=route.name, source="serpapi",
+        origin=row["origin"], destination=row["destination"],
+        departure_date=row["departure_date"], return_date=row["return_date"],
+        stay_days=row["stay_days"], price=best.price,
+        currency=best.currency, is_lowest_price=False)])
+    insert_point_rows(conn, [PointRow(
+        snapshot_at=snapshot_at, route_id=route.name, source="serpapi",
+        origin=row["origin"], destination=row["destination"],
+        departure_date=row["departure_date"], return_date=row["return_date"],
+        rank=0, price=best.price, currency=best.currency, carriers=carriers,
+        total_minutes=None, stops=None,
+        is_self_transfer=best.separate_tickets, seller=best.book_with)])
+    LOG.info("ota enrich: %s @ %d %s (below verified %d) %s->%s",
+             best.book_with, best.price, best.currency, row["price"],
+             row["origin"], row["destination"])
+    return stored
+
+
 def run_aviasales_sweep(conn, av_client, route, *, dry_run: bool,
                         pairs: list | None = None,
                         months: list | None = None) -> int:

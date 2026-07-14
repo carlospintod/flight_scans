@@ -477,6 +477,36 @@ function findResetSeconds(obj: unknown): number | null {
   return null;
 }
 
+export interface ConfidenceCard {
+  level: string; // high | medium | low | no_data
+  score: number;
+  families: string[];
+  note: string;
+}
+
+/** Best-price confidence from the latest batch run (R5) — counts
+ *  independent coverage families, not endpoints. */
+export async function getConfidence(): Promise<ConfidenceCard | null> {
+  try {
+    const rs = await db().execute(
+      `SELECT summary_json FROM ledger_runs
+       WHERE summary_json IS NOT NULL ORDER BY started_at DESC LIMIT 1`,
+    );
+    const r = rs.rows[0];
+    if (!r) return null;
+    const c = (JSON.parse(String(r["summary_json"])) || {}).confidence;
+    if (!c) return null;
+    return {
+      level: String(c.level ?? "no_data"),
+      score: Number(c.score ?? 0),
+      families: Array.isArray(c.families) ? c.families.map(String) : [],
+      note: String(c.note ?? ""),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Per-source health verdicts from the latest batch run's summary
  * (written by run_batch via lib/health.assess_sources). Reads the newest

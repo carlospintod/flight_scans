@@ -524,3 +524,75 @@ def test_skyscanner_skipped_for_one_way_candidates(tmp_path: Path):
                            skyscanner_max_calls=None)
     assert sky_calls == []
     assert res.itineraries_queried == 1
+
+
+def test_ota_enrichment_stores_cheaper_seller(tmp_path: Path):
+    """booking_options finds an OTA below the verified headline -> a fresh
+    cheaper observation is stored with the seller (the reliable OTA win)."""
+    from lib.scanops import enrich_ota_sellers
+    from lib.searchapi_io import FlightOption, PointResponse
+    from lib.serpapi_io import SellerOption
+
+    class FakeSerp:
+        source_id = "serpapi"
+
+        def point_query(self, **kw):
+            return PointResponse(
+                raw={"best_flights": [{"booking_token": "tok123",
+                                       "price": 567}]},
+                best_flights=(FlightOption(price=567, total_minutes=800,
+                                           stops=1, carriers="Etihad"),))
+
+        def booking_options(self, **kw):
+            return [SellerOption("Gotogate", 512, "EUR", False),
+                    SellerOption("Etihad", 567, "EUR", False)]
+
+    db = tmp_path / "t.db"
+    route = _route(min_stay=60, max_stay=90)
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        # A verified (googleflights) fare at 567 this scan.
+        insert_calendar_rows(conn, [CalendarRow(
+            snapshot_at="2026-07-14T10:00:00Z", route_id="t",
+            source="googleflights", origin="MAD", destination="NBO",
+            departure_date="2026-09-15", return_date="2026-11-17",
+            stay_days=63, price=567, currency="EUR", is_lowest_price=False)])
+        stored = enrich_ota_sellers(conn, FakeSerp(), route,
+                                    since="2026-07-14T00:00:00Z")
+        assert stored == 1
+        pq = conn.execute(
+            "SELECT source, price, seller FROM point_queries "
+            "WHERE source='serpapi'").fetchone()
+        assert pq["price"] == 512 and pq["seller"] == "Gotogate"
+        cal = conn.execute(
+            "SELECT price FROM calendar_snapshots WHERE source='serpapi'"
+        ).fetchone()
+        assert cal["price"] == 512          # feeds cheapest-now + alerts
+
+
+def test_ota_enrichment_no_improvement_stores_nothing(tmp_path: Path):
+    from lib.scanops import enrich_ota_sellers
+    from lib.searchapi_io import FlightOption, PointResponse
+    from lib.serpapi_io import SellerOption
+
+    class FakeSerp:
+        source_id = "serpapi"
+        def point_query(self, **kw):
+            return PointResponse(raw={"best_flights": [{"booking_token": "t"}]},
+                                 best_flights=(FlightOption(price=500, total_minutes=1, stops=0, carriers="X"),))
+        def booking_options(self, **kw):
+            return [SellerOption("Etihad", 600, "EUR", False)]  # not cheaper
+
+    db = tmp_path / "t.db"
+    route = _route(min_stay=60, max_stay=90)
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        insert_calendar_rows(conn, [CalendarRow(
+            snapshot_at="2026-07-14T10:00:00Z", route_id="t",
+            source="googleflights", origin="MAD", destination="NBO",
+            departure_date="2026-09-15", return_date="2026-11-17",
+            stay_days=63, price=567, currency="EUR", is_lowest_price=False)])
+        assert enrich_ota_sellers(conn, FakeSerp(), route,
+                                  since="2026-07-14T00:00:00Z") == 0

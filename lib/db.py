@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS point_queries (
     carriers         TEXT NOT NULL,
     total_minutes    INTEGER,
     stops            INTEGER,
-    is_self_transfer INTEGER NOT NULL DEFAULT 0
+    is_self_transfer INTEGER NOT NULL DEFAULT 0,
+    seller           TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_pq_itin
@@ -311,6 +312,8 @@ _MIGRATIONS: tuple[tuple[str, str, str], ...] = (
      "ALTER TABLE scan_runs ADD COLUMN batch_id TEXT"),
     ("scan_runs", "reserved_json",
      "ALTER TABLE scan_runs ADD COLUMN reserved_json TEXT"),
+    ("point_queries", "seller",
+     "ALTER TABLE point_queries ADD COLUMN seller TEXT"),
 )
 
 
@@ -357,6 +360,7 @@ class PointRow:
     total_minutes: int | None
     stops: int | None
     is_self_transfer: bool = False
+    seller: str | None = None   # booking agent (OTA/airline) when known
 
 
 @dataclass(frozen=True)
@@ -494,7 +498,7 @@ def insert_point_rows(conn: sqlite3.Connection, rows: Iterable[PointRow]) -> int
             r.snapshot_at, r.route_id, r.source, r.origin, r.destination,
             r.departure_date, r.return_date, r.rank,
             r.price, r.currency, r.carriers, r.total_minutes, r.stops,
-            1 if r.is_self_transfer else 0,
+            1 if r.is_self_transfer else 0, r.seller,
         )
         for r in rows
     ]
@@ -505,8 +509,9 @@ def insert_point_rows(conn: sqlite3.Connection, rows: Iterable[PointRow]) -> int
         INSERT INTO point_queries
             (snapshot_at, route_id, source, origin, destination,
              departure_date, return_date, rank,
-             price, currency, carriers, total_minutes, stops, is_self_transfer)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             price, currency, carriers, total_minutes, stops,
+             is_self_transfer, seller)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         payload,
     )

@@ -17,7 +17,7 @@ from pathlib import Path
 
 from . import alerts as alerts_mod
 from .followup import run_followup
-from .scanops import run_aviasales_sweep, run_kiwi_discovery
+from .scanops import enrich_ota_sellers, run_aviasales_sweep, run_kiwi_discovery
 
 LOG = logging.getLogger(__name__)
 
@@ -54,6 +54,8 @@ def execute_search(*, conn, route, plan, clients, caps,
     out = SearchRunResult(search_id=route.name)
     if serpapi_fallback_cap is None:
         serpapi_fallback_cap = caps.serpapi or 0
+    from .scanops import _now_iso
+    search_started = _now_iso()
 
     # --- Kiwi discovery bands (fails gracefully while quota is 0) ---
     if plan.kiwi_bands and clients.get("kiwi") is not None:
@@ -94,6 +96,20 @@ def execute_search(*, conn, route, plan, clients, caps,
             out.degraded = True
             out.record("aviasales", attempted=n_av, error=str(exc))
             LOG.error("aviasales failed (%s): %s", route.name, exc)
+
+    # --- OTA-seller enrichment (reliable OTA coverage) ---
+    # For the cheapest verified fare, ask SerpApi booking_options which
+    # OTA sells it cheaper than Google's headline. Rides the search's
+    # already-reserved serpapi budget (so spend never exceeds the quote);
+    # best-effort, before alerts so a cheaper OTA fare can fire one.
+    if clients.get("serpapi") is not None:
+        try:
+            n = enrich_ota_sellers(conn, clients["serpapi"], route,
+                                   since=search_started)
+            if n:
+                out.record("serpapi_ota", attempted=1, stored=n)
+        except Exception as exc:  # noqa: BLE001
+            LOG.info("ota enrichment skipped (%s): %s", route.name, exc)
 
     # --- Alerts (drop + new_low) ---
     out.alerts = alerts_mod.evaluate(conn=conn, route=route,
