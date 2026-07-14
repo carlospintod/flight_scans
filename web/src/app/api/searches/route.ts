@@ -90,12 +90,14 @@ export async function POST(req: NextRequest) {
     tripType: oneWay ? "one_way" : "round_trip",
   });
   const cap = await capacityView();
-  const newMonthly = predicted.kiwi * RUNS_PER_MONTH;
-  if (cap.kiwi.available !== null
-      && cap.kiwi.committedMonthly + newMonthly > cap.kiwi.available
+  // The only metered monthly budget is the SerpApi contingency (Kiwi
+  // retired; discovery + verification are free).
+  const newMonthly = predicted.serpapi_contingency * RUNS_PER_MONTH;
+  if (cap.serpapi.available !== null
+      && cap.serpapi.committedMonthly + newMonthly > cap.serpapi.available
       && user.role !== "owner") {
     return NextResponse.json(
-      { error: "not enough shared discovery capacity for this search right " +
+      { error: "not enough shared SerpApi budget for this search right " +
                "now — try a narrower date window, or ask the owner about " +
                "expanding capacity" },
       { status: 409 },

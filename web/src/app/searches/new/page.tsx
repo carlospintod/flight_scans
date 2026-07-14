@@ -29,7 +29,7 @@ const AIRPORTS: [string, string][] = [
 ];
 
 interface Capacity {
-  kiwi: { available: number | null; committedMonthly: number };
+  serpapi: { available: number | null; committedMonthly: number };
 }
 
 export default function NewSearchPage() {
@@ -70,9 +70,12 @@ export default function NewSearchPage() {
 
   const fits = useMemo(() => {
     if (!preview || !capacity) return null;
-    if (capacity.kiwi.available === null) return null;
-    return capacity.kiwi.committedMonthly + preview.kiwi * RUNS_PER_MONTH
-      <= capacity.kiwi.available;
+    if (capacity.serpapi.available === null) return null;
+    // The only metered monthly budget is the SerpApi contingency;
+    // discovery + verification are free. Reserve the upper bound.
+    return capacity.serpapi.committedMonthly
+      + preview.serpapi_contingency * RUNS_PER_MONTH
+      <= capacity.serpapi.available;
   }, [preview, capacity]);
 
   async function create() {
@@ -185,28 +188,27 @@ export default function NewSearchPage() {
         {preview ? (
           <>
             <p className="mt-2 font-mono text-[13px] text-text">
-              ~{preview.kiwi + preview.aviasales} discovery lookups per scan
-              · up to {preview.googleflights} verifications per scan ·
-              3 scans/week
+              Free discovery + verification. The only metered budget is
+              ≤{preview.serpapi_contingency} SerpApi checks/scan — and only
+              if the live browser rail fails. 3 scans/week.
             </p>
             <details className="mt-2">
               <summary className="cursor-pointer font-mono text-[11px] text-text-mid">
                 per-source detail
               </summary>
               <ul className="mt-1 space-y-0.5 font-mono text-[12px] text-text-mid">
-                <li>kiwi discovery ≤{preview.kiwi}/scan</li>
-                <li>google flights verification ≤{preview.googleflights}/scan</li>
+                <li>aviasales discovery {preview.aviasales}/scan · free</li>
+                <li>google flights verification ≤{preview.googleflights}/scan · free</li>
                 <li>serpapi contingency ≤{preview.serpapi_contingency}/scan
-                  (only if the primary rail fails)</li>
-                <li>aviasales cached sweep {preview.aviasales}/scan</li>
+                  · metered (only if the browser rail fails)</li>
               </ul>
             </details>
             <p className={`mt-3 font-mono text-[12px] ${
               fits === false ? "text-red"
               : fits === true ? "text-good" : "text-hint"}`}>
-              {fits === true && "✓ fits the shared capacity"}
+              {fits === true && "✓ fits the shared SerpApi budget"}
               {fits === false &&
-                "✗ over shared capacity — narrow the window or ask the owner"}
+                "✗ over the shared SerpApi budget — narrow the window or ask the owner"}
               {fits === null && "capacity check pending…"}
             </p>
           </>

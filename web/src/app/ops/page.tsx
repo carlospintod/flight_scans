@@ -5,7 +5,7 @@ import { UserAdmin } from "@/components/ops/UserAdmin";
 import { Card, SectionHeading } from "@/components/Section";
 import { isOpsBreakGlass } from "@/lib/auth";
 import { ageDays } from "@/lib/format";
-import { getQuotas, getScanHistory, getSourceHealth } from "@/lib/queries";
+import { getQuotas, getScanHistory, getSourceHealth, getSpend } from "@/lib/queries";
 import { requireUser } from "@/lib/users";
 import type { RouteConfigJson } from "@/lib/config-schema";
 import { db } from "@/lib/db";
@@ -30,10 +30,11 @@ export default async function OpsPage() {
   const owner = await requireUser("owner");
   if (!owner && !(await isOpsBreakGlass())) redirect("/ops/login");
 
-  const [quotas, scans, health, cfgRow] = await Promise.all([
+  const [quotas, scans, health, spend, cfgRow] = await Promise.all([
     getQuotas(),
     getScanHistory(ROUTE_ID, 10),
     getSourceHealth(),
+    getSpend(30),
     db().execute({
       sql: "SELECT config_json FROM routes WHERE route_id = ?",
       args: [ROUTE_ID],
@@ -72,6 +73,49 @@ export default async function OpsPage() {
             </p>
           )}
         </Card>
+      </section>
+
+      <section>
+        <SectionHeading>Spend · last 30 days</SectionHeading>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse font-mono text-[13px]">
+            <thead>
+              <tr className="border-b border-line-bright text-left text-[10px] uppercase tracking-wider text-fg-dim">
+                <th className="py-2 pr-4">source</th>
+                <th className="py-2 pr-4">calls</th>
+                <th className="py-2 pr-4">ok</th>
+                <th className="py-2 pr-4">empty</th>
+                <th className="py-2 pr-4">failed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {spend.map((s) => (
+                <tr key={s.source} className="border-b border-line">
+                  <td className="py-2 pr-4 text-fg-bright">
+                    {QUOTA_LABELS[s.source] ?? s.source}
+                  </td>
+                  <td className="py-2 pr-4">{s.calls}</td>
+                  <td className="py-2 pr-4 text-good">{s.ok}</td>
+                  <td className="py-2 pr-4 text-fg-dim">{s.empty}</td>
+                  <td className={`py-2 pr-4 ${s.failed > 0 ? "text-red" : "text-fg-dim"}`}>
+                    {s.failed}
+                  </td>
+                </tr>
+              ))}
+              {spend.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-2 font-mono text-sm text-fg-mid">
+                    No API calls recorded in the last 30 days.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 font-mono text-[10px] text-hint">
+          One row per HTTP attempt (spend_events). "failed" = errors +
+          rate-limits + payment walls — the never-silent signal.
+        </p>
       </section>
 
       <section>

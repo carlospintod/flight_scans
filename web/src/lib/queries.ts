@@ -512,6 +512,43 @@ export async function getSourceHealth(): Promise<SourceHealthCard[]> {
   }));
 }
 
+export interface SpendRow {
+  source: string;
+  calls: number;
+  ok: number;
+  empty: number;
+  failed: number; // error | 429 | 402 | auth_fail | rate_limited
+}
+
+/**
+ * Per-source API spend over the last `sinceDays` — the visibility panel.
+ * Reads spend_events.result (one row per HTTP attempt): how many calls
+ * each source actually made, and how they landed.
+ */
+export async function getSpend(sinceDays = 30): Promise<SpendRow[]> {
+  const cutoff = new Date(Date.now() - sinceDays * 86_400_000).toISOString();
+  const rs = await db().execute({
+    sql: `SELECT source, result, COUNT(*) AS n
+          FROM spend_events WHERE spent_at >= ?
+          GROUP BY source, result`,
+    args: [cutoff],
+  });
+  const by: Record<string, SpendRow> = {};
+  for (const r of rs.rows) {
+    const source = String(r["source"]);
+    const result = String(r["result"]);
+    const n = Number(r["n"]);
+    const row = (by[source] ??= {
+      source, calls: 0, ok: 0, empty: 0, failed: 0,
+    });
+    row.calls += n;
+    if (result === "ok") row.ok += n;
+    else if (result === "empty") row.empty += n;
+    else if (result !== "pending") row.failed += n;
+  }
+  return Object.values(by).sort((a, b) => b.calls - a.calls);
+}
+
 /** Last N scan_runs rows for the ops history table. */
 export async function getScanHistory(
   routeId: string = DEFAULT_ROUTE,

@@ -5,33 +5,37 @@ import { RUNS_PER_MONTH } from "./capacity-constants";
 export { RUNS_PER_MONTH };
 
 export interface CapacityView {
-  kiwi: {
+  // The binding monthly budget. Since Kiwi was retired (2026-07-13),
+  // discovery (Aviasales) and verification (Google Flights) are free
+  // pools; the only metered monthly pool a search can consume is the
+  // SerpApi contingency (spent only if the browser rail fails).
+  serpapi: {
     available: number | null;      // live remaining minus safety margin
     periodLimit: number | null;
-    committedPerScan: number;      // all active searches, per scan
+    committedPerScan: number;      // all active searches' reserved contingency
     committedMonthly: number;
     runsPerMonth: number;
   };
   activeSearches: number;
 }
 
-/** Shared-pool capacity: live kiwi availability vs the monthly load ALL
- *  active searches already commit (B5: a per-search-only check would
- *  lie). Used by the /api/capacity endpoint AND the create-search
- *  verdict — one implementation. */
+/** Shared-pool capacity: live SerpApi availability vs the monthly load
+ *  ALL active searches already reserve (B5: a per-search-only check would
+ *  lie). Used by /api/capacity AND the create-search verdict — one
+ *  implementation. Discovery/verification are free, so they don't gate. */
 export async function capacityView(): Promise<CapacityView> {
   const client = db();
   const pool = await client.execute(
     `SELECT qp.period_limit, qp.safety_margin,
             (SELECT pa.baseline_remaining FROM pool_anchors pa
-             WHERE pa.source = 'kiwi' ORDER BY pa.anchor_id DESC LIMIT 1)
+             WHERE pa.source = 'serpapi' ORDER BY pa.anchor_id DESC LIMIT 1)
             AS anchor_remaining,
             (SELECT COALESCE(SUM(se.units), 0) FROM spend_events se
-             WHERE se.source = 'kiwi' AND se.event_id > COALESCE((
+             WHERE se.source = 'serpapi' AND se.event_id > COALESCE((
                 SELECT pa2.last_spend_event_id FROM pool_anchors pa2
-                WHERE pa2.source = 'kiwi'
+                WHERE pa2.source = 'serpapi'
                 ORDER BY pa2.anchor_id DESC LIMIT 1), 0)) AS spent_since
-     FROM quota_pools qp WHERE qp.source = 'kiwi'`,
+     FROM quota_pools qp WHERE qp.source = 'serpapi'`,
   );
   const p = pool.rows[0];
   const available =
@@ -56,13 +60,13 @@ export async function capacityView(): Promise<CapacityView> {
         latestReturn: cfg.search_window.latest_return,
         minStayDays: cfg.stay_preferences?.min_days ?? 1,
         tripType: cfg.trip_type === "one_way" ? "one_way" : "round_trip",
-      }).kiwi;
+      }).serpapi_contingency;
     } catch {
       /* unparseable config never blocks the meter */
     }
   }
   return {
-    kiwi: {
+    serpapi: {
       available,
       periodLimit: p ? Number(p["period_limit"]) : null,
       committedPerScan,
