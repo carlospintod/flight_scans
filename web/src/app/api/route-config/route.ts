@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isAuthed } from "@/lib/auth";
+import { isOpsBreakGlass } from "@/lib/auth";
 import { routeConfigSchema } from "@/lib/config-schema";
 import { db } from "@/lib/db";
+import { requireUser } from "@/lib/users";
 
 const ROUTE_ID = "spain-nairobi";
 
@@ -23,7 +24,9 @@ export async function GET() {
  *  statement as lib/db.upsert_route, so the Python scan pipeline picks
  *  the edit up on its next run (route_store precedence: DB wins). */
 export async function PUT(req: NextRequest) {
-  if (!(await isAuthed())) {
+  // Owner via the v2 mint-link session, OR the legacy APP_PASSWORD
+  // break-glass. (Was isAuthed() only — which rejects v2 cookies.)
+  if (!(await requireUser("owner")) && !(await isOpsBreakGlass())) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   let body: unknown;
