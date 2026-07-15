@@ -163,10 +163,16 @@ def _classify(*, origin, mix, attempts, ok, empty, fails, stored, avail,
     # 2. Auth failure — bad/expired key or not subscribed.
     if mix.get("auth_fail"):
         return "auth_failed", "401/403 — API key rejected or not subscribed"
-    # 3. Dark: attempted this window but produced NOTHING and every call
-    #    failed. This is the exact 2026-07-11 shape (Kiwi all-errors, 0 rows).
-    if attempts > 0 and ok == 0 and stored == 0 and fails == attempts:
-        return "dark", f"{fails}/{attempts} calls failed, 0 rows stored"
+    # 3. Dark: attempted this window but produced NOTHING usable and no
+    #    call succeeded with data — every call either FAILED or came back
+    #    EMPTY, 0 rows stored. Covers the 2026-07-11 Kiwi all-errors shape
+    #    AND an all-empty primary grid (2026-07-14: serpapi is the finding
+    #    layer now; a blank one going all-"empty" — ok=0 — must not slip to
+    #    "unknown"/"live" and page nobody).
+    if attempts > 0 and ok == 0 and stored == 0:
+        why = (f"{fails}/{attempts} calls failed" if fails == attempts
+               else f"{attempts} calls returned no flights")
+        return "dark", f"{why}, 0 rows stored"
     # 4. Monthly pool nearly exhausted (still alive, warn early).
     if avail is not None and per_search_cap:
         if avail <= 0:

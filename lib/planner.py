@@ -28,6 +28,17 @@ from .sweep import SweepWindow, plan_windows
 # Default per-run cap on Kiwi (300/mo tier; keep one run modest).
 DEFAULT_KIWI_CAP = 20
 
+# SerpApi discovery grid: the RELIABLE finding layer after Kiwi's
+# retirement and Google-Flights scraping getting captcha-walled from CI
+# (2026-07-14). SerpApi is managed Google-Flights data that never gets
+# blocked, so it prices a small rotating date grid across the window each
+# scan. GRID + OTA must stay within the serpapi pool's per_search_cap (7,
+# lib/sources.py) so non-owner searches reserve cleanly, and inside the
+# free 250/mo: (GRID 5 + OTA 2) x 2 searches x 13 runs/mo = 182 < 250.
+# A third search trips the create-form capacity gate → $25/mo switch.
+SERPAPI_DISCOVERY_CAP = 5      # distinct date samples priced per scan
+SERPAPI_OTA_RESERVE = 2        # enrich_ota_sellers: point_query + booking_options
+
 
 @dataclass(frozen=True)
 class CostLine:
@@ -68,20 +79,21 @@ def predict_upper_bounds(
     trip_type: str = "round_trip",
     kiwi_band_days: int = 21,
     gf_cap: int = 25,
-    serpapi_contingency: int = 7,
+    serpapi_discovery_cap: int = SERPAPI_DISCOVERY_CAP,
+    serpapi_ota_reserve: int = SERPAPI_OTA_RESERVE,
 ) -> dict[str, int]:
     """Closed-form, DB-free per-scan upper bounds for a search — what the
     creation form shows BEFORE any history exists. Pure geometry, no
     conn: mirrored 1:1 in web/src/lib/predict.ts, drift-guarded by a
     fixture this function generates in CI (scripts/gen_estimator_fixture).
 
-    Kiwi discovery geometry matches build_run_plan exactly: one band per
-    started `kiwi_band_days` chunk of the departure window, per
-    (origin, destination) pair. Both trip types quote verification
-    (googleflights) at its cap with the contingency line mirroring
-    cost_vector's rule. Aviasales corroboration: 1 call per pair
-    (round-trip cheap_prices) or 1 call per pair per window month
-    (one-way one_way_month_prices).
+    `serpapi` is the metered rail that gates capacity: a fixed-size live
+    discovery grid (capped, so window size only ever lowers the actual
+    count) plus the OTA seller-check reserve. `googleflights` verification
+    and `aviasales` discovery are free. `kiwi` is retired but its band
+    geometry stays quoted (unused by the roster) for continuity.
+    Aviasales corroboration: 1 call per pair (round-trip) or 1 per pair
+    per window month (one-way).
     """
     one_way = trip_type == "one_way"
     # One-way departures span the whole window (no return leg to fit).
@@ -90,6 +102,7 @@ def predict_upper_bounds(
     window_days = max(0, (latest_dep - earliest_departure).days + 1)
     bands_per_pair = -(-window_days // kiwi_band_days) if window_days else 0
     pairs = n_origins * n_destinations
+    serpapi = serpapi_discovery_cap + serpapi_ota_reserve
     if one_way:
         months = 0 if not window_days else (
             (latest_dep.year - earliest_departure.year) * 12
@@ -97,13 +110,13 @@ def predict_upper_bounds(
         return {
             "kiwi": bands_per_pair * pairs,
             "googleflights": gf_cap,
-            "serpapi_contingency": min(gf_cap, serpapi_contingency),
+            "serpapi": serpapi,
             "aviasales": months * pairs,
         }
     return {
         "kiwi": bands_per_pair * pairs,
         "googleflights": gf_cap,
-        "serpapi_contingency": min(gf_cap, serpapi_contingency),
+        "serpapi": serpapi,
         "aviasales": pairs,
     }
 
@@ -112,17 +125,18 @@ def cost_vector(plan: "RunPlan", *, caps: "Caps") -> CostVector:
     """Pure function of a RunPlan: the exact upper-bound cost lines the
     ledger reserves before executing it.
 
-    Contingency: when googleflights is the followup rail and serpapi is
-    an enabled source, run_scan._run_verification re-runs the candidate
-    list through serpapi if the browser rail dies — that spend must be
-    quoted and reserved too (an unreserved fallback either overspends
-    the quote or silently drops verification; both forbidden).
+    SerpApi is the metered PRIMARY discovery rail now (2026-07-14): its
+    line covers the live date grid plus the OTA seller check, both inside
+    calls_by_source['serpapi']. It is no longer a browser-death
+    contingency — the grid IS the reliable live layer, so a dead gf
+    scraper degrades to serpapi's own coverage (surfaced by health, not
+    silently), and there is no separate serpapi fallback to reserve.
     """
     lines: list[CostLine] = []
     notes = {
         "kiwi": "discovery bands + candidate checks",
         "googleflights": "verification (free politeness budget)",
-        "serpapi": "verification",
+        "serpapi": "live discovery grid + OTA seller check",
         "searchapi": "verification (break-glass)",
         "aviasales": "cached sweep (unmetered, rate-paced)",
         "skyscanner": "curve + lookups",
@@ -131,14 +145,6 @@ def cost_vector(plan: "RunPlan", *, caps: "Caps") -> CostVector:
         if units:
             lines.append(CostLine(source=source, units=units, kind="primary",
                                   note=notes.get(source, "")))
-    if (plan.followup_source == "googleflights"
-            and "serpapi" in plan.sources and plan.followup_candidates):
-        fallback_units = min(len(plan.followup_candidates),
-                             caps.serpapi or 0)
-        if fallback_units:
-            lines.append(CostLine(
-                source="serpapi", units=fallback_units, kind="contingency",
-                note="only if the browser rail dies mid-batch"))
     return CostVector(lines=tuple(lines))
 
 
@@ -189,17 +195,28 @@ class RunPlan:
     # sweeps (one call per pair per month). Quote == execution: the
     # runner iterates exactly this list.
     aviasales_months: tuple[str, ...] = ()
+    # SerpApi discovery grid: distinct (origin, dest, dep, ret) date
+    # samples SerpApi prices live each scan (the reliable finding layer;
+    # runner feeds these straight into run_followup with the serpapi
+    # client). Same shape as followup_candidates.
+    serpapi_discovery: tuple[dict, ...] = ()
 
 
 def _discovery_grid(route: RouteConfig, *, today: date,
                     max_points: int) -> list[dict]:
-    """Representative (origin, dest, dep, ret) points sampled evenly
-    across the search window, so Google Flights prices the whole window
-    live — the discovery mechanism now that Kiwi is retired. Round-trip
-    returns pair each departure with dep+min_stay; one-way uses the ''
-    sentinel. Bounded by max_points, split across origin/destination
-    pairs. Shape matches select_candidates so run_followup treats them
-    identically."""
+    """Up to `max_points` DISTINCT departure dates sampled evenly across
+    the search window, so SerpApi can price the whole window live — the
+    discovery mechanism now that Kiwi is retired and gf scraping is
+    blocked. Round-trip pairs each departure with dep+min_stay; one-way
+    uses the '' sentinel. Origins/destinations are assigned round-robin
+    across the dates (date breadth beats per-date origin completeness for
+    a scout — the mission flies from MAD *or* BCN, either is fine).
+
+    The sampling PHASE rotates with `today` (deterministic — no clock
+    read), so consecutive scans probe different dates and sweep the whole
+    window over a handful of runs while quote==execution still holds
+    (both the quote and the runner read the same plan). Shape matches
+    select_candidates so run_followup consumes it unchanged."""
     from datetime import timedelta as _td
     sw = route.search_window
     one_way = route.is_one_way
@@ -210,23 +227,28 @@ def _discovery_grid(route: RouteConfig, *, today: date,
     pairs = [(o, d) for o in route.origins for d in route.destinations]
     if not pairs or max_points <= 0 or latest_dep < earliest:
         return []
-    per_pair = max(1, max_points // len(pairs))
     span = (latest_dep - earliest).days
+    n = min(max_points, span + 1)            # no more dates than days exist
+    if n <= 1:
+        offsets = [span // 2]
+    else:
+        seg = span / n
+        phase = today.toordinal() % max(1, int(seg) or 1)
+        offsets = [min(span, round(i * seg + phase)) for i in range(n)]
     out: list[dict] = []
-    for o, d in pairs:
-        if per_pair == 1 or span <= 0:
-            deps = [earliest]
-        else:
-            step = span / (per_pair - 1)
-            deps = [earliest + _td(days=round(i * step))
-                    for i in range(per_pair)]
-        for dep in deps:
-            ret = "" if one_way else (dep + _td(days=min_stay)).isoformat()
-            out.append({"origin": o, "destination": d,
-                        "departure_date": dep.isoformat(),
-                        "return_date": ret, "snapshot_price": None,
-                        "trigger": "grid"})
-    return out[:max_points]
+    seen: set[int] = set()
+    for i, off in enumerate(offsets):
+        if off in seen:
+            continue
+        seen.add(off)
+        o, d = pairs[i % len(pairs)]
+        dep = earliest + _td(days=off)
+        ret = "" if one_way else (dep + _td(days=min_stay)).isoformat()
+        out.append({"origin": o, "destination": d,
+                    "departure_date": dep.isoformat(),
+                    "return_date": ret, "snapshot_price": None,
+                    "trigger": "grid"})
+    return out
 
 
 def build_run_plan(
@@ -299,15 +321,20 @@ def build_run_plan(
             kept = kept[: caps.searchapi_sweep]
         sweep_windows = kept
 
-    # ---- Followup verification: free ladder ----
-    # First enabled source wins: googleflights (free, needs a local
-    # browser) > serpapi (managed, 250/mo renewing) > searchapi
-    # (one-time credits, break-glass).
+    # ---- Followup verification ladder ----
+    # First enabled source wins: googleflights (free browser scraper) >
+    # searchapi (one-time credits, break-glass). SerpApi is DELIBERATELY
+    # NOT on this ladder: it is the metered discovery grid (below), and
+    # letting it ALSO verify candidates would double-count it — grid +
+    # OTA + candidates = up to 14 serpapi/scan, blowing the fixed 7-unit
+    # upper bound and the per_search_cap (found in adversarial review
+    # 2026-07-14). When gf is dead, the serpapi grid IS the live layer;
+    # aviasales leads simply go gf-verified-or-not, never via metered
+    # serpapi. So serpapi's per-scan cost stays a flat grid + OTA.
     followup_source = "searchapi"
     followup_cap = caps.searchapi_followup
     for cand_source, cand_cap in (
         ("googleflights", caps.googleflights),
-        ("serpapi", caps.serpapi),
         ("searchapi", caps.searchapi_followup),
     ):
         if cand_source in src:
@@ -316,10 +343,9 @@ def build_run_plan(
             break
     # Round-trip candidates are (dep, ret) pairs; one-way candidates
     # carry the '' return sentinel, which select_candidates and the
-    # executors map to a one-way point query (return_=None). Both trip
-    # types get the free verification ladder — EXCEPT the searchapi
-    # rung, whose adapter is round-trip only (break-glass source, 2
-    # credits left: not worth an unverified one-way param).
+    # executors map to a one-way point query (return_=None). gf verifies
+    # both trip types; the searchapi rung is round-trip only (break-glass
+    # source, 2 credits left: not worth an unverified one-way param).
     followup_candidates: list[dict] = []
     if route.is_one_way and followup_source == "searchapi":
         if "searchapi" in src:
@@ -327,30 +353,6 @@ def build_run_plan(
                          "serpapi (searchapi adapter is round-trip only)")
     elif followup_source in src:
         cands = select_candidates(conn, route, today=today)
-        # Google Flights is the live DISCOVERY source now that Kiwi is
-        # retired: when the known cheap leads don't fill the budget,
-        # sample a date grid across the window so gf prices it live. This
-        # is what actually FINDS fares without Kiwi — found 2026-07-14:
-        # thin aviasales-only discovery (2 rows, above the alert bar)
-        # left gf idle and the scan stored nothing. Grid only for the
-        # FREE live rail (never burn metered serpapi on a broad grid).
-        cap = followup_cap if followup_cap is not None else DEFAULT_KIWI_CAP
-        if followup_source == "googleflights" and len(cands) < cap:
-            seen = {(c["origin"], c["destination"], c["departure_date"],
-                     c["return_date"]) for c in cands}
-            grid = _discovery_grid(route, today=today, max_points=cap)
-            added = 0
-            for g in grid:
-                key = (g["origin"], g["destination"],
-                       g["departure_date"], g["return_date"])
-                if key in seen or len(cands) >= cap:
-                    continue
-                cands.append(g)
-                seen.add(key)
-                added += 1
-            if added:
-                notes.append(f"googleflights discovery grid: {added} live "
-                             f"date samples across the window")
         if followup_cap is not None and len(cands) > followup_cap:
             notes.append(
                 f"followup ({followup_source}) capped to {followup_cap} of "
@@ -358,6 +360,20 @@ def build_run_plan(
             )
             cands = cands[:followup_cap]
         followup_candidates = cands
+
+    # ---- SerpApi discovery grid (RELIABLE live discovery) ----
+    # Kiwi is retired and Google-Flights scraping is blocked from CI
+    # (2026-07-14 run: 0/25 grid points, every query captcha-walled) — so
+    # the FINDING now runs on SerpApi, a managed Google-Flights API that
+    # never gets captcha'd. It prices a small evenly-spaced date grid
+    # across the window each scan; that IS live verification (SerpApi is
+    # live Google data), so no separate gf pass is needed. Bounded by
+    # SERPAPI_DISCOVERY_CAP so it stays inside the free 250/mo tier at the
+    # owner's scale (grid + 1 booking_options ≈ 6 calls/search/scan).
+    serpapi_discovery: list[dict] = []
+    if "serpapi" in src:
+        serpapi_discovery = _discovery_grid(
+            route, today=today, max_points=SERPAPI_DISCOVERY_CAP)
 
     # ---- Kiwi discovery bands (range-search, 1 call per band) ----
     kiwi_bands: list[KiwiBand] = []
@@ -456,8 +472,13 @@ def build_run_plan(
         "googleflights": (
             len(followup_candidates) if followup_source == "googleflights" else 0
         ),
+        # SerpApi = live discovery grid + OTA seller-check reserve. It is
+        # NOT a followup verifier (see ladder above), so this stays a
+        # fixed grid + OTA — a flat, honest upper bound the capacity gate
+        # and per_search_cap can both rely on.
         "serpapi": (
-            len(followup_candidates) if followup_source == "serpapi" else 0
+            len(serpapi_discovery)
+            + (SERPAPI_OTA_RESERVE if "serpapi" in src else 0)
         ),
         "aviasales": len(aviasales_pairs) * (
             len(aviasales_months) if route.is_one_way else 1
@@ -485,6 +506,7 @@ def build_run_plan(
         followup_source=followup_source,
         kiwi_bands=tuple(kiwi_bands),
         aviasales_months=tuple(aviasales_months),
+        serpapi_discovery=tuple(serpapi_discovery),
     )
 
 

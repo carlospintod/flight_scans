@@ -253,10 +253,13 @@ def test_plan_googleflights_takes_followup_role(tmp_path: Path):
     assert plan.calls_by_source["searchapi"] == 0
 
 
-def test_plan_followup_ladder_serpapi_beats_searchapi(tmp_path: Path):
-    """Ladder: googleflights > serpapi > searchapi. Without googleflights,
-    serpapi takes the followup role (managed + renewing beats one-time
-    break-glass credits); searchapi plans zero followups."""
+def test_plan_serpapi_is_discovery_not_followup_verifier(tmp_path: Path):
+    """SerpApi is the metered DISCOVERY grid, never a followup verifier
+    (2026-07-14 review fix: verifying too would double-count it to ~14
+    serpapi/scan when gf is down, blowing the flat 7-unit bound and the
+    per_search_cap). The followup ladder is googleflights > searchapi;
+    serpapi runs its grid regardless of who verifies."""
+    from lib.planner import SERPAPI_OTA_RESERVE
     db = tmp_path / "t.db"
     route = _route(origins=("MAD",))
     with connect(db) as conn:
@@ -266,24 +269,32 @@ def test_plan_followup_ladder_serpapi_beats_searchapi(tmp_path: Path):
             _cal_row("2026-09-15", "2026-11-15", 61, 540),
             _cal_row("2026-10-01", "2026-12-05", 65, 590),
         ])
+        # serpapi + searchapi, NO gf: followup falls to searchapi, not serpapi.
         plan = build_run_plan(
             conn, route, sources=["serpapi", "searchapi"],
-            caps=Caps(searchapi_sweep=0, serpapi=7), today=TODAY,
-        )
-        # And with googleflights present, it still outranks serpapi.
+            caps=Caps(searchapi_sweep=0, searchapi_followup=5, serpapi=7),
+            today=TODAY)
+        # gf present: gf verifies; serpapi still discovery-only.
         plan_gf = build_run_plan(
             conn, route, sources=["googleflights", "serpapi"],
-            caps=Caps(searchapi_sweep=0), today=TODAY,
-        )
-    assert plan.followup_source == "serpapi"
-    assert plan.calls_by_source["serpapi"] == 2
-    assert plan.calls_by_source["searchapi"] == 0
+            caps=Caps(searchapi_sweep=0), today=TODAY)
+    assert plan.followup_source == "searchapi"            # NOT serpapi
+    # serpapi cost is a FLAT grid + OTA — never includes followup candidates,
+    # in either config, so it can't exceed the per_search_cap.
+    assert plan.calls_by_source["serpapi"] == (
+        len(plan.serpapi_discovery) + SERPAPI_OTA_RESERVE)
+    assert plan.calls_by_source["serpapi"] <= 7
     assert plan_gf.followup_source == "googleflights"
-    assert plan_gf.calls_by_source["serpapi"] == 0
+    assert plan_gf.calls_by_source["serpapi"] == (
+        len(plan_gf.serpapi_discovery) + SERPAPI_OTA_RESERVE)
+    assert plan_gf.calls_by_source["serpapi"] <= 7
 
 
-def test_plan_serpapi_cap_limits_candidates(tmp_path: Path):
-    """Caps.serpapi bounds the followup list (91/mo budget at 13 runs)."""
+def test_serpapi_grid_capped_at_discovery_cap(tmp_path: Path):
+    """The serpapi grid never exceeds SERPAPI_DISCOVERY_CAP distinct dates
+    no matter how much history exists — the flat upper bound the capacity
+    gate and per_search_cap both rely on."""
+    from lib.planner import SERPAPI_DISCOVERY_CAP, SERPAPI_OTA_RESERVE
     db = tmp_path / "t.db"
     route = _route(origins=("MAD",))
     with connect(db) as conn:
@@ -295,11 +306,11 @@ def test_plan_serpapi_cap_limits_candidates(tmp_path: Path):
         ])
         plan = build_run_plan(
             conn, route, sources=["serpapi"],
-            caps=Caps(searchapi_sweep=0, serpapi=7), today=TODAY,
-        )
-    assert plan.followup_source == "serpapi"
-    assert len(plan.followup_candidates) == 7
-    assert any("capped to 7 of 10" in n for n in plan.notes)
+            caps=Caps(searchapi_sweep=0, serpapi=7), today=TODAY)
+    assert len(plan.serpapi_discovery) <= SERPAPI_DISCOVERY_CAP
+    assert plan.calls_by_source["serpapi"] == (
+        len(plan.serpapi_discovery) + SERPAPI_OTA_RESERVE)
+    assert plan.calls_by_source["serpapi"] <= 7
 
 
 def test_plan_aviasales_and_skyscanner_pair_counts(tmp_path: Path):
@@ -398,10 +409,10 @@ def _ow_cal_row(dep: str, price: int,
 
 
 def test_plan_one_way_multi_source(tmp_path: Path):
-    """One-way gets the full free stack (M7): gf verification via the
-    ladder, serpapi contingency in the cost vector, aviasales month
-    corroboration — and NO kiwi point candidates (scarce pool)."""
-    from lib.planner import cost_vector
+    """One-way gets the full free stack: gf verification via the ladder,
+    a serpapi live discovery grid + OTA in the cost vector, aviasales
+    month corroboration — and NO kiwi point candidates (scarce pool)."""
+    from lib.planner import cost_vector, SERPAPI_OTA_RESERVE
 
     route = _one_way_route()
     db = tmp_path / "t.db"
@@ -429,11 +440,13 @@ def test_plan_one_way_multi_source(tmp_path: Path):
     assert plan.calls_by_source["aviasales"] == 4     # 2 pairs x 2 months
     n_gf = len(plan.followup_candidates)
     assert plan.calls_by_source["googleflights"] == n_gf
+    # serpapi runs its OWN live discovery grid + OTA — a primary line, no
+    # browser-death contingency rail anymore.
     cv = cost_vector(plan, caps=caps)
-    contingency = [ln for ln in cv.lines if ln.kind == "contingency"]
-    assert len(contingency) == 1
-    assert contingency[0].source == "serpapi"
-    assert contingency[0].units == min(n_gf, 7)   # min(candidates, serpapi cap)
+    assert not any(ln.kind == "contingency" for ln in cv.lines)
+    assert plan.calls_by_source["serpapi"] == (
+        len(plan.serpapi_discovery) + SERPAPI_OTA_RESERVE)
+    assert plan.calls_by_source["serpapi"] <= 7          # per_search_cap
 
 
 def test_predict_upper_bounds_bounds_one_way_plan(tmp_path: Path):
@@ -462,7 +475,8 @@ def test_predict_upper_bounds_bounds_one_way_plan(tmp_path: Path):
     assert bounds["kiwi"] >= plan.calls_by_source["kiwi"]
     assert bounds["googleflights"] >= plan.calls_by_source["googleflights"]
     assert bounds["aviasales"] == plan.calls_by_source["aviasales"]
-    assert bounds["serpapi_contingency"] >= 1
+    # serpapi is the metered discovery rail; the quote is its upper bound.
+    assert bounds["serpapi"] >= plan.calls_by_source["serpapi"]
 
 
 def test_plan_one_way_searchapi_rung_stays_gated(tmp_path: Path):
@@ -603,45 +617,58 @@ def test_floored_pool_search_reserves_not_skipped(tmp_path: Path):
         assert held and all(r["source"] != "kiwi" for r in held)
 
 
-def test_googleflights_discovery_grid_fills_when_no_leads(tmp_path: Path):
-    """The 2026-07-14 fix: with Kiwi retired and no cheap aviasales leads,
-    gf must still price a date grid across the window (live discovery),
-    not sit idle. Grid stays within the gf budget (upper bound holds)."""
-    route = _route()   # 2 origins, 60-90 day stay, Sep 1 - Dec 20
+def test_serpapi_discovery_grid_is_the_finding_layer(tmp_path: Path):
+    """The 2026-07-14 fix: with Kiwi retired and gf scraping blocked from
+    CI, SerpApi prices a rotating date grid across the window every scan
+    (live discovery). The grid exists independent of any cheap leads, is
+    date-diverse, and stays inside the serpapi upper bound."""
+    from lib.planner import (SERPAPI_DISCOVERY_CAP, SERPAPI_OTA_RESERVE,
+                             predict_upper_bounds)
+    route = _route()   # 2 origins, Sep 1 - Dec 20 window
     db = tmp_path / "t.db"
     with connect(db) as conn:
         ensure_schema(conn)
         upsert_route(conn, route)
-        # No calendar rows -> select_candidates returns nothing.
+        # No calendar rows -> no leads, yet the grid still populates.
         plan = build_run_plan(
             conn, route, sources=["googleflights", "serpapi", "aviasales"],
             caps=Caps(searchapi_sweep=0, googleflights=20, serpapi=7),
             today=TODAY)
-    assert plan.followup_source == "googleflights"
-    cands = plan.followup_candidates
-    assert 0 < len(cands) <= 20                       # filled, within budget
-    assert all(c.get("trigger") == "grid" for c in cands)
-    # Spread across both origins and inside the window.
-    assert {c["origin"] for c in cands} == {"MAD", "BCN"}
-    assert plan.calls_by_source["googleflights"] == len(cands)
-    from lib.planner import predict_upper_bounds
+    grid = plan.serpapi_discovery
+    assert 0 < len(grid) <= SERPAPI_DISCOVERY_CAP
+    assert all(g.get("trigger") == "grid" for g in grid)
+    assert len({g["departure_date"] for g in grid}) == len(grid)  # distinct dates
+    assert {g["origin"] for g in grid} == {"MAD", "BCN"}          # round-robin
+    # serpapi cost = grid + OTA reserve, within the pool per_search_cap 7.
+    assert plan.calls_by_source["serpapi"] == len(grid) + SERPAPI_OTA_RESERVE
+    assert plan.calls_by_source["serpapi"] <= 7
     b = predict_upper_bounds(
         n_origins=2, n_destinations=1,
         earliest_departure=route.search_window.earliest_departure,
         latest_return=route.search_window.latest_return,
         min_stay_days=route.stay.min_days)
-    assert len(cands) <= b["googleflights"]           # invariant preserved
+    assert plan.calls_by_source["serpapi"] <= b["serpapi"]        # upper bound
 
 
-def test_discovery_grid_one_way_uses_sentinel(tmp_path: Path):
+def test_serpapi_discovery_grid_rotates_and_one_way_sentinel(tmp_path: Path):
+    """The grid phase rotates with `today` (sweeps the window over scans)
+    and one-way samples carry the '' return sentinel."""
+    from datetime import timedelta
     route = _one_way_route()
     db = tmp_path / "t.db"
     with connect(db) as conn:
         ensure_schema(conn)
         upsert_route(conn, route)
-        plan = build_run_plan(
-            conn, route, sources=["googleflights", "serpapi", "aviasales"],
-            caps=Caps(searchapi_sweep=0, googleflights=10, serpapi=7),
-            today=TODAY)
-    cands = plan.followup_candidates
-    assert cands and all(c["return_date"] == "" for c in cands)   # one-way
+        plan_a = build_run_plan(
+            conn, route, sources=["serpapi", "aviasales"],
+            caps=Caps(searchapi_sweep=0, serpapi=7), today=TODAY)
+        plan_b = build_run_plan(
+            conn, route, sources=["serpapi", "aviasales"],
+            caps=Caps(searchapi_sweep=0, serpapi=7),
+            today=TODAY + timedelta(days=3))
+    grid = plan_a.serpapi_discovery
+    assert grid and all(g["return_date"] == "" for g in grid)     # one-way
+    # Different scan day -> different sampled dates (rotation).
+    dates_a = [g["departure_date"] for g in grid]
+    dates_b = [g["departure_date"] for g in plan_b.serpapi_discovery]
+    assert dates_a != dates_b

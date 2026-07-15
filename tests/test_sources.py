@@ -59,9 +59,11 @@ def test_role_map_defaults_to_enabled_only():
     assert "kiwi" not in rm.get("discovery", [])
     assert "aviasales" in rm.get("discovery", [])
     assert "serpapi" in rm.get("verification", [])
-    # Explicit source list is honoured verbatim.
+    # Explicit source list is honoured verbatim. serpapi is now BOTH the
+    # primary discovery rail (live date grid) and verification (2026-07-14).
     rm2 = sources.role_map(["aviasales", "serpapi"])
-    assert rm2 == {"discovery": ["aviasales"], "corroboration": ["aviasales"],
+    assert rm2 == {"discovery": ["aviasales", "serpapi"],
+                   "corroboration": ["aviasales"],
                    "verification": ["serpapi"]}
 
 

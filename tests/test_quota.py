@@ -422,20 +422,23 @@ def test_settle_releases_unused_contingency(conn):
     assert ledger.reserved_units(run, "s1", "serpapi") == 0  # closed
 
 
-def test_cost_vector_includes_serpapi_contingency():
+def test_cost_vector_serpapi_is_primary_discovery():
+    """SerpApi is the metered PRIMARY rail now (2026-07-14): its cost is
+    the discovery grid + OTA reserve carried in calls_by_source, emitted
+    as a single primary line — no browser-death contingency line."""
     from lib.planner import Caps, cost_vector
 
-    class _P:  # minimal RunPlan stand-in (cost_vector reads 4 attrs)
+    class _P:  # minimal RunPlan stand-in (cost_vector reads calls + a few attrs)
         calls_by_source = {"kiwi": 8, "googleflights": 23,
-                           "aviasales": 2, "serpapi": 0}
+                           "aviasales": 2, "serpapi": 7}
         followup_source = "googleflights"
         sources = ("googleflights", "serpapi", "aviasales", "kiwi")
         followup_candidates = tuple(range(23))
 
     cv = cost_vector(_P(), caps=Caps())
     assert cv.total("googleflights") == 23
-    assert cv.total("serpapi", kind="contingency") == 7   # min(23, caps 7)
-    assert cv.total("serpapi", kind="primary") == 0
+    assert cv.total("serpapi", kind="primary") == 7      # grid + OTA reserve
+    assert cv.total("serpapi", kind="contingency") == 0  # no contingency rail
     assert cv.by_source() == {"kiwi": 8, "googleflights": 23,
                               "serpapi": 7, "aviasales": 2}
 

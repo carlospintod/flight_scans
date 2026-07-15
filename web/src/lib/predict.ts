@@ -17,13 +17,17 @@ export interface PredictInput {
 export interface UpperBounds {
   kiwi: number;
   googleflights: number;
-  serpapi_contingency: number;
+  serpapi: number;
   aviasales: number;
 }
 
 const KIWI_BAND_DAYS = 21;
 const GF_CAP = 25;
-const SERPAPI_CONTINGENCY = 7;
+// SerpApi is the metered PRIMARY discovery rail (2026-07-14): a fixed
+// live date grid + the OTA seller-check reserve. Must match
+// lib/planner.py SERPAPI_DISCOVERY_CAP / SERPAPI_OTA_RESERVE.
+const SERPAPI_DISCOVERY_CAP = 5;
+const SERPAPI_OTA_RESERVE = 2;
 
 export function predictUpperBounds(p: PredictInput): UpperBounds {
   const oneWay = p.tripType === "one_way";
@@ -47,14 +51,14 @@ export function predictUpperBounds(p: PredictInput): UpperBounds {
     return {
       kiwi: bandsPerPair * pairs,
       googleflights: GF_CAP,
-      serpapi_contingency: Math.min(GF_CAP, SERPAPI_CONTINGENCY),
+      serpapi: SERPAPI_DISCOVERY_CAP + SERPAPI_OTA_RESERVE,
       aviasales: months * pairs,
     };
   }
   return {
     kiwi: bandsPerPair * pairs,
     googleflights: GF_CAP,
-    serpapi_contingency: Math.min(GF_CAP, SERPAPI_CONTINGENCY),
+    serpapi: SERPAPI_DISCOVERY_CAP + SERPAPI_OTA_RESERVE,
     aviasales: pairs,
   };
 }

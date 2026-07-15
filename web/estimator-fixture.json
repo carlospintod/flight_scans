@@ -12,7 +12,7 @@
    "expected": {
     "kiwi": 2,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 1
    }
   },
@@ -28,7 +28,7 @@
    "expected": {
     "kiwi": 2,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 1
    }
   },
@@ -44,7 +44,7 @@
    "expected": {
     "kiwi": 8,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 2
    }
   },
@@ -60,7 +60,7 @@
    "expected": {
     "kiwi": 1,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 1
    }
   },
@@ -76,7 +76,7 @@
    "expected": {
     "kiwi": 16,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 4
    }
   },
@@ -92,7 +92,7 @@
    "expected": {
     "kiwi": 14,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 1
    }
   },
@@ -108,7 +108,7 @@
    "expected": {
     "kiwi": 3,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 3
    }
   },
@@ -124,7 +124,7 @@
    "expected": {
     "kiwi": 1,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 1
    }
   },
@@ -140,7 +140,7 @@
    "expected": {
     "kiwi": 2,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 1
    }
   },
@@ -156,7 +156,7 @@
    "expected": {
     "kiwi": 6,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 2
    }
   },
@@ -172,7 +172,7 @@
    "expected": {
     "kiwi": 3,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 2
    }
   },
@@ -188,7 +188,7 @@
    "expected": {
     "kiwi": 2,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 2
    }
   },
@@ -204,7 +204,7 @@
    "expected": {
     "kiwi": 2,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 2
    }
   },
@@ -220,7 +220,7 @@
    "expected": {
     "kiwi": 10,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 8
    }
   },
@@ -236,7 +236,7 @@
    "expected": {
     "kiwi": 1,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 1
    }
   },
@@ -252,7 +252,7 @@
    "expected": {
     "kiwi": 6,
     "googleflights": 25,
-    "serpapi_contingency": 7,
+    "serpapi": 7,
     "aviasales": 5
    }
   }

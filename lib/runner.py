@@ -46,14 +46,15 @@ def execute_search(*, conn, route, plan, clients, caps,
     """Execute one search's RunPlan slices with the given clients.
 
     `serpapi_fallback_cap`: max candidates re-run through serpapi when
-    the primary verification rail dies. The batch runner passes the
-    search's RESERVED contingency units (A7: fallback must stay inside
-    this search's reservation, never borrow other searches' holds);
-    run_scan.py passes caps.serpapi (legacy single-search behavior).
+    the free gf rail dies. DEFAULTS TO 0 (2026-07-14): serpapi now spends
+    its whole reserved budget on the discovery grid + OTA, so an extra
+    gf->serpapi verification fallback would spend UNRESERVED serpapi and
+    break the upper bound. The grid is the reliable live layer instead.
+    run_batch passes cost.total('serpapi', kind='contingency') == 0.
     """
     out = SearchRunResult(search_id=route.name)
     if serpapi_fallback_cap is None:
-        serpapi_fallback_cap = caps.serpapi or 0
+        serpapi_fallback_cap = 0
     from .scanops import _now_iso
     search_started = _now_iso()
 
@@ -68,6 +69,27 @@ def execute_search(*, conn, route, plan, clients, caps,
             out.degraded = True
             out.record("kiwi", attempted=len(plan.kiwi_bands), error=str(exc))
             LOG.error("kiwi discovery failed (%s): %s", route.name, exc)
+
+    # --- SerpApi live discovery grid (the reliable finding layer) ---
+    # Kiwi is retired and gf scraping is captcha-walled from CI
+    # (2026-07-14), so SerpApi — managed Google Flights that never gets
+    # blocked — prices a rotating date grid across the window each scan.
+    # run_followup stores the same calendar+point rows as any point query
+    # (source='serpapi'); bounded by the plan's grid and the search's
+    # reserved serpapi budget, with the OTA check drawing the remainder.
+    if plan.serpapi_discovery and clients.get("serpapi") is not None:
+        grid = list(plan.serpapi_discovery)
+        try:
+            res = run_followup(conn=conn, client=clients["serpapi"],
+                               route=route, candidates=grid,
+                               skyscanner_max_calls=0)
+            out.record("serpapi", attempted=len(grid),
+                       stored=res.rows_stored)
+        except Exception as exc:  # noqa: BLE001 — incl. QuotaExceeded
+            out.degraded = True
+            out.record("serpapi", attempted=len(grid), error=str(exc))
+            LOG.error("serpapi discovery grid failed (%s): %s",
+                      route.name, exc)
 
     # --- Verification via the followup ladder ---
     candidates = list(plan.followup_candidates)

@@ -90,9 +90,9 @@ export async function POST(req: NextRequest) {
     tripType: oneWay ? "one_way" : "round_trip",
   });
   const cap = await capacityView();
-  // The only metered monthly budget is the SerpApi contingency (Kiwi
-  // retired; discovery + verification are free).
-  const newMonthly = predicted.serpapi_contingency * RUNS_PER_MONTH;
+  // The only metered monthly budget is SerpApi (live discovery grid +
+  // OTA check); Kiwi retired, aviasales + gf are free.
+  const newMonthly = predicted.serpapi * RUNS_PER_MONTH;
   if (cap.serpapi.available !== null
       && cap.serpapi.committedMonthly + newMonthly > cap.serpapi.available
       && user.role !== "owner") {

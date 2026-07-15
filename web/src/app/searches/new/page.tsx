@@ -71,10 +71,10 @@ export default function NewSearchPage() {
   const fits = useMemo(() => {
     if (!preview || !capacity) return null;
     if (capacity.serpapi.available === null) return null;
-    // The only metered monthly budget is the SerpApi contingency;
-    // discovery + verification are free. Reserve the upper bound.
+    // The only metered monthly budget is SerpApi (live discovery grid +
+    // OTA check); aviasales + gf are free. Reserve the upper bound.
     return capacity.serpapi.committedMonthly
-      + preview.serpapi_contingency * RUNS_PER_MONTH
+      + preview.serpapi * RUNS_PER_MONTH
       <= capacity.serpapi.available;
   }, [preview, capacity]);
 
@@ -188,19 +188,19 @@ export default function NewSearchPage() {
         {preview ? (
           <>
             <p className="mt-2 font-mono text-[13px] text-text">
-              Free discovery + verification. The only metered budget is
-              ≤{preview.serpapi_contingency} SerpApi checks/scan — and only
-              if the live browser rail fails. 3 scans/week.
+              The only metered budget is ≤{preview.serpapi} SerpApi
+              calls/scan (live discovery grid + OTA seller check).
+              Aviasales + Google Flights are free. 3 scans/week.
             </p>
             <details className="mt-2">
               <summary className="cursor-pointer font-mono text-[11px] text-text-mid">
                 per-source detail
               </summary>
               <ul className="mt-1 space-y-0.5 font-mono text-[12px] text-text-mid">
-                <li>aviasales discovery {preview.aviasales}/scan · free</li>
+                <li>serpapi live discovery grid + OTA check ≤{preview.serpapi}/scan
+                  · metered (free tier)</li>
+                <li>aviasales cached discovery {preview.aviasales}/scan · free</li>
                 <li>google flights verification ≤{preview.googleflights}/scan · free</li>
-                <li>serpapi contingency ≤{preview.serpapi_contingency}/scan
-                  · metered (only if the browser rail fails)</li>
               </ul>
             </details>
             <p className={`mt-3 font-mono text-[12px] ${

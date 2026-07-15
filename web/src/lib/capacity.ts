@@ -5,14 +5,15 @@ import { RUNS_PER_MONTH } from "./capacity-constants";
 export { RUNS_PER_MONTH };
 
 export interface CapacityView {
-  // The binding monthly budget. Since Kiwi was retired (2026-07-13),
-  // discovery (Aviasales) and verification (Google Flights) are free
-  // pools; the only metered monthly pool a search can consume is the
-  // SerpApi contingency (spent only if the browser rail fails).
+  // The binding monthly budget. Since Kiwi was retired (2026-07-13) and
+  // gf scraping got captcha-walled from CI (2026-07-14), SerpApi is the
+  // metered PRIMARY discovery rail: a live date grid + OTA seller check
+  // each scan. Aviasales (cached) and Google Flights (free scraper) don't
+  // gate; SerpApi is the only monthly pool a search draws down.
   serpapi: {
     available: number | null;      // live remaining minus safety margin
     periodLimit: number | null;
-    committedPerScan: number;      // all active searches' reserved contingency
+    committedPerScan: number;      // all active searches' reserved serpapi
     committedMonthly: number;
     runsPerMonth: number;
   };
@@ -60,7 +61,7 @@ export async function capacityView(): Promise<CapacityView> {
         latestReturn: cfg.search_window.latest_return,
         minStayDays: cfg.stay_preferences?.min_days ?? 1,
         tripType: cfg.trip_type === "one_way" ? "one_way" : "round_trip",
-      }).serpapi_contingency;
+      }).serpapi;
     } catch {
       /* unparseable config never blocks the meter */
     }

@@ -57,13 +57,14 @@ REGISTRY: tuple[SourceSpec, ...] = (
         note="RETIRED 2026-07-13 — proxy is the 402 freemium trap; "
              "official Tequila invitation-gated. Opt-in only."),
     SourceSpec(
-        "serpapi", family=FAMILY_GOOGLE, roles=("verification",),
+        "serpapi", family=FAMILY_GOOGLE, roles=("discovery", "verification"),
         env_var="SERPAPI_KEY",
         metered={"point_query": 1, "booking_options": 1},
         pool=("monthly", 250, None, 25, 7, None),
         failure_mode="clean_429", enabled=True,
-        note="Live Google Flights + booking_options (OTA sellers) + "
-             "price_insights. No card. $25/mo -> 1000 switch."),
+        note="PRIMARY discovery + verification rail (2026-07-14): live "
+             "Google Flights date grid + booking_options (OTA sellers) + "
+             "price_insights. Never captcha'd. No card. $25/mo -> 1000 switch."),
     SourceSpec(
         "aviasales", family=FAMILY_CACHED, roles=("discovery", "corroboration"),
         env_var="TRAVELPAYOUTS_TOKEN",
