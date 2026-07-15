@@ -115,6 +115,39 @@ def _prior_confidence(conn, this_run_id: str):
         note=c.get("note", ""))
 
 
+def _prior_summary(conn, this_run_id: str) -> dict | None:
+    """The full summary dict from the most recent PRIOR batch run."""
+    row = conn.execute(
+        "SELECT summary_json FROM ledger_runs WHERE run_id != ? "
+        "AND summary_json IS NOT NULL ORDER BY started_at DESC LIMIT 1",
+        (this_run_id,)).fetchone()
+    if row is None:
+        return None
+    try:
+        return json.loads(row["summary_json"]) or {}
+    except (ValueError, TypeError):
+        return None
+
+
+def _unconfigured_sources(requested: list[str], available: list[str]) -> list[str]:
+    """Requested sources that NEED an API key but have no client — i.e.
+    UNCONFIGURED, not merely idle. Scrapers (googleflights) legitimately
+    go dark on CI (no browser), so they don't count; only keyed live
+    sources whose absence silently strips real coverage. Found 2026-07-15:
+    serpapi (the reliable rail) had no SERPAPI_KEY yet the scan reported
+    'healthy' and ran on cached data alone."""
+    from lib.sources import REGISTRY
+    by_id = {s.id: s for s in REGISTRY}
+    out = []
+    for s in requested:
+        if s in available:
+            continue
+        spec = by_id.get(s)
+        if spec and spec.env_var and spec.failure_mode != "scraper":
+            out.append(s)
+    return out
+
+
 def _estimate_seconds(plan) -> int:
     # One-way aviasales sweeps run per (pair, month); months is () for
     # round-trip, so the multiplier collapses to 1.
@@ -465,6 +498,27 @@ def main() -> int:
             drop = _conf.confidence_drop_push(conf, prior_conf)
             if drop:
                 summary["health_alerts"].append(drop)
+            # Never-silent: a keyed source requested but with no client is
+            # UNCONFIGURED — the scan silently ran without it. Page ONCE
+            # (transition vs the prior summary) so a missing key can't hide
+            # behind a "healthy" run (2026-07-15: serpapi keyless).
+            unconfigured = _unconfigured_sources(sources, available)
+            summary["unconfigured_sources"] = unconfigured
+            prior_unconf = set(
+                (_prior_summary(conn, run_id) or {}).get(
+                    "unconfigured_sources", []))
+            newly = [s for s in unconfigured if s not in prior_unconf]
+            if newly:
+                from lib.sources import REGISTRY as _REG
+                envs = {s.id: s.env_var for s in _REG}
+                keys = ", ".join(envs.get(s) or s for s in newly)
+                summary["health_alerts"].append({
+                    "title": "Price source unconfigured",
+                    "body": f"{', '.join(newly)} has no API key ({keys}) — "
+                            f"the scan ran on the remaining sources only, no "
+                            f"live prices from it. Set the key in /ops -> API "
+                            f"keys.",
+                    "priority": "high", "tags": "warning,key"})
         except Exception as exc:  # noqa: BLE001 — health must never fail a scan
             LOG.warning("health assessment failed (non-fatal): %s", exc)
             summary["source_health"] = {}

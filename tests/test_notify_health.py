@@ -62,6 +62,38 @@ def test_price_and_health_both_push(monkeypatch, tmp_path):
     assert len(pushed) == 2      # one price, one health
 
 
+def test_unconfigured_source_detection():
+    """A keyed source requested but with no client is UNCONFIGURED;
+    a scraper (googleflights) going dark on CI is not (expected)."""
+    from run_batch import _unconfigured_sources
+    # serpapi keyless while requested -> flagged (the 2026-07-15 bug).
+    assert _unconfigured_sources(
+        ["googleflights", "serpapi", "aviasales"], ["aviasales"]) == ["serpapi"]
+    # googleflights (scraper) unavailable -> NOT flagged (no browser on CI).
+    assert _unconfigured_sources(["googleflights", "aviasales"],
+                                 ["aviasales"]) == []
+    # everything present -> nothing flagged.
+    assert _unconfigured_sources(["serpapi", "aviasales"],
+                                 ["serpapi", "aviasales"]) == []
+
+
+def test_unconfigured_source_pushes_once(monkeypatch, tmp_path):
+    """The 'Price source unconfigured' alert reaches the phone."""
+    summary = {
+        "status": "ok", "alerts_fired": [],
+        "health_alerts": [{
+            "title": "Price source unconfigured",
+            "body": "serpapi has no API key (SERPAPI_KEY) — ...",
+            "priority": "high", "tags": "warning,key"}],
+    }
+    pushed = _run(monkeypatch, summary)
+    monkeypatch.setattr("sys.argv", ["notify", _write(tmp_path, summary)])
+    assert notify.main() == 0
+    assert len(pushed) == 1
+    assert "unconfigured" in pushed[0]["title"].lower()
+    assert pushed[0]["priority"] == "high"
+
+
 def test_missing_summary_still_pings(monkeypatch, tmp_path):
     pushed = _run(monkeypatch, {}, job="failure")
     monkeypatch.setattr("sys.argv", ["notify", str(tmp_path / "nope.json")])
