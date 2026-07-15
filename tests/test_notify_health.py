@@ -62,6 +62,41 @@ def test_price_and_health_both_push(monkeypatch, tmp_path):
     assert len(pushed) == 2      # one price, one health
 
 
+def test_oneway_alert_labelled_oneway(monkeypatch, tmp_path):
+    """A one-way fare (empty return_date) must say 'one-way', not render a
+    bare 'dep..' that reads like a round-trip (2026-07-15 owner confusion)."""
+    summary = {
+        "status": "ok",
+        "alerts_fired": [{"type": "new_low", "origin": "MAD",
+                          "destination": "NBO", "departure_date": "2026-12-16",
+                          "return_date": "", "price": 478, "currency": "EUR"}],
+        "health_alerts": [],
+    }
+    pushed = _run(monkeypatch, summary)
+    monkeypatch.setattr("sys.argv", ["notify", _write(tmp_path, summary)])
+    assert notify.main() == 0
+    assert len(pushed) == 1
+    assert "one-way 2026-12-16" in pushed[0]["body"]
+    assert "2026-12-16.." not in pushed[0]["body"]     # no bare round-trip form
+    assert "one-way" in pushed[0]["title"]
+
+
+def test_roundtrip_alert_keeps_return(monkeypatch, tmp_path):
+    summary = {
+        "status": "ok",
+        "alerts_fired": [{"type": "new_low", "origin": "MAD",
+                          "destination": "NBO", "departure_date": "2026-09-20",
+                          "return_date": "2026-11-19", "price": 556,
+                          "currency": "EUR"}],
+        "health_alerts": [],
+    }
+    pushed = _run(monkeypatch, summary)
+    monkeypatch.setattr("sys.argv", ["notify", _write(tmp_path, summary)])
+    assert notify.main() == 0
+    assert "2026-09-20..2026-11-19" in pushed[0]["body"]
+    assert "one-way" not in pushed[0]["title"]
+
+
 def test_unconfigured_source_detection():
     """A keyed source requested but with no client is UNCONFIGURED;
     a scraper (googleflights) going dark on CI is not (expected)."""

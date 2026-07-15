@@ -48,14 +48,22 @@ def main() -> int:
     if summary and summary.get("alerts_fired"):
         alerts = summary["alerts_fired"]
         cheapest = min(alerts, key=lambda a: a["price"])
-        title = (f"Flight alert: {cheapest['destination']} from "
+        # Flag ONE-WAY explicitly: an empty return_date used to render as a
+        # bare "2026-12-16.." that looked like a round-trip with a missing
+        # leg (2026-07-15: an owner got a one-way €478 alert and couldn't
+        # find it on the round-trip radar). Say "one-way" so it's obvious
+        # which search (round-trip vs one-way) the fare belongs to.
+        oneway = not cheapest.get("return_date")
+        title = (f"Flight alert: {cheapest['destination']}"
+                 f"{' one-way' if oneway else ''} from "
                  f"{cheapest['price']} {cheapest['currency']}")
-        lines = [
-            f"[{a['type']}] {a['origin']}->{a['destination']} "
-            f"{a['departure_date']}..{a['return_date']} "
-            f"{a['price']} {a['currency']}"
-            for a in sorted(alerts, key=lambda a: a["price"])[:8]
-        ]
+        lines = []
+        for a in sorted(alerts, key=lambda a: a["price"])[:8]:
+            trip = (f"one-way {a['departure_date']}"
+                    if not a.get("return_date")
+                    else f"{a['departure_date']}..{a['return_date']}")
+            lines.append(f"[{a['type']}] {a['origin']}->{a['destination']} "
+                         f"{trip} {a['price']} {a['currency']}")
         if len(alerts) > 8:
             lines.append(f"... and {len(alerts) - 8} more")
         _push(topic, title=title, body="\n".join(lines),
