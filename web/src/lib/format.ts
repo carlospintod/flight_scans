@@ -52,6 +52,42 @@ export function isStale(iso: string): boolean {
   return ageDays(iso) > STALE_DAYS;
 }
 
+/** Friendly label for a row's data source. serpapi / googleflights /
+ *  searchapi are all the same Google Flights corpus; aviasales is the
+ *  cached date scout (a lead, not a bookable-verified fare). */
+export function providerLabel(source: string): string {
+  switch (source) {
+    case "serpapi":
+    case "googleflights":
+    case "searchapi":
+      return "Google Flights";
+    case "aviasales":
+      return "Aviasales (cached)";
+    case "kiwi":
+      return "Kiwi";
+    default:
+      return source;
+  }
+}
+
+/** Deep-link to verify a fare live on Kayak — a metasearch that lists the
+ *  carriers AND OTA sellers for each itinerary, cheapest-first. Kayak's
+ *  path-based URL deterministically pre-fills origin, destination and the
+ *  exact dates (verified 2026-07-15), with no cookie-consent wall. One-way
+ *  (empty returnDate) omits the return leg. */
+export function verifyUrl(o: {
+  origin: string;
+  destination: string;
+  departureDate: string;
+  returnDate: string;
+}): string {
+  const leg = o.returnDate
+    ? `${o.departureDate}/${o.returnDate}`
+    : o.departureDate;
+  return `https://www.kayak.com/flights/${o.origin}-${o.destination}/${
+    leg}?sort=price_a`;
+}
+
 export type Freshness = "fresh" | "aging" | "stale";
 
 /** Stale-data ladder for the badge: amber >4d, red >8d (plan Phase 2). */

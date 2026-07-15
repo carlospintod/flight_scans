@@ -3,7 +3,13 @@ import { notFound } from "next/navigation";
 import { AlertsFeed } from "@/components/AlertsFeed";
 import { HistoryChart } from "@/components/HistoryChart";
 import { Card, SectionHeading } from "@/components/Section";
-import { fmtDateLong, fmtDuration, fmtStops } from "@/lib/format";
+import {
+  fmtDateLong,
+  fmtDuration,
+  fmtStops,
+  providerLabel,
+  verifyUrl,
+} from "@/lib/format";
 import {
   getItineraryAlerts,
   getItineraryDetail,
@@ -62,6 +68,19 @@ export default async function ItineraryPage({
         <p className="mt-1 font-mono text-[13px] text-text-mid">
           out {fmtDateLong(dep)} · back {fmtDateLong(ret)} · {stay} day stay
         </p>
+        <a
+          href={verifyUrl({
+            origin,
+            destination,
+            departureDate: dep,
+            returnDate: ret,
+          })}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-block rounded-card border border-border bg-bg2 px-3 py-1.5 font-mono text-[12px] text-text hover:border-signature hover:text-signature"
+        >
+          Check this fare live on Kayak ↗
+        </a>
       </div>
 
       <section>
@@ -75,7 +94,7 @@ export default async function ItineraryPage({
         <section>
           <SectionHeading>
             Verified options · {detail[0].snapshotAt.slice(0, 10)} ·{" "}
-            {detail[0].source}
+            {providerLabel(detail[0].source)}
           </SectionHeading>
           <div className="grid gap-3 sm:grid-cols-3">
             {detail.map((d) => (
@@ -91,6 +110,13 @@ export default async function ItineraryPage({
                   {fmtStops(d.stops)} · {fmtDuration(d.totalMinutes)}
                   {d.isSelfTransfer && (
                     <span className="ml-1 text-amber">· self-transfer</span>
+                  )}
+                </div>
+                <div className="mt-1 font-mono text-[11px] text-hint">
+                  {d.seller ? (
+                    <>cheapest via <span className="text-signature">{d.seller}</span></>
+                  ) : (
+                    <>via {providerLabel(d.source)}</>
                   )}
                 </div>
               </Card>

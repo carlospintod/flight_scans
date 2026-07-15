@@ -33,6 +33,13 @@ function freshCutoff(): string {
     .replace(/\.\d{3}Z$/, "Z");
 }
 
+/** Display ceiling for the "cheapest" views (table, heatmap, curve,
+ *  carrier mix). Fares above this are irrelevant to the sub-€500 mission
+ *  and skew the heatmap colour scale / bury the signal, so they're hidden
+ *  from discovery. History and the per-itinerary drill-down keep every
+ *  price. Trusted integer constant — inlined into SQL (no user input). */
+const MAX_DISPLAY_PRICE = 600;
+
 /** Effective route config — routes.config_json (canonical shape written
  *  by lib/config.RouteConfig.to_json). Mirrors route_store precedence:
  *  the web app never falls back to YAML (the DB row always exists after
@@ -86,6 +93,7 @@ export async function getOneWayCurve(
       WHERE cs.route_id = ? AND cs.return_date = ''
         AND cs.departure_date >= ? AND cs.departure_date <= ?
         AND cs.snapshot_at >= ?
+        AND cs.price <= ${MAX_DISPLAY_PRICE}
       GROUP BY cs.departure_date
       ORDER BY cs.departure_date ASC`,
     args: [w.routeId, w.routeId, w.earliestDeparture, w.latestReturn,
@@ -159,7 +167,13 @@ export async function getTopAlternatives(
                 AND pq.destination = cs.destination
                 AND pq.departure_date = cs.departure_date
                 AND pq.return_date = cs.return_date AND pq.rank = 0
-              ORDER BY pq.snapshot_at DESC LIMIT 1) AS is_self_transfer
+              ORDER BY pq.snapshot_at DESC LIMIT 1) AS is_self_transfer,
+             (SELECT seller FROM point_queries pq
+              WHERE pq.route_id = cs.route_id AND pq.origin = cs.origin
+                AND pq.destination = cs.destination
+                AND pq.departure_date = cs.departure_date
+                AND pq.return_date = cs.return_date AND pq.rank = 0
+              ORDER BY pq.snapshot_at DESC LIMIT 1) AS seller
       FROM calendar_snapshots cs
       JOIN (
           SELECT source, origin, destination, departure_date, return_date,
@@ -178,6 +192,7 @@ export async function getTopAlternatives(
         AND cs.departure_date >= ?
         AND cs.return_date <= ?
         AND cs.snapshot_at >= ?
+        AND cs.price <= ${MAX_DISPLAY_PRICE}
       ORDER BY cs.price ASC
       LIMIT ?`,
     args: [
@@ -206,6 +221,7 @@ export async function getTopAlternatives(
       totalMinutes:
         r["total_minutes"] === null ? null : Number(r["total_minutes"]),
       isSelfTransfer: Number(r["is_self_transfer"] ?? 0) === 1,
+      seller: r["seller"] ? String(r["seller"]) : null,
     });
     if (out.length >= limit) break;
   }
@@ -283,6 +299,7 @@ export async function getHeatmapGrid(
         AND cs.departure_date >= ?
         AND cs.return_date <= ?
         AND cs.snapshot_at >= ?
+        AND cs.price <= ${MAX_DISPLAY_PRICE}
       GROUP BY cs.departure_date, cs.stay_days
       ORDER BY cs.departure_date ASC, cs.stay_days ASC`,
     args: [
@@ -316,6 +333,7 @@ export async function getCarrierMix(w: RouteWindow): Promise<CarrierCount[]> {
               AND cs.stay_days BETWEEN ? AND ?
               AND cs.departure_date >= ?
               AND cs.return_date <= ?
+              AND cs.price <= ${MAX_DISPLAY_PRICE}
         )
       GROUP BY pq.carriers
       ORDER BY n DESC
@@ -350,12 +368,13 @@ export async function getItineraryDetail(
     totalMinutes: number | null;
     isSelfTransfer: boolean;
     source: string;
+    seller: string | null;
     snapshotAt: string;
   }[]
 > {
   const rs = await db().execute({
     sql: `SELECT rank, price, currency, carriers, stops, total_minutes,
-                 is_self_transfer, source, snapshot_at
+                 is_self_transfer, source, seller, snapshot_at
           FROM point_queries
           WHERE route_id = ? AND origin = ? AND destination = ?
             AND departure_date = ? AND return_date = ?
@@ -380,6 +399,7 @@ export async function getItineraryDetail(
       r["total_minutes"] === null ? null : Number(r["total_minutes"]),
     isSelfTransfer: Number(r["is_self_transfer"] ?? 0) === 1,
     source: String(r["source"]),
+    seller: r["seller"] ? String(r["seller"]) : null,
     snapshotAt: String(r["snapshot_at"]),
   }));
 }

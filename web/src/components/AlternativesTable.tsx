@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { fmtDate, fmtStops, isStale, seenLabel } from "@/lib/format";
+import {
+  fmtDate,
+  fmtStops,
+  isStale,
+  providerLabel,
+  seenLabel,
+  verifyUrl,
+} from "@/lib/format";
 import type { Itinerary } from "@/lib/types";
 
 /** Cheapest itinerary per departure day (the collapse mirrors
@@ -24,10 +31,11 @@ export function AlternativesTable({ rows }: { rows: Itinerary[] }) {
               <th className="py-2 pr-4">Depart</th>
               <th className="py-2 pr-4">Return</th>
               <th className="py-2 pr-4">Stay</th>
-              <th className="py-2 pr-4">Carrier</th>
+              <th className="py-2 pr-4">Airline</th>
               <th className="py-2 pr-4">Stops</th>
-              <th className="py-2 pr-4">Src</th>
-              <th className="py-2">Seen</th>
+              <th className="py-2 pr-4">Via</th>
+              <th className="py-2 pr-4">Seen</th>
+              <th className="py-2">Check</th>
             </tr>
           </thead>
           <tbody>
@@ -52,15 +60,38 @@ export function AlternativesTable({ rows }: { rows: Itinerary[] }) {
                 <td className="py-2 pr-4">{r.stayDays}d</td>
                 <td className="max-w-[200px] truncate py-2 pr-4">
                   {r.topCarrier ?? "—"}
+                  {r.isSelfTransfer && (
+                    <span className="ml-1 text-[10px] text-amber">
+                      self-transfer
+                    </span>
+                  )}
                 </td>
                 <td className="py-2 pr-4">{fmtStops(r.stops)}</td>
-                <td className="py-2 pr-4 text-hint">{r.source}</td>
+                <td className="py-2 pr-4 text-hint">
+                  {providerLabel(r.source)}
+                  {r.seller && (
+                    <span className="block text-[11px] text-signature">
+                      via {r.seller}
+                    </span>
+                  )}
+                </td>
                 <td
-                  className={`py-2 ${
+                  className={`py-2 pr-4 ${
                     isStale(r.snapshotAt) ? "text-amber" : "text-hint"
                   }`}
                 >
                   {seenLabel(r.snapshotAt).replace("seen ", "")}
+                </td>
+                <td className="py-2">
+                  <a
+                    href={verifyUrl(r)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-hint hover:text-signature"
+                    title="Check this fare live on Kayak"
+                  >
+                    live ↗
+                  </a>
                 </td>
               </tr>
             ))}
@@ -89,12 +120,25 @@ export function AlternativesTable({ rows }: { rows: Itinerary[] }) {
               </div>
               <div className="mt-0.5 text-[11px] text-hint">
                 {r.topCarrier ?? "carrier unknown"} · {fmtStops(r.stops)} ·{" "}
-                {r.source} ·{" "}
-                <span className={isStale(r.snapshotAt) ? "text-amber" : ""}>
-                  {seenLabel(r.snapshotAt)}
-                </span>
+                {providerLabel(r.source)}
+                {r.seller && (
+                  <span className="text-signature"> · via {r.seller}</span>
+                )}
               </div>
             </Link>
+            <div className="mt-1.5 flex items-center justify-between text-[11px]">
+              <span className={isStale(r.snapshotAt) ? "text-amber" : "text-hint"}>
+                {seenLabel(r.snapshotAt)}
+              </span>
+              <a
+                href={verifyUrl(r)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-hint hover:text-signature"
+              >
+                check live ↗
+              </a>
+            </div>
           </li>
         ))}
       </ul>

@@ -27,6 +27,9 @@ export interface Itinerary {
   stops: number | null;
   totalMinutes: number | null;
   isSelfTransfer: boolean;
+  /** The OTA/agency Google lists as the cheapest seller (e.g. SmartFares,
+   *  Gotogate) when it undercuts the airline headline; null otherwise. */
+  seller: string | null;
 }
 
 export interface ScanRun {
