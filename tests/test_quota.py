@@ -680,3 +680,65 @@ def test_kiwi_capture_quota_skips_payment_gate():
     assert recorded == []                     # nothing written
     client._capture_quota(_Resp(200))
     assert client.latest_quota["remaining"] == 285   # 2xx still captured
+
+
+def test_closeout_capture_never_resurrects_run_spend(conn):
+    """2026-07-17 review (critical): the close-out anchor capture must not
+    re-promote the run-START account-probe snapshot — its remaining
+    predates the run's spend, and record_anchor pins the watermark at the
+    CURRENT max spend event, which would resurrect every credit the run
+    just spent. run_batch passes a cutoff taken AFTER the probes; this
+    pins the ledger behavior for that sequence."""
+    import time
+    from lib.db import record_quota
+    from lib.quota import QuotaLedger
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    started_at = "2026-07-18T05:23:00Z"
+    # Run start: /me probe records a snapshot + an account_api anchor.
+    record_quota(conn, source="searchapi", remaining=100, limit_total=100,
+                 raw_json="{}")
+    conn.execute("UPDATE quota_snapshots SET checked_at = ? "
+                 "WHERE source = 'searchapi'", ("2026-07-18T05:23:01Z",))
+    ledger.record_anchor("searchapi", remaining=100, limit_total=100,
+                         origin="account_api")
+    anchors_probed_at = "2026-07-18T05:23:02Z"
+    run = ledger.begin_run(trigger="cron")
+    # The sweep spends 28 lifetime credits.
+    for _ in range(28):
+        ev = ledger.record_spend(run_id=run, search_id="s",
+                                 source="searchapi", units=1, op="calendar")
+        ledger.mark(ev, "ok")
+    before = ledger.pool_state("searchapi").effective_available
+    # Close-out with the CORRECT cutoff: the stale start snapshot is
+    # excluded, nothing is promoted, spend stays on the books.
+    ledger.capture_anchors_from_snapshots(anchors_probed_at)
+    after = ledger.pool_state("searchapi").effective_available
+    assert after == before, (
+        f"close-out capture resurrected spend: {before} -> {after}")
+    # And the buggy old call (started_at) WOULD have resurrected it —
+    # the regression this test guards against.
+    ledger.capture_anchors_from_snapshots(started_at)
+    resurrected = ledger.pool_state("searchapi").effective_available
+    assert resurrected == before + 28    # documents the hazard shape
+
+
+def test_sweep_affordability_guard():
+    """2026-07-17 review (high): once the lifetime pool can't cover a full
+    sweep, the batch must drop ONLY the sweep — never let the 28-unit
+    line fail the all-or-nothing reservation and skip the whole search."""
+    from run_batch import _sweep_affordable
+
+    class _Cost:
+        def __init__(self, units): self._u = units
+        def total(self, source, **kw): return self._u if source == "searchapi" else 0
+
+    class _St:
+        def __init__(self, avail): self.effective_available = avail
+
+    assert _sweep_affordable(_Cost(28), {"searchapi": _St(96)}) is True
+    assert _sweep_affordable(_Cost(28), {"searchapi": _St(28)}) is True
+    assert _sweep_affordable(_Cost(28), {"searchapi": _St(12)}) is False  # terminal state
+    assert _sweep_affordable(_Cost(28), {"searchapi": _St(None)}) is False
+    assert _sweep_affordable(_Cost(28), {}) is False
+    assert _sweep_affordable(_Cost(0), {}) is True     # no sweep planned

@@ -100,11 +100,20 @@ REGISTRY: tuple[SourceSpec, ...] = (
         note="Sky-Scrapper (apiheya, 20/mo Hard Limit) — OTA breadth + "
              "price calendar. Second backend of the OTA family."),
     SourceSpec(
-        "searchapi", family=FAMILY_GOOGLE, roles=("verification",),
+        "searchapi", family=FAMILY_GOOGLE, roles=("discovery", "verification"),
         env_var="SEARCHAPI_KEY",
         metered={"point_query": 1, "calendar": 1},
-        pool=None, failure_mode="lifetime_cap", enabled=False,
-        note="Break-glass — 100 lifetime then $40/mo. Same Google corpus."),
+        # LIFETIME credits, not renewing: reset_anchor_day=None means the
+        # ledger NEVER presumes a reset — availability only moves via
+        # /me-anchors and recorded spend. per_search_cap=28 = one full
+        # mission-rectangle sweep; safety_margin=4 fails closed near zero.
+        pool=("monthly", 100, None, 4, 28, None),
+        failure_mode="lifetime_cap", enabled=True,
+        note="RECTANGLE SWEEP rail (2026-07-16 coverage audit): "
+             "google_flights_calendar prices the full (dep x ret) window "
+             "in ~28 calls — the only true no-blind-spots discovery. "
+             "Biweekly cadence, owner round-trip searches only "
+             "(run_batch gates). 100 lifetime credits ~= 3 full sweeps."),
 )
 
 _BY_ID = {s.id: s for s in REGISTRY}

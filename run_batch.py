@@ -23,7 +23,7 @@ import json
 import logging
 import os
 import sys
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -44,7 +44,17 @@ EXIT_OK, EXIT_FATAL, EXIT_DEGRADED = 0, 1, 2
 EST_KIWI_BAND_S = 4
 EST_GF_CANDIDATE_S = 25
 EST_AVIASALES_PAIR_S = 3
+# Calendar calls are usually a few seconds but can hang to the client
+# timeout (60s) on a bad day; 8s is the planning estimate, and the job
+# timeout (50 min) + per-call timeout bound the true worst case.
+EST_SWEEP_WINDOW_S = 8
 EST_SEARCH_OVERHEAD_S = 45
+
+# SearchAPI rectangle sweeps burn LIFETIME credits (~28/sweep of 100), so
+# they run at most every ~2 weeks: Saturdays, and only when no sweep has
+# spent in the cooldown window. Cooldown (not a parity gate) so a forced
+# validation sweep automatically pushes the next cron sweep out.
+SWEEP_COOLDOWN_DAYS = 12
 
 
 def _now_iso() -> str:
@@ -148,11 +158,41 @@ def _unconfigured_sources(requested: list[str], available: list[str]) -> list[st
     return out
 
 
+def _sweep_affordable(cost, pool_states) -> bool:
+    """True when the searchapi pool can cover the plan's whole sweep line.
+    Guards the terminal lifetime state (2026-07-17 review): once ~3 sweeps
+    spend 84 of 100 credits, a 28-window sweep line would fail the
+    all-or-nothing reservation and skip the ENTIRE owner search every
+    sweep Saturday — the 2026-07-11 Kiwi failure shape. Instead the batch
+    rebuilds the plan without searchapi: the search still runs its other
+    rails, only the sweep is dropped (and the pool card on /ops shows why).
+    """
+    needed = cost.total("searchapi")
+    if needed <= 0:
+        return True
+    st = pool_states.get("searchapi")
+    avail = getattr(st, "effective_available", None) if st else None
+    return (avail or 0) >= needed
+
+
+def _sweep_recently(conn, *, days: int = SWEEP_COOLDOWN_DAYS) -> bool:
+    """True if any searchapi calendar call spent within the cooldown —
+    the biweekly cadence gate for the finite-credit rectangle sweep."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM spend_events "
+        "WHERE source = 'searchapi' AND op = 'calendar' AND spent_at >= ?",
+        (cutoff,)).fetchone()
+    return (row["n"] or 0) > 0
+
+
 def _estimate_seconds(plan) -> int:
     # One-way aviasales sweeps run per (pair, month); months is () for
     # round-trip, so the multiplier collapses to 1.
     av_calls = len(plan.aviasales_pairs) * (len(plan.aviasales_months) or 1)
     return (EST_SEARCH_OVERHEAD_S
+            + len(plan.sweep_windows) * EST_SWEEP_WINDOW_S
             + len(plan.kiwi_bands) * EST_KIWI_BAND_S
             + len(plan.followup_candidates) * EST_GF_CANDIDATE_S
             + av_calls * EST_AVIASALES_PAIR_S)
@@ -164,13 +204,19 @@ def main() -> int:
                     # kiwi retired 2026-07-13 (proxy = 402 freemium trap;
                     # official Tequila invitation-gated). Opt-in only:
                     # add "kiwi" here if a genuinely-free access appears.
-                    default="googleflights,serpapi,aviasales")
+                    # searchapi = rectangle sweep, cadence-gated inside
+                    # the batch (most runs plan without it).
+                    default="googleflights,serpapi,aviasales,searchapi")
     ap.add_argument("--cap", type=int, default=25,
                     help="max googleflights verifications per search")
     ap.add_argument("--trigger", default="local",
                     choices=["local", "cron", "dispatch", "schedule",
                              "workflow_dispatch"])
     ap.add_argument("--json-summary", type=Path, default=None)
+    ap.add_argument("--force-sweep", action="store_true",
+                    help="run the SearchAPI rectangle sweep this run, "
+                         "bypassing the Saturday+cooldown cadence gate "
+                         "(still ledger-metered)")
     ap.add_argument("--wall-budget-s", type=int,
                     default=int(os.environ.get("BATCH_WALL_BUDGET_S", 2700)))
     args = ap.parse_args()
@@ -297,6 +343,47 @@ def main() -> int:
             except Exception as exc:  # noqa: BLE001
                 LOG.warning("serpapi account check failed: %s", exc)
 
+        # searchapi's /me endpoint is also free — anchor the LIFETIME
+        # credit pool so sweep reservations compare against real credits
+        # (reset_anchor_day=None: availability only ever moves via these
+        # anchors and recorded spend, never a presumed monthly reset).
+        sa = raw_clients.get("searchapi")
+        if sa is not None:
+            try:
+                q = sa.check_quota()
+                if isinstance(q.get("remaining"), int):
+                    db_mod.record_quota(conn, source="searchapi",
+                                        remaining=q["remaining"],
+                                        limit_total=q.get("limit_total"),
+                                        raw_json=json.dumps(q.get("raw", {})))
+                    ledger.record_anchor("searchapi",
+                                         remaining=q["remaining"],
+                                         limit_total=q.get("limit_total"),
+                                         origin="account_api")
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("searchapi account check failed: %s", exc)
+
+        # Anchor-capture cutoff: the close-out capture_anchors_from_
+        # snapshots must NOT see the account-probe snapshots recorded
+        # above — they predate this run's spend, and re-promoting one at
+        # close-out would pin a fresh watermark AFTER the run's spend
+        # events, resurrecting every credit the run just spent (found in
+        # the 2026-07-17 review; fatal for searchapi's LIFETIME pool,
+        # quietly wrong for serpapi since M7). Only snapshots written
+        # after this instant (i.e. genuine mid-run call headers) qualify.
+        anchors_probed_at = _now_iso()
+
+        # Rectangle-sweep cadence: Saturdays with a cooldown (or forced).
+        # The sweep burns lifetime credits, so most runs exclude searchapi
+        # per-search below; the client/anchor above still run so the pool
+        # stays observable on /ops between sweeps.
+        sweep_day = args.force_sweep or (
+            date.today().weekday() == 5 and not _sweep_recently(conn))
+        if sa is not None:
+            LOG.info("rectangle sweep %s this run%s",
+                     "ACTIVE" if sweep_day else "dormant",
+                     " (forced)" if args.force_sweep else "")
+
         run_id = ledger.begin_run(trigger=trigger)
         if run_id is None:
             LOG.warning("another run holds the lease — exiting cleanly")
@@ -318,12 +405,17 @@ def main() -> int:
             return EXIT_FATAL
         LOG.info("batch %s: %d active search(es)", run_id, len(rows))
 
+        # searchapi_sweep=28 bounds one rectangle sweep (= the searchapi
+        # pool's per_search_cap; the planner note flags any capping).
+        # searchapi_followup stays 0 — the sweep IS searchapi's job; the
+        # verification ladder rung remains gated off.
         caps = Caps(googleflights=args.cap, kiwi=20,
-                    searchapi_sweep=0, searchapi_followup=0)
+                    searchapi_sweep=28, searchapi_followup=0)
         per_search: list[dict] = []
         all_alerts: list = []
         degraded = False
         skipped = 0
+        sweep_taken = False   # at most one rectangle sweep per run
 
         for row in rows:
             sid = row["search_id"]
@@ -361,9 +453,39 @@ def main() -> int:
             # (2026-07-11: a floored Kiwi silently took down every search).
             # Recomputed per search so earlier searches' holds count.
             pool_states = {p.source: p for p in ledger.all_pool_states()}
-            plan = build_run_plan(conn, route, sources=available, caps=caps,
-                                  today=date.today(), pool_states=pool_states)
+            # Rectangle sweeps are owner-only (finite lifetime credits are
+            # the owner's), cadence-gated, and at most ONE per run (a
+            # second owner round-trip search must not double-burn ~56
+            # credits the same Saturday). Every other search plans without
+            # searchapi so no sweep line is quoted or reserved.
+            allow_sweep = (sweep_day and row["priority"] == "owner"
+                           and not sweep_taken)
+            search_sources = available
+            if not allow_sweep:
+                search_sources = [s for s in available if s != "searchapi"]
+            plan = build_run_plan(conn, route, sources=search_sources,
+                                  caps=caps, today=date.today(),
+                                  pool_states=pool_states)
             cost = cost_vector(plan, caps=caps)
+            if allow_sweep and plan.sweep_windows:
+                if _sweep_affordable(cost, pool_states):
+                    sweep_taken = True
+                else:
+                    # Terminal lifetime state: pool can't cover a full
+                    # sweep. Drop ONLY the sweep, keep the search.
+                    st = pool_states.get("searchapi")
+                    LOG.warning(
+                        "sweep unaffordable (%s available < %d planned) — "
+                        "running %s without the rectangle sweep",
+                        getattr(st, "effective_available", None),
+                        cost.total("searchapi"), label)
+                    search_sources = [s for s in available
+                                      if s != "searchapi"]
+                    plan = build_run_plan(conn, route,
+                                          sources=search_sources, caps=caps,
+                                          today=date.today(),
+                                          pool_states=pool_states)
+                    cost = cost_vector(plan, caps=caps)
 
             est = _estimate_seconds(plan)
             if elapsed + est > args.wall_budget_s:
@@ -435,7 +557,10 @@ def main() -> int:
         # -- close out ------------------------------------------------------
         status = "degraded" if degraded else "ok"
         try:
-            ledger.capture_anchors_from_snapshots(started_at)
+            # anchors_probed_at (NOT started_at): excludes the run-start
+            # account-probe snapshots, whose re-promotion here would
+            # resurrect this run's spend (2026-07-17 review, critical).
+            ledger.capture_anchors_from_snapshots(anchors_probed_at)
         except Exception as exc:  # noqa: BLE001
             LOG.warning("anchor capture failed: %s", exc)
         conn.execute(

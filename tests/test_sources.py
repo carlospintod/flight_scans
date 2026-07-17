@@ -8,12 +8,16 @@ from lib import sources
 from lib.quota import METERED, POOL_SEEDS
 
 
-# The exact literals that lived in lib/quota.py before the registry.
+# The exact literals that lived in lib/quota.py before the registry —
+# plus searchapi, pooled 2026-07-16 when the rectangle sweep returned
+# (100 LIFETIME credits: reset day None = never presumed reset;
+# per_search_cap 28 = one full mission sweep; margin 4 fails closed).
 _GOLDEN_POOL_SEEDS = (
     ("kiwi", "monthly", 300, 10, 15, 10, None),
     ("serpapi", "monthly", 250, None, 25, 7, None),
     ("aviasales", "rate_only", None, None, 0, None, None),
     ("googleflights", "per_run", None, None, 0, 25, 30),
+    ("searchapi", "monthly", 100, None, 4, 28, None),
 )
 _GOLDEN_METERED = {
     "kiwi": {"range_search": 1, "round_trip_search": 1, "one_way_search": 1,

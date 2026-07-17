@@ -58,6 +58,14 @@ def _make_clients(dry_run: bool, db_conn, *, sources: set[str]):
 def cmd_sweep(args: argparse.Namespace) -> int:
     route = _load_route(args.route)
     requested = set(args.sources)
+    if "searchapi" in requested and not args.dry_run:
+        # Legacy path: NO ledger, NO cooldown record. Credits spent here
+        # are invisible to the batch's biweekly sweep gate, so the next
+        # cron Saturday would sweep again (double burn). The metered path
+        # is `python run_batch.py --force-sweep`.
+        print("WARNING: unmetered legacy sweep — spends LIFETIME searchapi "
+              "credits outside the quota ledger; prefer "
+              "`run_batch.py --force-sweep`.", file=sys.stderr)
     with db_mod.connect(args.db) as conn:
         db_mod.ensure_schema(conn)
         db_mod.upsert_route(conn, route)

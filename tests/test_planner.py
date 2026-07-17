@@ -6,7 +6,7 @@ execute that plan. Verified with fake counting clients — no network.
 """
 
 from dataclasses import replace
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from lib.config import (
@@ -17,7 +17,7 @@ from lib.db import (
     CalendarRow, connect, ensure_schema, insert_calendar_rows, upsert_route,
 )
 from lib.followup import run_followup
-from lib.planner import Caps, build_run_plan
+from lib.planner import Caps, _discovery_grid, build_run_plan
 from lib.searchapi_io import CalendarResponse, PointResponse
 from lib.sweep import run_sweep
 
@@ -672,3 +672,140 @@ def test_serpapi_discovery_grid_rotates_and_one_way_sentinel(tmp_path: Path):
     dates_a = [g["departure_date"] for g in grid]
     dates_b = [g["departure_date"] for g in plan_b.serpapi_discovery]
     assert dates_a != dates_b
+
+
+def _scan_dates(start: date, n: int) -> list[date]:
+    """Next n Mon/Wed/Sat cron dates from `start` (inclusive)."""
+    out, d = [], start
+    while len(out) < n:
+        if d.weekday() in (0, 2, 5):
+            out.append(d)
+        d += timedelta(days=1)
+    return out
+
+
+def test_grid_rotates_stay_axis_across_scans(tmp_path: Path):
+    """2026-07-16 audit fix: the RT grid must sample the whole
+    (departure x stay) rectangle, not just the min-stay edge. Over a
+    month of scans it prices many distinct stay lengths, every return
+    stays inside the window, and every stay stays inside [min, max]."""
+    route = _route()   # stay 60-90, window 2026-09-01..2026-12-20
+    sw = route.search_window
+    stays_seen: set[int] = set()
+    cells: set[tuple[str, int]] = set()
+    for d in _scan_dates(date(2026, 7, 18), 13):
+        for g in _discovery_grid(route, today=d, max_points=5):
+            dep = date.fromisoformat(g["departure_date"])
+            ret = date.fromisoformat(g["return_date"])
+            stay = (ret - dep).days
+            assert route.stay.min_days <= stay <= route.stay.max_days
+            assert ret <= sw.latest_return
+            stays_seen.add(stay)
+            cells.add((g["departure_date"], stay))
+    assert len(stays_seen) >= 8          # not pinned to one edge anymore
+    assert min(stays_seen) == route.stay.min_days       # edges included
+    assert len(cells) >= 55              # rectangle cells, not a line
+
+
+def test_grid_phase_never_wastes_a_scan(tmp_path: Path):
+    """2026-07-16 audit fix: the old `ordinal % seg` phase resonated with
+    the Mon/Wed/Sat cadence (3 of 13 one-way scans added ZERO new dates).
+    The golden-ratio phase must make every scan discover something new —
+    while the window is far from saturated (97 days >> 65 draws; the
+    helper's default 34-day window saturates, where re-pricing is right)."""
+    route = _one_way_route(origins=("MAD",), search_window=SearchWindow(
+        earliest_departure=date(2026, 9, 15),
+        latest_return=date(2026, 12, 20)))
+    seen: set[str] = set()
+    for d in _scan_dates(date(2026, 7, 18), 13):
+        grid = _discovery_grid(route, today=d, max_points=5)
+        new = {g["departure_date"] for g in grid} - seen
+        assert new, f"scan on {d} re-priced only already-covered dates"
+        seen |= {g["departure_date"] for g in grid}
+    assert len(seen) >= 50               # was 50 with resonance; now 53+
+
+
+def test_grid_deterministic_for_same_today(tmp_path: Path):
+    """Quote == execution: the grid is a pure function of (route, today)."""
+    route = _route()
+    a = _discovery_grid(route, today=date(2026, 8, 3), max_points=5)
+    b = _discovery_grid(route, today=date(2026, 8, 3), max_points=5)
+    assert a == b
+
+
+def test_one_way_route_never_plans_sweep_windows(tmp_path: Path):
+    """The calendar engine prices (dep x ret) rectangles — meaningless for
+    one-way. Even with searchapi enabled, a one-way route plans zero
+    sweep windows (2026-07-16 sweep re-enablement gate)."""
+    route = _one_way_route()
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        plan = build_run_plan(
+            conn, route, sources=["searchapi", "serpapi", "aviasales"],
+            caps=Caps(searchapi_sweep=28), today=TODAY)
+    assert plan.sweep_windows == ()
+    # searchapi contributes NO cost line for a one-way search.
+    assert plan.calls_by_source["searchapi"] == 0
+
+
+def test_rt_sweep_windows_fit_lifetime_budget(tmp_path: Path):
+    """The full-rectangle sweep for the mission-shaped route stays within
+    one per_search_cap (28) reservation — the geometry that makes 100
+    lifetime credits ~= 3 full sweeps."""
+    route = _route()   # 2 origins, stay 60-90, Sep 1 - Dec 20
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        plan = build_run_plan(
+            conn, route, sources=["searchapi", "serpapi", "aviasales"],
+            caps=Caps(searchapi_sweep=28), today=TODAY)
+    n = len(plan.sweep_windows)
+    assert 0 < n <= 28
+    axis_start = max(route.search_window.earliest_departure, TODAY)
+    axis_end = route.search_window.latest_return - timedelta(
+        days=route.stay.min_days)
+    expected = {axis_start + timedelta(days=i)
+                for i in range((axis_end - axis_start).days + 1)}
+    # Each origin tiles the full axis with NO overlap (exactly-once).
+    per_origin: dict[str, set] = {}
+    for w in plan.sweep_windows:
+        seen = per_origin.setdefault(w.origin, set())
+        d = w.outbound_start
+        while d <= w.outbound_end:
+            assert d not in seen, f"{w.origin} windows overlap on {d}"
+            seen.add(d)
+            d += timedelta(days=1)
+    assert set(per_origin) == {"MAD", "BCN"}
+    for o, covered in per_origin.items():
+        assert covered == expected, f"{o} axis not fully tiled"
+    assert plan.calls_by_source["searchapi"] == n
+
+
+def test_execute_search_runs_the_sweep(tmp_path: Path):
+    """The batch runner executes plan.sweep_windows via run_sweep and
+    records the result under 'searchapi' (2026-07-16: the executor step
+    had been dropped when searchapi was benched — the planner quoted
+    windows nobody ran)."""
+    from lib.runner import execute_search
+    route = _route()
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        plan = build_run_plan(
+            conn, route, sources=["searchapi"],
+            caps=Caps(searchapi_sweep=28, searchapi_followup=0),
+            today=TODAY)
+        assert plan.sweep_windows
+        fake = FakeSearchApiClient()
+        res = execute_search(
+            conn=conn, route=route, plan=plan,
+            clients={"searchapi": fake},
+            caps=Caps(searchapi_sweep=28, searchapi_followup=0),
+            alerts_log=tmp_path / "alerts.log")
+    assert fake.calendar_calls == len(plan.sweep_windows)   # quote==execution
+    assert res.results["searchapi"]["attempted"] == len(plan.sweep_windows)
+    assert res.results["searchapi"]["error"] is None

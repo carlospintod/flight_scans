@@ -22,8 +22,11 @@ def test_loads_first_run_yaml():
     assert cfg.sweep.cadence_days == 3
     assert cfg.sweep.skip_if_min_above == 800
     assert cfg.sweep.skip_grace_days == 60
-    assert cfg.followup.watch_below_price == 650
-    assert cfg.followup.drop_above_price == 800
+    # 2026-07-16 coverage audit: watch raised 500->600 (nothing had ever
+    # qualified; all-time min was 532), drop 700 keeps the 100-EUR
+    # hysteresis. YAML synced from the canonical DB config.
+    assert cfg.followup.watch_below_price == 600
+    assert cfg.followup.drop_above_price == 700
     assert cfg.alerts.drop_threshold_pct == 15
     assert cfg.alerts.baseline_window_days == 30
     assert cfg.alerts.min_observations == 4

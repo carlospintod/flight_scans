@@ -1,38 +1,25 @@
 route:
   name: spain-nairobi
-  origins: [MAD, BCN]
-  destinations: [NBO]
-
-# The REAL trip: departures mid-September to mid-October 2026,
-# 60-90 day stays -> returns mid-November 2026 to mid-January 2027.
+  origins:
+  - MAD
+  - BCN
+  destinations:
+  - NBO
 search_window:
-  earliest_departure: 2026-09-12
-  latest_return: 2027-01-15
-
+  earliest_departure: '2026-09-12'
+  latest_return: '2027-01-15'
 stay_preferences:
   min_days: 60
   max_days: 90
-
 currency: EUR
-
 sweep:
-  cadence_days: 3   # scan 2-3x per week now that discovery is free/cheap
-  # Smart skip: in subsequent sweeps, skip a window if its most recent
-  # snapshot showed no prices at or below `skip_if_min_above`, AND the
-  # window's earliest outbound is more than `skip_grace_days` away.
-  # Disable by setting either to null.
+  cadence_days: 3
   skip_if_min_above: 800
   skip_grace_days: 60
-
-followup:
-  # An itinerary is a followup candidate iff it has been seen at or
-  # below `watch_below_price` at some point in its history AND its most
-  # recent observed price is at or below `drop_above_price`.
-  # If both are null, fall back to the legacy alert-baseline trigger.
-  watch_below_price: 650
-  drop_above_price: 800
-
 alerts:
-  drop_threshold_pct: 15
+  drop_threshold_pct: 15.0
   baseline_window_days: 30
   min_observations: 4
+followup:
+  watch_below_price: 600
+  drop_above_price: 700

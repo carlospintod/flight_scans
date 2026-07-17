@@ -5,10 +5,13 @@
 #   TURSO_DATABASE_URL, TURSO_AUTH_TOKEN   - persistent DB
 #   RAPIDAPI_KEY                           - kiwi (+ skyscanner)
 #   TRAVELPAYOUTS_TOKEN                    - aviasales
-#   SERPAPI_KEY                            - managed Google Flights (100/mo)
+#   SERPAPI_KEY                            - managed Google Flights (250/mo)
 #   NTFY_TOPIC                             - phone push topic (long + random)
-# Deliberately NOT given to CI: SEARCHAPI_KEY (2 break-glass credits,
-# local-only for booking-day verification).
+# SEARCHAPI_KEY is deliberately NOT a GitHub secret: it lives in the /ops
+# key manager (source_credentials in Turso) and run_batch loads it at
+# start — CI IS the primary spender of its 100 lifetime credits (the
+# biweekly rectangle sweep, ~28/sweep, ledger-metered). Rotating the key
+# in /ops needs no CI change.
 #
 # Variables (repo Settings -> ... -> Variables):
 #   GF_ON_ACTIONS = "true" | "false"  - set from the probe workflow's
@@ -24,7 +27,11 @@ on:
     inputs:
       sources:
         description: "Comma-separated sources"
-        default: "googleflights,serpapi,aviasales"
+        default: "googleflights,serpapi,aviasales,searchapi"
+        required: false
+      force_sweep:
+        description: "Run the SearchAPI rectangle sweep now (bypasses the Saturday+cooldown gate; ~28 lifetime credits)"
+        default: "false"
         required: false
       cap:
         description: "Max googleflights verifications per search"
@@ -50,7 +57,11 @@ permissions:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # 50 min: worst-case sweep (28 calendar calls x 60s client timeout =
+    # 28 min) + gf verifications must finish INSIDE the job so settle/
+    # summary/notify always run; the in-run wall guard (2400s) fires
+    # between searches well before this hard kill.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
 
@@ -86,6 +97,9 @@ jobs:
           # non-owner user exists: search ids in public logs/summaries
           # become stable hashes (user search params never leak).
           SCAN_LOG_PRIVATE: ${{ vars.SCAN_LOG_PRIVATE }}
+          # In-run wall guard fires between searches BEFORE the job's
+          # 50-min hard kill, so skip receipts/settle/notify always land.
+          BATCH_WALL_BUDGET_S: "2400"
         run: |
           if [ "${{ inputs.mode || 'batch' }}" = "legacy" ]; then
             python run_scan.py \
@@ -96,9 +110,10 @@ jobs:
               --json-summary summary.json
           else
             python run_batch.py \
-              --sources "${{ inputs.sources || 'googleflights,serpapi,aviasales' }}" \
+              --sources "${{ inputs.sources || 'googleflights,serpapi,aviasales,searchapi' }}" \
               --cap "${{ inputs.cap || '25' }}" \
               --trigger "${{ github.event_name }}" \
+              ${{ inputs.force_sweep == 'true' && '--force-sweep' || '' }} \
               --json-summary summary.json
           fi
 

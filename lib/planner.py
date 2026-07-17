@@ -202,25 +202,39 @@ class RunPlan:
     serpapi_discovery: tuple[dict, ...] = ()
 
 
+# Golden-ratio conjugate: phase steps by frac(ordinal * PHI) are
+# quasi-uniform and never resonate with ANY integer period — the naive
+# `ordinal % seg` phase resonated with the Mon/Wed/Sat cadence (audit
+# 2026-07-16: 3 of 13 one-way scans re-priced already-covered dates,
+# coverage plateaued at 51.5% instead of ~65%).
+_PHI = 0.6180339887498949
+
+
 def _discovery_grid(route: RouteConfig, *, today: date,
                     max_points: int) -> list[dict]:
     """Up to `max_points` DISTINCT departure dates sampled evenly across
     the search window, so SerpApi can price the whole window live — the
     discovery mechanism now that Kiwi is retired and gf scraping is
-    blocked. Round-trip pairs each departure with dep+min_stay; one-way
-    uses the '' sentinel. Origins/destinations are assigned round-robin
-    across the dates (date breadth beats per-date origin completeness for
-    a scout — the mission flies from MAD *or* BCN, either is fine).
+    blocked. Origins/destinations are assigned round-robin across the
+    dates (date breadth beats per-date origin completeness for a scout —
+    the mission flies from MAD *or* BCN, either is fine).
 
-    The sampling PHASE rotates with `today` (deterministic — no clock
-    read), so consecutive scans probe different dates and sweep the whole
-    window over a handful of runs while quote==execution still holds
-    (both the quote and the runner read the same plan). Shape matches
-    select_candidates so run_followup consumes it unchanged."""
+    TWO deterministic rotations, both derived from `today` (no clock
+    read, so quote == execution holds):
+      * the sampling PHASE (golden-ratio, see _PHI) walks the departure
+        axis scan over scan without resonating with the scan cadence;
+      * for ROUND-TRIP routes the STAY length rotates per point and per
+        scan across [min_stay, max_stay] (clamped so the return fits the
+        window), so the grid samples the whole (departure x stay)
+        rectangle instead of the min-stay edge — the stay axis was 97%
+        blind before this (audit 2026-07-16). One-way uses the ''
+        sentinel. Shape matches select_candidates so run_followup
+        consumes it unchanged."""
     from datetime import timedelta as _td
     sw = route.search_window
     one_way = route.is_one_way
     min_stay = route.stay.min_days
+    max_stay = route.stay.max_days
     earliest = max(sw.earliest_departure, today)
     latest_dep = sw.latest_return if one_way else (
         sw.latest_return - _td(days=min_stay))
@@ -233,8 +247,13 @@ def _discovery_grid(route: RouteConfig, *, today: date,
         offsets = [span // 2]
     else:
         seg = span / n
-        phase = today.toordinal() % max(1, int(seg) or 1)
+        phase = ((today.toordinal() * _PHI) % 1.0) * seg
         offsets = [min(span, round(i * seg + phase)) for i in range(n)]
+    # Evenly-spaced stay samples across the range; which point gets which
+    # stay shifts with `today`, so over scans every departure region gets
+    # priced at every sampled stay length.
+    stay_steps = [min_stay + round(k * (max_stay - min_stay) / max(1, n - 1))
+                  for k in range(n)]
     out: list[dict] = []
     seen: set[int] = set()
     for i, off in enumerate(offsets):
@@ -243,7 +262,14 @@ def _discovery_grid(route: RouteConfig, *, today: date,
         seen.add(off)
         o, d = pairs[i % len(pairs)]
         dep = earliest + _td(days=off)
-        ret = "" if one_way else (dep + _td(days=min_stay)).isoformat()
+        if one_way:
+            ret = ""
+        else:
+            stay = stay_steps[(i + today.toordinal()) % n]
+            # Late departures can't host the longer stays — clamp to the
+            # window end (never below min_stay: dep <= latest_return-min).
+            ret_d = min(dep + _td(days=stay), sw.latest_return)
+            ret = ret_d.isoformat()
         out.append({"origin": o, "destination": d,
                     "departure_date": dep.isoformat(),
                     "return_date": ret, "snapshot_price": None,
@@ -292,8 +318,11 @@ def build_run_plan(
     src = tuple(src_list)
 
     # ---- Sweep (SearchAPI grid) ----
+    # Round-trip only: the calendar engine prices (dep x ret) rectangles;
+    # a one-way route has no return axis (min_stay=0 would degenerate the
+    # geometry). One-way discovery rides the serpapi grid + gf instead.
     sweep_windows: list[SweepWindow] = []
-    if "searchapi" in src:
+    if "searchapi" in src and not route.is_one_way:
         planned, geo_notes = plan_windows(route, today=today)
         notes.extend(geo_notes)
         # Apply smart-skip exactly as run_sweep would — but batched:

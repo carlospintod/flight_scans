@@ -26,7 +26,10 @@ LOG = logging.getLogger(__name__)
 
 BASE_URL = "https://www.searchapi.io/api/v1/search"
 CALENDAR_COMBO_CAP = 200
-DEFAULT_TIMEOUT_S = 95  # API docs say 503 after 90s
+# API docs say the server 503s at 90s, but a 28-window sweep at 95s/call
+# worst-case (~44 min) would outlive the CI job. 60s bounds a bad sweep
+# to ~28 min; calls genuinely that slow were going to 503 anyway.
+DEFAULT_TIMEOUT_S = 60
 SOURCE_ID = "searchapi"
 
 

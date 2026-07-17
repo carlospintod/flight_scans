@@ -7,7 +7,9 @@ Run it yourself (it writes secrets to your repo — deliberate action):
 
 Requires the gh CLI to be logged in (it is, if `git push` works).
 Values are piped to `gh secret set`, never printed. SEARCHAPI_KEY is
-deliberately NOT pushed — the 2 break-glass credits stay local-only.
+deliberately NOT pushed — it lives in the /ops key manager
+(source_credentials in Turso) and every scan loads it from there, so
+rotating it never touches CI config. Do not add it here.
 """
 
 from __future__ import annotations

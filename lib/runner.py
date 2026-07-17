@@ -70,6 +70,27 @@ def execute_search(*, conn, route, plan, clients, caps,
             out.record("kiwi", attempted=len(plan.kiwi_bands), error=str(exc))
             LOG.error("kiwi discovery failed (%s): %s", route.name, exc)
 
+    # --- SearchAPI rectangle sweep (full-coverage discovery) ---
+    # google_flights_calendar prices whole (dep x ret) rectangles — the
+    # only layer that sees EVERY date combination (2026-07-16 coverage
+    # audit: the point-query grid samples ~4% of the rectangle; this
+    # sweeps 100%). Finite lifetime credits: run_batch gates it to
+    # biweekly owner runs, the ledger meters every call, and run_sweep
+    # executes EXACTLY the planned windows (quote == execution).
+    if plan.sweep_windows and clients.get("searchapi") is not None:
+        from .sweep import run_sweep
+        try:
+            sres = run_sweep(conn=conn, client=clients["searchapi"],
+                             route=route, windows=list(plan.sweep_windows),
+                             dry_run=False)
+            out.record("searchapi", attempted=len(plan.sweep_windows),
+                       stored=sres.entries_stored)
+        except Exception as exc:  # noqa: BLE001 — incl. QuotaExceeded
+            out.degraded = True
+            out.record("searchapi", attempted=len(plan.sweep_windows),
+                       error=str(exc))
+            LOG.error("searchapi sweep failed (%s): %s", route.name, exc)
+
     # --- SerpApi live discovery grid (the reliable finding layer) ---
     # Kiwi is retired and gf scraping is captcha-walled from CI
     # (2026-07-14), so SerpApi — managed Google Flights that never gets

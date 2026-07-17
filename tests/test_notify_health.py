@@ -135,3 +135,29 @@ def test_missing_summary_still_pings(monkeypatch, tmp_path):
     assert notify.main() == 0
     assert len(pushed) == 1
     assert "attention" in pushed[0]["title"]
+
+
+def test_sweep_cooldown_gate(tmp_path):
+    """_sweep_recently: a calendar spend within the cooldown suppresses
+    the next sweep (so a forced sweep pushes the cron sweep out)."""
+    from datetime import datetime, timedelta, timezone
+    from lib.db import connect, ensure_schema
+    from run_batch import _sweep_recently
+    db = tmp_path / "t.db"
+    with connect(db) as conn:
+        ensure_schema(conn)
+        assert _sweep_recently(conn) is False          # empty ledger
+        recent = (datetime.now(timezone.utc) - timedelta(days=3)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ")
+        old = (datetime.now(timezone.utc) - timedelta(days=20)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ")
+        conn.execute(
+            "INSERT INTO spend_events (run_id, search_id, source, op, units,"
+            " result, spent_at) VALUES ('r','s','searchapi','calendar',1,"
+            "'ok', ?)", (old,))
+        assert _sweep_recently(conn) is False          # outside cooldown
+        conn.execute(
+            "INSERT INTO spend_events (run_id, search_id, source, op, units,"
+            " result, spent_at) VALUES ('r','s','searchapi','calendar',1,"
+            "'ok', ?)", (recent,))
+        assert _sweep_recently(conn) is True           # inside cooldown
