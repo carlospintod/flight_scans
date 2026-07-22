@@ -3,7 +3,9 @@ import {
   fmtDuration,
   fmtStops,
   isStale,
+  providerLabel,
   seenLabel,
+  verifyUrl,
 } from "@/lib/format";
 import type { Itinerary, RouteWindow } from "@/lib/types";
 
@@ -81,13 +83,26 @@ export function PriceHero({
           {best.totalMinutes !== null && ` · ${fmtDuration(best.totalMinutes)}`}
         </div>
       </div>
-      <div className="mt-3 font-mono text-[11px] text-hint">
-        source: {best.source}
-        {best.isSelfTransfer && (
-          <span className="ml-2 text-amber">
-            self-transfer itinerary · separate tickets
-          </span>
-        )}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 font-mono text-[11px] text-hint">
+        <span>
+          source: {providerLabel(best.source)}
+          {best.seller && (
+            <span className="text-signature"> · via {best.seller}</span>
+          )}
+          {best.isSelfTransfer && (
+            <span className="ml-2 text-amber">
+              self-transfer itinerary · separate tickets
+            </span>
+          )}
+        </span>
+        <a
+          href={verifyUrl(best)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-text-mid hover:text-signature"
+        >
+          check this fare live ↗
+        </a>
       </div>
     </div>
   );

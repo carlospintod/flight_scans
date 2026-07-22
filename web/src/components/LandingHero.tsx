@@ -6,8 +6,9 @@ const d = (ms: number) => ({ "--d": `${ms}ms` }) as CSSProperties;
  *  the atmosphere is now the measuring field — a constellation behind the
  *  pitch that links to the pointer and reads out distances (phosphor.js,
  *  loaded by the page). Below the pitch, one real scan replayed in a
- *  terminal window; the numbers are real observations (532 EUR best seen,
- *  −11% vs baseline), disclaimed as a replay right underneath. */
+ *  terminal window; the numbers are real observations from the 2026-07-17
+ *  full-rectangle sweep (28 calls, 3,561 prices, €555 floor, 65 alerts),
+ *  disclaimed as a replay right underneath. */
 export function LandingHero() {
   return (
     <section className="bleed stage stage--field -mt-8 mb-14 pt-16 pb-14 sm:pt-20">
@@ -66,16 +67,16 @@ export function LandingHero() {
           </div>
           <div className="term__body">
             <span className="ln ln--cmd" style={d(0)}>
-              python run_batch.py
+              python run_batch.py --force-sweep
             </span>
             <span className="ln ln--info" style={d(140)}>
               ● reserving budget · predicted spend is a guaranteed upper bound
             </span>
             <span className="ln ln--ok" style={d(280)}>
-              ✓ scan complete · every source under its cap
+              ✓ rectangle sweep · 28 calls · 3,561 prices · every date pair
             </span>
             <span className="ln ln--ok" style={d(420)}>
-              ▼ MAD→NBO 532 EUR · −11% vs baseline · alert pushed
+              ▼ MAD→NBO 555 EUR · cheapest of the whole window · 65 new lows
             </span>
             <span className="ln ln--dim" style={d(580)}>
               a scan can spend less, never more · <span className="cursor">█</span>
