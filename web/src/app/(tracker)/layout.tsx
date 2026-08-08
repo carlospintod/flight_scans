@@ -1,7 +1,7 @@
-import type { Metadata, Viewport } from "next";
+﻿import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import Link from "next/link";
-import "./globals.css";
+import "../globals.css";
 
 export const viewport: Viewport = {
   themeColor: "#181825",

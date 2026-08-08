@@ -12,6 +12,19 @@
    Fonts stay wired to next/font vars (do not adopt hardcoded stacks).
    ═══════════════════════════════════════════════════════════════════ */
 @theme {
+  /* ── Vuelazo editorial tokens (D7): warm paper, near-black ink, ONE
+     amber signal reserved for prices/CTAs. Used only by the (vuelazo)
+     route group — the deliberate opposite of the phosphor dark. ── */
+  --color-vz-paper: #faf6ef;
+  --color-vz-paper2: #f2ece1;
+  --color-vz-ink: #1c1917;
+  --color-vz-ink-soft: #6e6860;
+  --color-vz-line: #e1dacf;
+  --color-vz-amber: #d97706;
+  --color-vz-amber-deep: #b45309;
+  --font-vz-display: var(--font-fraunces);
+  --font-vz-text: var(--font-inter);
+
   /* the two verbs */
   --color-build: #cba6f7;
   --color-measure: #89b4fa;
@@ -83,10 +96,17 @@
    (on html, not body — body overflow propagates to the viewport) */
 html { overflow-x: clip; }
 
-body {
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-sans);
+/* Base (NOT unlayered!): Tailwind v4 emits utilities inside @layer, and
+   unlayered author CSS would beat them — the (vuelazo) root layout sets
+   its paper theme via body utilities (bg-vz-paper text-vz-ink
+   font-vz-text), which must win. The tracker layout carries no body
+   utilities, so it keeps these dark defaults. */
+@layer base {
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+  }
 }
 
 /* Terminal cursor for the brand mark. */

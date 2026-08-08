@@ -1,0 +1,64 @@
+# Destination IATA -> route class, seen from Spanish origins (D2 floors).
+# intra_eu ~ short-haul (EU/Schengen + UK + Morocco/Algeria/Tunisia),
+# medium   ~ Middle East / West & North-East Africa / Caucasus / Canaries-adjacent islands,
+# long     ~ Americas, Asia, southern Africa, Oceania.
+# Unlisted destinations default to `medium` (the middle floor — conservative
+# for short-haul noise, slightly lax for long-haul; acceptable at M0 where a
+# human approves every alert).
+
+intra_eu:
+  # Spanish domestic (mainland + Baleares + Canarias) — Aviasales sweeps
+  # return these from any Spanish origin
+  [PMI, IBZ, MAH, AGP, SVQ, XRY, GRX, ALC, VLC, MAD, BCN, BIO, EAS, SDR,
+   SCQ, LCG, VGO, OVD, LEN, VLL, ZAZ, PNA, RJL, MLN,
+   TFN, TFS, LPA, ACE, FUE, SPC, TCI,
+  # Metro/city codes (Aviasales uses these alongside airport codes)
+   LON, PAR, ROM, MIL, STO, BUH,
+  # Iberia + islands
+   LIS, OPO, FAO, FNC, PDL, TER,
+  # France / Benelux / British Isles
+   CDG, ORY, BVA, NTE, LYS, MRS, NCE, TLS, BOD, BRU, CRL, AMS, EIN, LUX,
+   LHR, LGW, STN, LTN, MAN, BHX, EDI, GLA, BRS, LPL, DUB, ORK, SNN,
+  # DACH + Nordics + Baltics
+   FRA, MUC, BER, HAM, DUS, CGN, STR, NUE, ZRH, GVA, BSL, VIE, SZG,
+   CPH, AAL, OSL, TRF, BGO, ARN, NYO, GOT, HEL, TLL, RIX, VNO,
+  # Italy + Malta
+   FCO, CIA, MXP, LIN, BGY, VCE, TSF, BLQ, NAP, PSA, FLR, CTA, PMO, CAG, BRI, MLA,
+  # Central/Eastern Europe
+   WAW, WMI, KRK, GDN, WRO, PRG, BUD, BTS, LJU, ZAG, BEG, SJJ, SKP, TIA,
+   OTP, CLJ, SOF, BOJ, ATH, SKG, HER, RHO, CFU, JTR, CHQ, ZTH, EFL,
+   IST, SAW, ADB, AYT, DLM, BJV,
+  # North Africa short-haul
+   RAK, CMN, FEZ, AGA, TNG, NDR, OUD, RBA, ALG, ORN, TUN, DJE, MIR]
+
+medium:
+  # Middle East / Gulf / Caucasus / Central Asia fringe
+  [TLV, AMM, BEY, CAI, HRG, SSH, RUH, JED, MED, DXB, AUH, SHJ, DOH, BAH,
+   KWI, MCT, IKA, EVN, TBS, GYD, ALA, TAS,
+  # West / East / Central Africa
+   DSS, DKR, BJL, ABJ, ACC, LOS, ABV, LFW, COO, DLA, NSI, BKO, OUA, NIM,
+   ADD, NBO, MBA, EBB, KGL, DAR, JIB, KRT,
+  # Atlantic islands beyond Canaries
+   SID, RAI, BVC]
+
+long:
+  # Metro/city codes
+  [NYC, WAS, CHI, HOU, RIO, SAO, BUE, TYO, OSA, SEL, BJS,
+  # North America
+   JFK, EWR, BOS, IAD, DCA, PHL, ATL, MIA, FLL, MCO, TPA, ORD, DTW, MSP,
+   DFW, IAH, AUS, DEN, PHX, LAS, LAX, SFO, SAN, SEA, PDX, YYZ, YUL, YVR, YYC,
+  # Mexico / Central America / Caribbean
+   MEX, CUN, GDL, MTY, SJD, PVR, SJO, PTY, SAL, GUA, HAV, VRA, SDQ, PUJ,
+   STI, SJU, MBJ, KIN, AUA, CUR,
+  # South America
+   BOG, MDE, CTG, CLO, UIO, GYE, LIM, CUZ, SCL, EZE, AEP, COR, MDZ, MVD,
+   ASU, GRU, GIG, BSB, CNF, REC, SSA, FOR, CCS,
+  # Asia
+   DEL, BOM, BLR, MAA, HYD, CCU, CMB, MLE, KTM, DAC, BKK, DMK, HKT, CNX,
+   SGN, HAN, DAD, PNH, REP, VTE, RGN, KUL, PEN, SIN, CGK, DPS, SUB, MNL,
+   CEB, HKG, MFM, TPE, ICN, GMP, NRT, HND, KIX, NGO, FUK, CTS, PEK, PKX,
+   PVG, SHA, CAN, SZX, CTU, XIY, KMG, URC,
+  # Southern Africa + Indian Ocean
+   JNB, CPT, DUR, WDH, GBE, HRE, LUN, LLW, TNR, MRU, RUN, SEZ, MPM,
+  # Oceania
+   SYD, MEL, BNE, PER, ADL, AKL, CHC, WLG, NAN, PPT]

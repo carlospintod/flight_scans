@@ -1,0 +1,77 @@
+# Sunday digest (M3, D3): assemble from the week's approvals, push a
+# review ping; sending is an explicit dispatch with send=true after
+# Carlos reads the draft in the job summary (one Sunday review).
+
+name: digest
+
+on:
+  schedule:
+    - cron: "23 7 * * 0"   # Sunday 07:23 UTC
+  workflow_dispatch:
+    inputs:
+      send:
+        description: "Approve the latest draft and SEND to the free list"
+        default: "false"
+        required: false
+
+# Own concurrency group: sharing one group across workflows lets a cron
+# CANCEL a pending approve/send dispatch (GitHub keeps one pending run
+# per group). True serialization is the DB-side single-run lease.
+concurrency:
+  group: digest
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Assemble / send digest
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          WEB_URL: ${{ vars.WEB_URL }}
+        run: |
+          set -o pipefail   # tee must not swallow run_digest's exit code
+          if [ "${{ inputs.send || 'false' }}" = "true" ]; then
+            python scripts/run_digest.py --send --trigger "${{ github.event_name }}" | tee digest_out.txt
+          else
+            python scripts/run_digest.py --queue --trigger "${{ github.event_name }}" | tee digest_out.txt
+          fi
+      - name: Job summary
+        if: always()
+        run: |
+          echo '## Digest' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat digest_out.txt >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - name: Notify failure (ntfy.sh)
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          if [ -n "$NTFY_TOPIC" ]; then
+            curl -fsS -X POST "https://ntfy.sh/$NTFY_TOPIC" \
+              -H "Title: Vuelazo: digest workflow FAILED" \
+              -H "Priority: high" -H "Tags: rotating_light" \
+              -d "Run ${{ github.run_id }} failed — el digest NO se envió." || true
+          fi
+
+      - name: Keepalive
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/digest.yml/enable"

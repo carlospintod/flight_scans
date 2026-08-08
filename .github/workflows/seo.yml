@@ -1,0 +1,65 @@
+# Nightly SEO regeneration (M4b, D6): gate route pages on the
+# detector's maturity bar, generate/refresh Claude intros, then ping the
+# site so ISR rebuilds ("SSG nightly").
+
+name: seo
+
+on:
+  schedule:
+    - cron: "41 2 * * *"   # nightly 02:41 UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: seo
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  seo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Gate pages + generate intros
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/gen_seo_intros.py --trigger "${{ github.event_name }}"
+      - name: Refresh site (ISR)
+        if: always()
+        env:
+          WEB_URL: ${{ vars.WEB_URL }}
+          REVALIDATE_SECRET: ${{ secrets.REVALIDATE_SECRET }}
+        run: |
+          if [ -n "$WEB_URL" ] && [ -n "$REVALIDATE_SECRET" ]; then
+            curl -fsS -X POST "$WEB_URL/api/revalidate?secret=$REVALIDATE_SECRET" || true
+          else
+            echo "WEB_URL / REVALIDATE_SECRET not configured - skipping"
+          fi
+      - name: Notify failure (ntfy.sh)
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          if [ -n "$NTFY_TOPIC" ]; then
+            curl -fsS -X POST "https://ntfy.sh/$NTFY_TOPIC" \
+              -H "Title: Vuelazo: seo workflow FAILED" \
+              -H "Priority: default" -H "Tags: warning" \
+              -d "Run ${{ github.run_id }} failed — check Actions." || true
+          fi
+
+      - name: Keepalive
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/seo.yml/enable"

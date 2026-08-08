@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
 import { ConfigEditor } from "@/components/ops/ConfigEditor";
 import { CredentialsAdmin } from "@/components/ops/CredentialsAdmin";
+import DealQueue from "@/components/ops/DealQueue";
 import { TriggerScan } from "@/components/ops/TriggerScan";
 import { UserAdmin } from "@/components/ops/UserAdmin";
 import { Card, SectionHeading } from "@/components/Section";
 import { isOpsBreakGlass } from "@/lib/auth";
 import { ageDays } from "@/lib/format";
+import { getDealCounts, getDealQueue, getRouteSparkline, type SparkPoint } from "@/lib/deals";
 import { getConfidence, getQuotas, getScanHistory, getSourceHealth, getSpend } from "@/lib/queries";
 import { requireUser } from "@/lib/users";
 import type { RouteConfigJson } from "@/lib/config-schema";
@@ -31,26 +33,43 @@ export default async function OpsPage() {
   const owner = await requireUser("owner");
   if (!owner && !(await isOpsBreakGlass())) redirect("/ops/login");
 
-  const [quotas, scans, health, spend, confidence, cfgRow] = await Promise.all([
-    getQuotas(),
-    getScanHistory(ROUTE_ID, 10),
-    getSourceHealth(),
-    getSpend(30),
-    getConfidence(),
-    db().execute({
-      sql: "SELECT config_json FROM routes WHERE route_id = ?",
-      args: [ROUTE_ID],
-    }),
-  ]);
+  const [quotas, scans, health, spend, confidence, cfgRow, dealQueue, dealCounts] =
+    await Promise.all([
+      getQuotas(),
+      getScanHistory(ROUTE_ID, 10),
+      getSourceHealth(),
+      getSpend(30),
+      getConfidence(),
+      db().execute({
+        sql: "SELECT config_json FROM routes WHERE route_id = ?",
+        args: [ROUTE_ID],
+      }),
+      getDealQueue(),
+      getDealCounts(),
+    ]);
   const config = cfgRow.rows[0]
     ? (JSON.parse(String(cfgRow.rows[0]["config_json"])) as RouteConfigJson)
     : null;
+  const sparkEntries = await Promise.all(
+    dealQueue.map(async (d) => [d.id, await getRouteSparkline(d.origin, d.dest)] as const),
+  );
+  const sparks: Record<number, SparkPoint[]> = Object.fromEntries(sparkEntries);
 
   return (
     <div className="space-y-10">
       <h1 className="font-mono text-lg text-text-bright">
         OPS · {ROUTE_ID}
       </h1>
+
+      <section>
+        <SectionHeading>Deal queue · vuelazo</SectionHeading>
+        <p className="mb-3 font-mono text-[11px] text-hint">
+          {dealCounts.queued} en cola · {dealCounts.approvedUnpublished} aprobados
+          sin enviar · {dealCounts.publishedLast7} publicados (7d) ·{" "}
+          {dealCounts.rejectedLast7} rechazados (7d)
+        </p>
+        <DealQueue deals={dealQueue} sparks={sparks} />
+      </section>
 
       <section>
         <SectionHeading>Run a scan</SectionHeading>

@@ -27,6 +27,7 @@ FAMILY_GOOGLE = "google"            # Google Flights corpus (airline-metasearch)
 FAMILY_OTA = "ota_metasearch"       # Skyscanner corpus (OTA-metasearch)
 FAMILY_CACHED = "cached"            # Travelpayouts cached scout
 FAMILY_SELF_TRANSFER = "self_transfer"  # Kiwi virtual-interlining (retired)
+FAMILY_SERVICE = "service"          # non-fare services (drafting, publish fan-out)
 
 
 @dataclass(frozen=True)
@@ -69,7 +70,8 @@ REGISTRY: tuple[SourceSpec, ...] = (
         "aviasales", family=FAMILY_CACHED, roles=("discovery", "corroboration"),
         env_var="TRAVELPAYOUTS_TOKEN",
         metered={"cheap_prices": 1, "prices_for_dates": 1,
-                 "latest_prices": 1, "one_way_month_prices": 1},
+                 "latest_prices": 1, "one_way_month_prices": 1,
+                 "anywhere_prices": 1},
         pool=("rate_only", None, None, 0, None, None),
         failure_mode="clean_429", enabled=True,
         note="Travelpayouts cached date scout — leads to verify, "
@@ -114,6 +116,44 @@ REGISTRY: tuple[SourceSpec, ...] = (
              "in ~28 calls — the only true no-blind-spots discovery. "
              "Biweekly cadence, owner round-trip searches only "
              "(run_batch gates). 100 lifetime credits ~= 3 full sweeps."),
+    # -- Vuelazo service rails (M0). env_var=None on purpose: their keys
+    #    (ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, RESEND_API_KEY) are infra
+    #    secrets per CLAUDE.md #6 — env / Actions secrets only, never the
+    #    /ops key manager. Providers publish no quota counters, so the
+    #    monthly pools below are SELF-imposed budgets: run_deals seeds a
+    #    baseline anchor equal to period_limit and the ledger meters our
+    #    own spend against it (predicted = upper bound still holds).
+    SourceSpec(
+        "anthropic", family=FAMILY_SERVICE, roles=(),
+        env_var=None,
+        metered={"draft": 1},
+        pool=("monthly", 200, None, 10, 20, None),
+        failure_mode="clean_429", enabled=True,
+        note="Deal drafting via the Anthropic API (templates/deal_draft_es.md)."
+             " 200 drafts/mo self-cap ~= EUR 4/mo ceiling at launch volume."),
+    SourceSpec(
+        "telegram", family=FAMILY_SERVICE, roles=(),
+        env_var=None,
+        metered={"send_message": 1, "create_invite_link": 1,
+                 "remove_member": 2},  # ban + unban = 2 HTTP requests
+        pool=("rate_only", None, None, 0, None, None),
+        failure_mode="clean_429", enabled=True,
+        note="Telegram Bot API — free; per-run bound comes from the "
+             "reservation, not a monthly pool. Units follow METERED's "
+             "worst-case-HTTP-requests convention."),
+    SourceSpec(
+        "resend", family=FAMILY_SERVICE, roles=(),
+        env_var=None,
+        metered={"send_email": 1},
+        # per_search_cap None: the member/subscriber fan-out grows with
+        # the audience — a fixed per-search cap would silently halt the
+        # WHOLE pipeline (all-or-nothing reserve) at ~20 members. The
+        # monthly pool (3000) + margin (100 = one worst free-tier day)
+        # remain the real bounds.
+        pool=("monthly", 3000, None, 100, None, None),
+        failure_mode="clean_429", enabled=True,
+        note="Resend PLAIN email API only (never the contacts-priced "
+             "Marketing track, D4). Free tier 3000/mo + 100/day."),
 )
 
 _BY_ID = {s.id: s for s in REGISTRY}

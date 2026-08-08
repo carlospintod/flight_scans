@@ -18,6 +18,10 @@ _GOLDEN_POOL_SEEDS = (
     ("aviasales", "rate_only", None, None, 0, None, None),
     ("googleflights", "per_run", None, None, 0, 25, 30),
     ("searchapi", "monthly", 100, None, 4, 28, None),
+    # Vuelazo M0 service rails — self-imposed budgets (no provider counter).
+    ("anthropic", "monthly", 200, None, 10, 20, None),
+    ("telegram", "rate_only", None, None, 0, None, None),
+    ("resend", "monthly", 3000, None, 100, None, None),
 )
 _GOLDEN_METERED = {
     "kiwi": {"range_search": 1, "round_trip_search": 1, "one_way_search": 1,
@@ -28,8 +32,13 @@ _GOLDEN_METERED = {
     "searchapi": {"point_query": 1, "calendar": 1},
     "googleflights": {"point_query": 1},
     "aviasales": {"cheap_prices": 1, "prices_for_dates": 1,
-                  "latest_prices": 1, "one_way_month_prices": 1},
+                  "latest_prices": 1, "one_way_month_prices": 1,
+                  "anywhere_prices": 1},
     "skyscanner": {"point_query": 2, "search_airport": 1},
+    "anthropic": {"draft": 1},
+    "telegram": {"send_message": 1, "create_invite_link": 1,
+                 "remove_member": 2},
+    "resend": {"send_email": 1},
 }
 
 

@@ -5,3 +5,5 @@ streamlit>=1.36
 pandas>=2.2
 altair>=5.3
 
+anthropic>=0.40
+pillow>=10.0

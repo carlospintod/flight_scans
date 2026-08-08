@@ -9,6 +9,11 @@ data/*.db
 data/*.db-journal
 data/alerts.log
 
+# Run artifacts (rendered deal cards, run summaries)
+out/
+*_run_summary.json
+deal_summary.json
+
 # Captured probe responses (may contain API keys before scrubbing)
 response_*.json
 

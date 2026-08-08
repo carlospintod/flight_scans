@@ -1,0 +1,132 @@
+# Vuelazo deal pipeline — scheduled discovery/gate/verify/draft (M1).
+#
+# Cadence (D1): anywhere sweep 3x/day; the watchlist refresh rides the
+# first run of the day (run_deals gates it internally to 1x/day). Cron
+# jitter of 15-60 min under load is acceptable for standard deals
+# (MVP-SPEC §1); mistake-class candidates page via ntfy the moment a run
+# finds them.
+#
+# The cron run uses --queue: drafts land in the /ops queue; nothing
+# publishes without Carlos's approve tap (D3). The /ops approve button
+# dispatches this workflow with publish_only=true for the fan-out.
+#
+# Secrets: TURSO_*, TRAVELPAYOUTS_TOKEN, SERPAPI_KEY, NTFY_TOPIC (shared
+# with scan.yml) + ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN,
+# TELEGRAM_TEST_CHAT_ID, RESEND_API_KEY (Vuelazo service rails).
+
+name: deals
+
+on:
+  schedule:
+    # 3x/day; odd minute dodges queue spikes. 06:41 (not 05:41) keeps
+    # the morning run clear of scan.yml (05:23 Mon/Wed/Sat, up to 50
+    # min) — the two share the single-run ledger lease, and a collision
+    # would silently skip the whole deal run.
+    - cron: "41 6,12,18 * * *"
+  workflow_dispatch:
+    inputs:
+      publish_only:
+        description: "Only fan out already-approved deals (the /ops approve path)"
+        default: "false"
+        required: false
+
+concurrency:
+  group: deals
+  cancel-in-progress: false
+
+permissions:
+  actions: write     # keepalive re-enables this workflow
+  contents: read
+
+jobs:
+  deals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run deal pipeline
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_TEST_CHAT_ID: ${{ secrets.TELEGRAM_TEST_CHAT_ID }}
+          TELEGRAM_PRIVATE_CHANNEL_ID: ${{ secrets.TELEGRAM_PRIVATE_CHANNEL_ID }}
+          TELEGRAM_PUBLIC_CHANNEL_ID: ${{ secrets.TELEGRAM_PUBLIC_CHANNEL_ID }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          WEB_URL: ${{ vars.WEB_URL }}
+        run: |
+          if [ "${{ inputs.publish_only || 'false' }}" = "true" ]; then
+            python run_deals.py --publish-only \
+              --trigger "${{ github.event_name }}" \
+              --json-summary deal_summary.json
+          else
+            python run_deals.py --queue \
+              --trigger "${{ github.event_name }}" \
+              --json-summary deal_summary.json
+          fi
+
+      # Membership lifecycle (M2): lapse removal, T-30/T-7 reminders,
+      # refund enforcement. Idempotent (CAS + event-log dedup) — safe at
+      # 3x/day even though once would do. Runs even when the deal step
+      # failed: money/member enforcement must never be hostage to a
+      # fare-source outage.
+      - name: Member lifecycle
+        if: ${{ !cancelled() && inputs.publish_only != 'true' }}
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_PRIVATE_CHANNEL_ID: ${{ secrets.TELEGRAM_PRIVATE_CHANNEL_ID }}
+          TELEGRAM_TEST_CHAT_ID: ${{ secrets.TELEGRAM_TEST_CHAT_ID }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          WEB_URL: ${{ vars.WEB_URL }}
+        run: python scripts/member_lifecycle.py --trigger "${{ github.event_name }}"
+
+      - name: Job summary
+        if: always()
+        run: |
+          echo '## Deal run' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f deal_summary.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          s = json.load(open("deal_summary.json"))
+          print(f"- status: **{s.get('status', '?')}** (run {s.get('run_id')})")
+          for step, info in (s.get("steps") or {}).items():
+              print(f"- {step}: {info}")
+          for w in s.get("warnings") or []:
+              print(f"- ⚠ {w}")
+          PY
+          else
+            echo "- no summary produced (fatal before bootstrap?)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Notify failure (ntfy.sh)
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          if [ -n "$NTFY_TOPIC" ]; then
+            curl -fsS -X POST "https://ntfy.sh/$NTFY_TOPIC" \
+              -H "Title: Vuelazo: deals workflow FAILED" \
+              -H "Priority: high" -H "Tags: rotating_light" \
+              -d "Run ${{ github.run_id }} (${{ github.event_name }}) failed — check Actions." || true
+          fi
+
+      - name: Keepalive
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/deals.yml/enable"

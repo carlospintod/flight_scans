@@ -187,6 +187,41 @@ class AviasalesClient:
             )),
         )
 
+    # --- anywhere: origin-only sweep (Vuelazo discovery, M0) -----------
+
+    def anywhere_prices(
+        self,
+        *,
+        origin: str,
+        month: str | None = None,
+        currency: str = DEFAULT_CURRENCY,
+        one_way: bool = False,
+        limit: int = 100,
+    ) -> PriceResponse:
+        """Cached prices from `origin` to ANY destination — the free
+        "vuelazos desde tu aeropuerto" discovery sweep.
+
+        /aviasales/v3/prices_for_dates with the destination param OMITTED
+        (documented optional): items carry their own `destination`.
+        `month` ("YYYY-MM") restricts departures; omitted = the cache's
+        default horizon. Cached rows NOMINATE only — they never alert
+        without live verification (non-negotiable #2).
+        """
+        params: dict[str, Any] = {
+            "origin": origin,
+            "currency": currency.lower(),
+            "one_way": str(one_way).lower(),
+            "limit": limit,
+            "sorting": "price",
+        }
+        if month is not None:
+            params["departure_at"] = month
+        data = self._request("/aviasales/v3/prices_for_dates", params)
+        return PriceResponse(
+            raw=data,
+            quotes=tuple(_parse_quotes(data, currency, origin_default=origin)),
+        )
+
     # --- cheap: lowest current price per (origin, destination) ---------
 
     def cheap_prices(
