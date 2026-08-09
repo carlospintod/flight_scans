@@ -104,7 +104,14 @@ def _ensure_fare_anchor(ledger, source: str, client) -> None:
     if shares_key_with_other_project(source, os.environ):
         _ensure_service_anchor(ledger, source)
         return
-    if state.provider_view is not None or client is None:
+    # A dedicated key arrived. Any baseline we invented for ourselves
+    # while borrowing (origin 'seed'/'self_monthly_reset') is now a
+    # fiction that would cap the new account at the old slice — a real
+    # provider counter always outranks a self-imposed one.
+    self_imposed = state.baseline_origin in ("seed", "self_monthly_reset")
+    if state.provider_view is not None and not self_imposed:
+        return
+    if client is None:
         return
     probe = getattr(client, "check_quota", None)
     if probe is None:
@@ -302,6 +309,30 @@ def main() -> int:
             wl_routes = ([] if (args.publish_only or refreshed_today)
                          else all_wl)
 
+            # Explore rotation for today. Once a day like the watchlist:
+            # the grid is deterministic per date, so three cron runs
+            # would otherwise sweep the SAME windows three times.
+            explore_windows: list[tuple[str, str, str]] = []
+            explore_raw = None
+            if config.explore_enabled and not args.publish_only:
+                done_today = conn.execute(
+                    "SELECT COUNT(*) FROM spend_events WHERE source=? "
+                    "AND op='explore' AND spent_at LIKE ? "
+                    "AND result IN ('ok', 'empty')",
+                    (SRC_GOOGLE, today_prefix + "%")).fetchone()[0]
+                if done_today < config.explore_calls_per_day:
+                    from lib.explore_api import ExploreClient, rotation_plan
+                    explore_windows = rotation_plan(
+                        list(config.origins), list(config.explore_areas),
+                        months, day=date.today(),
+                        budget=config.explore_calls_per_day - done_today)
+                    explore_raw, explore_err = _try_service(
+                        "explore",
+                        lambda: ExploreClient.from_env(
+                            provider=config.explore_provider))
+                    if explore_raw is None:
+                        explore_windows = []
+
             # Only deals WITH a draft can fan out; a draftless approved
             # row would otherwise inflate every reservation forever
             # while never publishing.
@@ -341,11 +372,14 @@ def main() -> int:
                 if raw.get(SRC_SCRAPER):
                     lines.append(CostLine(SRC_SCRAPER, n_cand, "primary",
                                           "live verification (free)"))
-                if raw.get(SRC_GOOGLE):
-                    # Reserved for every candidate (predicted = upper
-                    # bound) though only scraper-survivors spend one.
-                    lines.append(CostLine(SRC_GOOGLE, n_cand, "primary",
-                                          "insights + second opinion"))
+                if raw.get(SRC_GOOGLE) or explore_windows:
+                    # ONE pool pays for both jobs: verification of
+                    # survivors and today's Explore rotation.
+                    n_verify = n_cand if raw.get(SRC_GOOGLE) else 0
+                    lines.append(CostLine(
+                        SRC_GOOGLE, n_verify + len(explore_windows), "primary",
+                        f"insights + second opinion (<={n_verify}), "
+                        f"explore rotation ({len(explore_windows)})"))
                 if drafter:
                     lines.append(CostLine("anthropic", n_cand, "primary",
                                           "draft"))
@@ -392,6 +426,23 @@ def main() -> int:
                  "anthropic": drafter, "telegram": telegram, "resend": resend},
                 ledger=ledger, run_id=run_id, search_id=SEARCH_ID,
                 shadow=False)
+
+            # serpapi_vz funds TWO jobs. GuardedClient counts down its
+            # OWN budget, so two proxies on one source would each be
+            # handed the whole reservation and could together exceed it
+            # — breaking "predicted = guaranteed upper bound". Split the
+            # reservation explicitly instead.
+            if explore_raw is not None and explore_windows:
+                from lib.quota import GuardedClient
+                if guarded.get(SRC_GOOGLE) is not None:
+                    guarded[SRC_GOOGLE] = GuardedClient(
+                        raw[SRC_GOOGLE], ledger=ledger, source=SRC_GOOGLE,
+                        run_id=run_id, search_id=SEARCH_ID, shadow=False,
+                        budget_units=n_cand)
+                guarded["explore"] = GuardedClient(
+                    explore_raw, ledger=ledger, source=SRC_GOOGLE,
+                    run_id=run_id, search_id=SEARCH_ID, shadow=False,
+                    budget_units=len(explore_windows))
 
             def _publish(deal_id: int, origin: str, dest: str, price,
                          currency: str, text: str) -> list[str]:
@@ -567,6 +618,53 @@ def main() -> int:
                 print(f"watchlist: {len(wl_obs)} observations from "
                       f"{len(wl_routes)} route refreshes")
                 obs.extend(wl_obs)
+
+            # Google Travel Explore: the long-haul rail. Same corpus we
+            # verify against, real airport codes, real date pairs — so
+            # unlike the cache it nominates candidates that can actually
+            # be confirmed. Degrades per window, never aborts discovery.
+            n_explore = 0
+            explore_persisted: list[deals_db.Observation] = []
+            if explore_windows and guarded.get("explore") is not None:
+                from lib.explore_api import ExploreError, to_observations
+                for eo, area, emonth in explore_windows:
+                    try:
+                        quotes = guarded["explore"].explore(
+                            origin=eo, month=emonth, area=area,
+                            currency=config.currency)
+                    except (ExploreError, QuotaExceeded) as exc:
+                        LOG.warning("explore %s/%s/%s failed: %s",
+                                    eo, area, emonth, exc)
+                        continue
+                    # Persist per window, not at the end of discovery.
+                    # Explore is the ONLY metered discovery call: the
+                    # free sweep can afford to be lost on a crash, four
+                    # paid credits cannot. (Measured: a run died between
+                    # the Explore loop and the bulk insert and threw
+                    # away 4 charged calls' worth of rows.)
+                    window_obs = to_observations(quotes)
+                    try:
+                        deals_db.insert_observations(conn, window_obs)
+                    except Exception as exc:  # noqa: BLE001
+                        LOG.warning("explore %s/%s/%s: rows not persisted "
+                                    "(%s) — keeping them for this run",
+                                    eo, area, emonth, exc)
+                        obs.extend(window_obs)
+                    else:
+                        explore_persisted.extend(window_obs)
+                    n_explore += len(quotes)
+                print(f"explore: {n_explore} observations from "
+                      f"{len(explore_windows)} window(s) "
+                      f"({', '.join(f'{o}/{a}/{m}' for o, a, m in explore_windows)})")
+                summary["steps"]["explore"] = {
+                    "windows": [list(w) for w in explore_windows],
+                    "observations": n_explore}
+
+            deals_db.insert_observations(conn, obs)
+            # Explore rows are already persisted (per window, above);
+            # they still belong in this run's gate input and reach.
+            obs = obs + explore_persisted
+
             # Long-haul reach is THE product metric — surface it every run.
             by_class: dict[str, set] = {}
             for o in obs:
@@ -575,14 +673,15 @@ def main() -> int:
             reach = {k: len(v) for k, v in sorted(by_class.items())}
             print(f"reach by class: {reach}")
             summary["steps"]["reach"] = reach
-            deals_db.insert_observations(conn, obs)
             for origin, dest in sorted({(o.origin, o.dest) for o in obs}):
                 deals_db.touch_watchlist(
                     conn, origin=origin, dest=dest,
                     route_class=classify_route(dest, config))
-            print(f"discover: {len(obs)} cached observations across "
-                  f"{len({(o.origin, o.dest) for o in obs})} routes")
-            summary["steps"]["discover"] = {"observations": len(obs)}
+            print(f"discover: {len(obs)} observations across "
+                  f"{len({(o.origin, o.dest) for o in obs})} routes "
+                  f"({n_explore} from explore)")
+            summary["steps"]["discover"] = {"observations": len(obs),
+                                            "explore": n_explore}
 
             # ---- 2. gate ----
             cands = gate_candidates(conn, obs, config)

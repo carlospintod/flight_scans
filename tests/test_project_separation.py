@@ -66,11 +66,23 @@ def test_backends_map_to_the_shared_adapter():
     assert sources.backend_of("serpapi") == "serpapi"
 
 
-def test_metered_ops_are_identical_to_the_backend():
-    """Same calls, same worst-case units — only the pot differs."""
+def test_shared_ops_cost_the_same_on_both_projects():
+    """An op the two projects share must cost identical units — the
+    same HTTP call cannot be 1 credit for the tracker and 2 for
+    Vuelazo. A project MAY meter extra ops the other never calls
+    (serpapi_vz adds `explore`, the long-haul discovery rail), so this
+    is a superset check, not equality."""
     from lib.quota import METERED
-    assert METERED["serpapi_vz"] == METERED["serpapi"]
-    assert METERED["aviasales_vz"] == METERED["aviasales"]
+    for vz, base in (("serpapi_vz", "serpapi"),
+                     ("aviasales_vz", "aviasales"),
+                     ("googleflights_vz", "googleflights")):
+        shared = set(METERED[vz]) & set(METERED[base])
+        assert shared, f"{vz} shares no op with {base}"
+        for op in shared:
+            assert METERED[vz][op] == METERED[base][op], f"{vz}.{op}"
+        assert set(METERED[base]) <= set(METERED[vz])
+    assert "explore" in METERED["serpapi_vz"]
+    assert "explore" not in METERED["serpapi"]  # tracker never calls it
 
 
 # -- keys --------------------------------------------------------------
@@ -86,6 +98,50 @@ def test_borrowing_the_trackers_key_is_visible_never_silent():
     var, shared = sources.resolve_env_var("serpapi_vz", env)
     assert (var, shared) == ("SERPAPI_KEY", True)
     assert sources.shares_key_with_other_project("serpapi_vz", env) is True
+
+
+def test_a_dedicated_key_retires_the_self_imposed_slice(conn, monkeypatch):
+    """While borrowing the tracker's key, serpapi_vz runs on a baseline
+    we invented (origin 'seed'). When a real account arrives that number
+    must be replaced, not kept — otherwise a fresh 250 account stays
+    capped at yesterday's 50-unit slice forever."""
+    import run_deals
+
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    ledger.record_anchor("serpapi_vz", remaining=50, limit_total=50,
+                         origin="seed")            # the borrowing era
+    assert ledger.pool_state("serpapi_vz").provider_view == 50
+
+    class _Account:
+        def check_quota(self):
+            return {"remaining": 250, "limit_total": 250}
+
+    monkeypatch.setenv("SERPAPI_KEY_VZ", "vz-own-account")
+    run_deals._ensure_fare_anchor(ledger, "serpapi_vz", _Account())
+
+    state = ledger.pool_state("serpapi_vz")
+    assert state.provider_view == 250
+    assert state.baseline_origin == "account_api"
+
+
+def test_a_real_provider_anchor_is_not_re_probed(conn, monkeypatch):
+    """The opposite guard: once anchored from the account, don't churn
+    it on every run."""
+    import run_deals
+
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    ledger.record_anchor("serpapi_vz", remaining=180, limit_total=250,
+                         origin="account_api")
+
+    class _Boom:
+        def check_quota(self):
+            raise AssertionError("re-probed an already-anchored pool")
+
+    monkeypatch.setenv("SERPAPI_KEY_VZ", "vz-own-account")
+    run_deals._ensure_fare_anchor(ledger, "serpapi_vz", _Boom())
+    assert ledger.pool_state("serpapi_vz").provider_view == 180
 
 
 def test_searchapi_vz_never_borrows_the_lifetime_credits():

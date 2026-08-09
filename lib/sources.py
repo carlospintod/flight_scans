@@ -147,22 +147,24 @@ REGISTRY: tuple[SourceSpec, ...] = (
         "serpapi_vz", family=FAMILY_GOOGLE, roles=("discovery", "verification"),
         env_var="SERPAPI_KEY_VZ", backend="serpapi",
         env_var_fallback="SERPAPI_KEY",
-        metered={"point_query": 1, "booking_options": 1},
-        # 50/mo: the measured headroom on the shared free key after the
-        # tracker's own needs (2026-08-08 audit: ~194 of 250 committed).
-        # This is a HOLDING number — it does not fund a daily deal
-        # pipeline. Raising it means either starving the tracker or
-        # buying capacity, which is Carlos's call (CLAUDE.md, budget).
-        pool=("monthly", 50, None, 5, 7, None),
+        metered={"point_query": 1, "booking_options": 1, "explore": 1},
+        # Vuelazo has its OWN SerpAPI account since 2026-08-09 (probed:
+        # 250/250), so this mirrors the tracker's pool instead of the
+        # 50-unit holding slice it needed while borrowing one key.
+        # Margin 25 = the same one-bad-day cushion the tracker keeps.
+        # per_search_cap 12 covers a verification queue (<=5) plus a
+        # day's Explore rotation (<=6) in one reservation.
+        pool=("monthly", 250, None, 25, 12, None),
         failure_mode="clean_429", enabled=True,
-        note="Vuelazo's slice of the Google rail. Verification of "
-             "candidates + price_insights. Own pool so a deal sweep can "
-             "never drain the NBO tracker's free 250."),
+        note="Vuelazo's own Google rail (SERPAPI_KEY_VZ). Runs as stage 2 "
+             "only — the free scraper verifies first, this adds "
+             "price_insights + a second price read on survivors. Separate "
+             "account, so a deal sweep cannot touch the NBO tracker's 250."),
     SourceSpec(
         "searchapi_vz", family=FAMILY_GOOGLE, roles=("discovery", "verification"),
         env_var="SEARCHAPI_KEY_VZ", backend="searchapi",
         env_var_fallback=None,   # deliberately NO fallback: see note
-        metered={"point_query": 1, "calendar": 1},
+        metered={"point_query": 1, "calendar": 1, "explore": 1},
         # Developer plan = 10k searches/mo. Margin 200 ~= one heavy day.
         pool=("monthly", 10000, None, 200, 28, None),
         failure_mode="clean_429", enabled=False,

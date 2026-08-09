@@ -45,6 +45,10 @@ class DealConfig:
     baseline_window_days: int
     mistake_pct_of_typical: float
     insights_floor: bool
+    explore_enabled: bool
+    explore_provider: str
+    explore_calls_per_day: int
+    explore_areas: tuple[str, ...]
     publish_channels: tuple[str, ...]
     daily_candidate_cap: int
     route_cooldown_days: int
@@ -70,6 +74,7 @@ def load_deal_config(path: Path = DEFAULT_CONFIG) -> DealConfig:
         scoring = raw["scoring"]
         drafting = raw["drafting"]
         publish = raw["publish"]
+        explore = raw.get("explore") or {}
         cfg = DealConfig(
             origins=tuple(str(o).upper() for o in raw["origins"]),
             currency=str(raw.get("currency", "EUR")).upper(),
@@ -94,6 +99,10 @@ def load_deal_config(path: Path = DEFAULT_CONFIG) -> DealConfig:
             baseline_window_days=int(det.get("baseline_window_days", 60)),
             mistake_pct_of_typical=float(det["mistake_pct_of_typical"]),
             insights_floor=bool(det.get("insights_floor", False)),
+            explore_enabled=bool(explore.get("enabled", False)),
+            explore_provider=str(explore.get("provider", "serpapi")),
+            explore_calls_per_day=int(explore.get("calls_per_day", 0)),
+            explore_areas=tuple(str(a) for a in explore.get("areas") or []),
             publish_channels=tuple(
                 str(c) for c in publish.get("channels", ["tg_private", "email"])),
             daily_candidate_cap=int(guard["daily_candidate_cap"]),

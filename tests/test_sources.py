@@ -22,7 +22,7 @@ _GOLDEN_POOL_SEEDS = (
     # own pools (2026-08-08 project separation). This is the whole point:
     # a Vuelazo sweep spends from serpapi_vz, never from the tracker's
     # free 250.
-    ("serpapi_vz", "monthly", 50, None, 5, 7, None),
+    ("serpapi_vz", "monthly", 250, None, 25, 12, None),
     ("searchapi_vz", "monthly", 10000, None, 200, 28, None),
     ("googleflights_vz", "per_run", None, None, 0, 25, 30),
     ("aviasales_vz", "rate_only", None, None, 0, None, None),
@@ -45,8 +45,9 @@ _GOLDEN_METERED = {
     "skyscanner": {"point_query": 2, "search_airport": 1},
     # Vuelazo's own ids meter identically to their backends — same calls,
     # different pot.
-    "serpapi_vz": {"point_query": 1, "booking_options": 1},
-    "searchapi_vz": {"point_query": 1, "calendar": 1},
+    "serpapi_vz": {"point_query": 1, "booking_options": 1,
+                   "explore": 1},
+    "searchapi_vz": {"point_query": 1, "calendar": 1, "explore": 1},
     "googleflights_vz": {"point_query": 1},
     "aviasales_vz": {"cheap_prices": 1, "prices_for_dates": 1,
                      "latest_prices": 1, "one_way_month_prices": 1,

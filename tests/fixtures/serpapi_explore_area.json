@@ -1,0 +1,1216 @@
+{
+ "search_metadata": {
+  "id": "6a78e7b7f2593a8525682736",
+  "status": "Success",
+  "json_endpoint": "https://serpapi.com/searches/6uds9Vk51nTZyjl0fV0mdg/6a78e7b7f2593a8525682736.json",
+  "created_at": "2026-08-09 20:48:55 UTC",
+  "processed_at": "2026-08-09 20:48:55 UTC",
+  "google_travel_explore_url": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoXagcIARIDTUFEcgwIBBIIL20vMDU5ZzQaF2oMCAQSCC9tLzA1OWc0cgcIARIDTUFEQAFIAXACggEECAoQApgBAQ",
+  "raw_html_file": "https://serpapi.com/searches/6uds9Vk51nTZyjl0fV0mdg/6a78e7b7f2593a8525682736.html",
+  "prettify_html_file": "https://serpapi.com/searches/6uds9Vk51nTZyjl0fV0mdg/6a78e7b7f2593a8525682736.prettify",
+  "total_time_taken": 7.53
+ },
+ "search_parameters": {
+  "engine": "google_travel_explore",
+  "hl": "en",
+  "gl": "es",
+  "departure_id": "MAD",
+  "arrival_area_id": "/m/059g4",
+  "month": "11",
+  "currency": "EUR"
+ },
+ "destinations": [
+  {
+   "destination_id": "/m/02_286",
+   "name": "New York",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 40.7127753,
+    "longitude": -74.0059728
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcTSy0LlOnvIOKZvVBa0YMy-1LPf54ANwcklVvu2RrMCQaCFtmMJmktOtpCLF8ax9ZPKSjInoe3DlCOfBKpmC53nnRpMtZ5qDHyCZJzRPg",
+   "destination_airport": {
+    "code": "EWR"
+   },
+   "start_date": "2026-11-02",
+   "end_date": "2026-11-08",
+   "flight_price": 398,
+   "hotel_price": 247,
+   "flight_duration": 795,
+   "number_of_stops": 1,
+   "airline": "Tap Air Portugal",
+   "airline_code": "TP",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAyagcIARIDTUFEGhUSCjIwMjYtMTEtMDhyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDyoNCAMSCS9tLzAyXzI4Ng",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F02_286&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-02&return_date=2026-11-08"
+  },
+  {
+   "destination_id": "/m/0d6lp",
+   "name": "San Francisco",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 37.7749295,
+    "longitude": -122.4194155
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSb3M4B-mwVbnbCg6A-uHJ50Yqot_FqJt5CFqZ05KpfufPCKnMWlqgbieVpj1kd7zhr8xgADYXDvTFPuFz9z_Po42wjClju7n8vBoFD9A",
+   "destination_airport": {
+    "code": "SFO"
+   },
+   "start_date": "2026-11-05",
+   "end_date": "2026-11-12",
+   "flight_price": 487,
+   "hotel_price": 139,
+   "flight_duration": 970,
+   "number_of_stops": 1,
+   "airline": "ITA",
+   "airline_code": "AZ",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTA1agcIARIDTUFEGhUSCjIwMjYtMTEtMTJyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBkNmxw",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0d6lp&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-05&return_date=2026-11-12"
+  },
+  {
+   "destination_id": "/m/030qb3t",
+   "name": "Los Angeles",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 34.0549076,
+    "longitude": -118.242643
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcTARk3fg4JrXocEwFZ__Vu1gTQq_0fAQykb5FfW16JDWxFEvSzsdWXG8thXEjtdTNrnGpD6L0OVyiRFQb3xGcQk6R1qWqf3S-SjvkZccA",
+   "destination_airport": {
+    "code": "LAX"
+   },
+   "start_date": "2026-11-05",
+   "end_date": "2026-11-12",
+   "flight_price": 478,
+   "hotel_price": 168,
+   "flight_duration": 995,
+   "number_of_stops": 1,
+   "airline": "Tap Air Portugal",
+   "airline_code": "TP",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTA1agcIARIDTUFEGhUSCjIwMjYtMTEtMTJyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBECoOCAMSCi9tLzAzMHFiM3Q",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F030qb3t&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-05&return_date=2026-11-12"
+  },
+  {
+   "destination_id": "/m/01_d4",
+   "name": "Chicago",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 41.88325,
+    "longitude": -87.6323879
+   },
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSJMxpnOjhPrxERWX-ArNulerDUMCP8pP6LE52vhHPK3QhmiftGGZsUyHM7HQ_Z8Ja1ZkAWje5IDSzlz3rianoBqOBuatJwnj4pUyEZlA",
+   "destination_airport": {
+    "code": "ORD"
+   },
+   "start_date": "2026-11-06",
+   "end_date": "2026-11-13",
+   "flight_price": 448,
+   "hotel_price": 169,
+   "flight_duration": 890,
+   "number_of_stops": 1,
+   "airline": "Tap Air Portugal",
+   "airline_code": "TP",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTA2agcIARIDTUFEGhUSCjIwMjYtMTEtMTNyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzAxX2Q0",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F01_d4&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-06&return_date=2026-11-13"
+  },
+  {
+   "destination_id": "/m/0rh6k",
+   "name": "Washington, D.C.",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 38.9072873,
+    "longitude": -77.0369274
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRG0OK4wTkRsqDVobvhtBOPZMDsUETpgJ7jPzOA--4D-HL-0BVkyp4S9gvw7CBWMKyfFVS0lLRn7pmR-Q",
+   "destination_airport": {
+    "code": "IAD"
+   },
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-08",
+   "flight_price": 467,
+   "hotel_price": 180,
+   "flight_duration": 885,
+   "number_of_stops": 1,
+   "airline": "ITA",
+   "airline_code": "AZ",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDhyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzByaDZr",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0rh6k&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-08"
+  },
+  {
+   "destination_id": "/m/0cv3w",
+   "name": "Las Vegas",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 36.171563,
+    "longitude": -115.1391009
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRu92znS_LNcf-AXv--tTB8NqlNSESpb9FmWerXxvY1AJRwqHluyG2zDEgBLgxVEVWpuYPwEE2JVxB0MhBzOU_YK6AXQfqD-Il3YAovBg",
+   "destination_airport": {
+    "code": "LAS"
+   },
+   "start_date": "2026-11-19",
+   "end_date": "2026-11-26",
+   "flight_price": 657,
+   "hotel_price": 92,
+   "flight_duration": 970,
+   "number_of_stops": 1,
+   "airline": "Aer Lingus",
+   "airline_code": "EI",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTE5agcIARIDTUFEGhUSCjIwMjYtMTEtMjZyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBjdjN3",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0cv3w&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-19&return_date=2026-11-26"
+  },
+  {
+   "destination_id": "/m/0f2v0",
+   "name": "Miami",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 25.7616798,
+    "longitude": -80.1917902
+   },
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcRhlHkMsMziRb7h4PsDzIzUkoDmYShx02v4iBLFDtotsN9Ax1mGEk9Vs97xFoAnGmkK_NRKJtJVBu45TUJ_LBwFPOWqAgpbzSPadIoSpw",
+   "destination_airport": {
+    "code": "MIA"
+   },
+   "start_date": "2026-11-06",
+   "end_date": "2026-11-12",
+   "flight_price": 496,
+   "hotel_price": 170,
+   "flight_duration": 770,
+   "number_of_stops": 1,
+   "airline": "Tap Air Portugal",
+   "airline_code": "TP",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTA2agcIARIDTUFEGhUSCjIwMjYtMTEtMTJyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBmMnYw",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0f2v0&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-06&return_date=2026-11-12"
+  },
+  {
+   "destination_id": "/m/01cx_",
+   "name": "Boston",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 42.3555076,
+    "longitude": -71.0565364
+   },
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcR0Ijatew2hxV7jkGPAsiRB3H6Re26hsTSKIbl1Vlr-M6UhlpRY7lT9qi_6dpEY7pVOrIAsm2jRfiXY6iHIkMUjjxmZdGPGR1plRHOtzA",
+   "destination_airport": {
+    "code": "BOS"
+   },
+   "start_date": "2026-11-13",
+   "end_date": "2026-11-19",
+   "flight_price": 527,
+   "hotel_price": 223,
+   "flight_duration": 660,
+   "number_of_stops": 1,
+   "airline": "Tap Air Portugal",
+   "airline_code": "TP",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTEzagcIARIDTUFEGhUSCjIwMjYtMTEtMTlyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzAxY3hf",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F01cx_&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-13&return_date=2026-11-19"
+  },
+  {
+   "destination_id": "/m/071vr",
+   "name": "San Diego",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 32.715738,
+    "longitude": -117.1610838
+   },
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcSWdRnCnA_7DkojrSakc7HFLSxr7nUHYpZMHwUnc6h0Gdge67NClnTorOL-Daze0sXU3QOgG5mAK9MsEq-EM6hk1PvnQzRJLjN1Neepkg",
+   "destination_airport": {
+    "code": "SAN"
+   },
+   "start_date": "2026-11-23",
+   "end_date": "2026-12-02",
+   "flight_price": 730,
+   "hotel_price": 153,
+   "flight_duration": 1755,
+   "number_of_stops": 2,
+   "airline": "JetBlue and Tap Air Portugal",
+   "airline_code": "multi",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTIzagcIARIDTUFEGhUSCjIwMjYtMTItMDJyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzA3MXZy",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F071vr&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-23&return_date=2026-12-02"
+  },
+  {
+   "destination_id": "/m/0d9jr",
+   "name": "Seattle",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 47.6061389,
+    "longitude": -122.3328481
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSSAiBpSv2yUgizRXFmwGP3MTh6M7DGi6u5WgjN5zbRJ9jD42_UzeQNdCTyuPiU5fj8jF1Podav6__a_A",
+   "destination_airport": {
+    "code": "SEA"
+   },
+   "start_date": "2026-11-19",
+   "end_date": "2026-11-26",
+   "flight_price": 590,
+   "hotel_price": 135,
+   "flight_duration": 1075,
+   "number_of_stops": 1,
+   "airline": "Condor and Air Europa",
+   "airline_code": "multi",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTE5agcIARIDTUFEGhUSCjIwMjYtMTEtMjZyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBkOWpy",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0d9jr&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-19&return_date=2026-11-26"
+  },
+  {
+   "destination_id": "/m/0h7h6",
+   "name": "Toronto",
+   "country": "Canada",
+   "gps_coordinates": {
+    "latitude": 43.6548253,
+    "longitude": -79.388447
+   },
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRYoaDkFWO8Zv4BUtmfOHDd3QvGJZci9lqWZfFVV90hiu-LIfCYQxG7KdPHrsY1qybwY_7HsDhO2sgzed6ynG04_NxiRZQlZhjUvR8K3A",
+   "destination_airport": {
+    "code": "YYZ"
+   },
+   "start_date": "2026-11-06",
+   "end_date": "2026-11-14",
+   "flight_price": 429,
+   "hotel_price": 131,
+   "flight_duration": 905,
+   "number_of_stops": 1,
+   "airline": "Tap Air Portugal",
+   "airline_code": "TP",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTA2agcIARIDTUFEGhUSCjIwMjYtMTEtMTRyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBoN2g2",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0h7h6&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-06&return_date=2026-11-14"
+  },
+  {
+   "destination_id": "/m/0f2tj",
+   "name": "New Orleans",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 29.9508941,
+    "longitude": -90.0758356
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRKcy-JaJJGCVBb1Pkn7ORTrgBF93OIwDFCc3JU32Ka5bfQK0h-llHXP5vIKLXqHXYUya-E6Bw_m-JWEePfd2zQ8SMJhLYy-nyW5g6LzQ",
+   "destination_airport": {
+    "code": "MSY"
+   },
+   "start_date": "2026-11-02",
+   "end_date": "2026-11-09",
+   "flight_price": 763,
+   "hotel_price": 181,
+   "flight_duration": 864,
+   "number_of_stops": 1,
+   "airline": "American and British Airways",
+   "airline_code": "multi",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAyagcIARIDTUFEGhUSCjIwMjYtMTEtMDlyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBmMnRq",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0f2tj&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-02&return_date=2026-11-09"
+  },
+  {
+   "destination_id": "/m/080h2",
+   "name": "Vancouver",
+   "country": "Canada",
+   "gps_coordinates": {
+    "latitude": 49.2827291,
+    "longitude": -123.1207375
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSseQhBPo03ZnGg9Dllq4H4PPN96eDUZInR1u6X1Jv2ss0iodLAgtM8TsbuV8Z8psk2Bt5sNaFqpGkY1Ik5fjqkpJ1076x1VsjCUA_fgA",
+   "destination_airport": {
+    "code": "YVR"
+   },
+   "start_date": "2026-11-12",
+   "end_date": "2026-11-18",
+   "flight_price": 573,
+   "hotel_price": 140,
+   "flight_duration": 1038,
+   "number_of_stops": 1,
+   "airline": "Porter Airlines and Air Transat",
+   "airline_code": "multi",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTEyagcIARIDTUFEGhUSCjIwMjYtMTEtMThyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzA4MGgy",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F080h2&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-12&return_date=2026-11-18"
+  },
+  {
+   "destination_id": "/m/0c_y8",
+   "name": "Yosemite National Park",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 37.8651011,
+    "longitude": -119.5383294
+   },
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcRptPuSQ96qbtxIWAgdi0_ZuW-p_qR8AtwSAWdcyuBAAX4w-8q8vkiEnJ6X7kjWbeuJlXWAFX5PqwtpJw",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBjX3k4",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0c_y8&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/0ply0",
+   "name": "Orlando",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 28.5383832,
+    "longitude": -81.3789269
+   },
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/licensed-image?q=tbn:ANd9GcS3xnYk_lGP7Z8SnXNwAITWUnFAzk9EgdltcnifbUZ4YmM98UmHYrvAcE2BdOo4UqiROPXA25uWGlUJbglqLWoptWA76kEGZm09ppMA8A",
+   "destination_airport": {
+    "code": "MCO"
+   },
+   "start_date": "2026-11-02",
+   "end_date": "2026-11-09",
+   "flight_price": 529,
+   "hotel_price": 133,
+   "flight_duration": 780,
+   "number_of_stops": 1,
+   "airline": "Tap Air Portugal",
+   "airline_code": "TP",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAyagcIARIDTUFEGhUSCjIwMjYtMTEtMDlyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBwbHkw",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0ply0&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-02&return_date=2026-11-09"
+  },
+  {
+   "destination_id": "/m/0dclg",
+   "name": "Philadelphia",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 39.9525839,
+    "longitude": -75.1652215
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcT07F49RT1tqvCRdJ-7cG65bnbxsNJOZt2niYKz6rJvRCen3Z8E3biDPAfqVImpyItLoMeyTgQTFLgTZ2hkWffzaggtG4CkYtVX5VpsaQ",
+   "destination_airport": {
+    "code": "PHL"
+   },
+   "start_date": "2026-11-05",
+   "end_date": "2026-11-11",
+   "flight_price": 633,
+   "hotel_price": 161,
+   "flight_duration": 960,
+   "number_of_stops": 1,
+   "airline": "Discover Airlines, Lufthansa, and United",
+   "airline_code": "multi",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTA1agcIARIDTUFEGhUSCjIwMjYtMTEtMTFyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBkY2xn",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0dclg&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-05&return_date=2026-11-11"
+  },
+  {
+   "destination_id": "/m/0vzm",
+   "name": "Austin",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 30.267153,
+    "longitude": -97.7430608
+   },
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQzygn7hi_n902Emd0nYwScfyBxJanvyQKi2mxcoNgMS1BsOwBhKzucEGHtmGxgveqcvsadXDC0xRr4G-nyuBML3jn9kyI6HmFuP6TD2Q",
+   "destination_airport": {
+    "code": "AUS"
+   },
+   "start_date": "2026-11-02",
+   "end_date": "2026-11-08",
+   "flight_price": 799,
+   "hotel_price": 124,
+   "flight_duration": 853,
+   "number_of_stops": 1,
+   "airline": "American and British Airways",
+   "airline_code": "multi",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAyagcIARIDTUFEGhUSCjIwMjYtMTEtMDhyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDSoLCAMSBy9tLzB2em0",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0vzm&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-02&return_date=2026-11-08"
+  },
+  {
+   "destination_id": "/m/052p7",
+   "name": "Montreal",
+   "country": "Canada",
+   "gps_coordinates": {
+    "latitude": 45.5018869,
+    "longitude": -73.5673919
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQfgyOr7-LOIbU9sq3k1psofK9TzTDkBTb0xIO3dRQqY9MaHbXRNHOt2qF0UJpQjc9iapxjWubyLGUKMxcZ2-TGJgp6kwof9VTORjzJgQ",
+   "start_date": "2026-11-20",
+   "end_date": "2026-11-27",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTIwagcIARIDTUFEGhUSCjIwMjYtMTEtMjdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzA1MnA3",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F052p7&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-20&return_date=2026-11-27"
+  },
+  {
+   "destination_id": "/m/08874",
+   "name": "Yellowstone National Park",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 44.5979182,
+    "longitude": -110.561249
+   },
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSoOyrsAo-Ad6-oKtim1fdiT3PdQ0Y3gaw64hZ0nMVlCYgSi_yv7Q-0WtWTwH0PSkNsOX7Vqft27Upi_PnkwGKwDz2RZJ_LA699152nHA",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzA4ODc0",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F08874&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/02cl1",
+   "name": "Denver",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 39.7392358,
+    "longitude": -104.990251
+   },
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQQsldpQbHhRtEH2RkyVQPYzYmB9kzqzGZkO6MMgyiAMU6XGtCpyu-O1x7V0-GV9HyUUnMZNOY53zXEkCaT5z97sj5r45K4JLAGw3zR7g",
+   "destination_airport": {
+    "code": "DEN"
+   },
+   "start_date": "2026-11-19",
+   "end_date": "2026-11-26",
+   "flight_price": 771,
+   "hotel_price": 121,
+   "flight_duration": 1448,
+   "number_of_stops": 2,
+   "airline": "Alaska, JetBlue, Condor, and Air Europa",
+   "airline_code": "multi",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTE5agcIARIDTUFEGhUSCjIwMjYtMTEtMjZyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzAyY2wx",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F02cl1&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-19&return_date=2026-11-26"
+  },
+  {
+   "destination_id": "/m/013yq",
+   "name": "Atlanta",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 33.7501275,
+    "longitude": -84.3885209
+   },
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcTJcNkmexDz0rCu-7-0YJxrxK3NHqgqxUPA1C0qPvCDWhAnwiP19PFPLWtxsLqtWO_AeB7NxseBEBBvUeZ2yKofiZWde-xYITCvjffRew",
+   "destination_airport": {
+    "code": "ATL"
+   },
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "flight_price": 754,
+   "hotel_price": 128,
+   "flight_duration": 875,
+   "number_of_stops": 1,
+   "airline": "Lufthansa and United",
+   "airline_code": "multi",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzAxM3lx",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F013yq&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/04sqj",
+   "name": "Mexico City",
+   "country": "Mexico",
+   "gps_coordinates": {
+    "latitude": 19.4326077,
+    "longitude": -99.133208
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcTyLSY_SgHe5Zc997j4p_FA6IBwXUKCFTlfEta50zuY3oPp9_vMuzXHyIRjUI0YeOIvRQc7z37xiTJl1tB2WAbrTxOcbAiWdLDsbyUVGw",
+   "destination_airport": {
+    "code": "MEX"
+   },
+   "start_date": "2026-11-30",
+   "end_date": "2026-12-07",
+   "flight_price": 730,
+   "hotel_price": 74,
+   "flight_duration": 740,
+   "number_of_stops": 0,
+   "airline": "Iberia",
+   "airline_code": "IB",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTMwagcIARIDTUFEGhUSCjIwMjYtMTItMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzA0c3Fq",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F04sqj&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-30&return_date=2026-12-07"
+  },
+  {
+   "destination_id": "/m/05jbn",
+   "name": "Nashville",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 36.1626638,
+    "longitude": -86.7816016
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRYmdqtS9aVjruOTl7F-iplOC2NZJpJRsa-Fpcx_Csa_r4_Di3IUUgcK54uCn8Dl8Rdk9CNiQgkw1IllIx8p4Q6NXQXifrZk2lH8iTItQ",
+   "destination_airport": {
+    "code": "BNA"
+   },
+   "start_date": "2026-11-14",
+   "end_date": "2026-11-21",
+   "flight_price": 657,
+   "hotel_price": 140,
+   "flight_duration": 820,
+   "number_of_stops": 1,
+   "airline": "Aer Lingus",
+   "airline_code": "EI",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTE0agcIARIDTUFEGhUSCjIwMjYtMTEtMjFyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzA1amJu",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F05jbn&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-14&return_date=2026-11-21"
+  },
+  {
+   "destination_id": "/m/02frhbc",
+   "name": "Portland",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 45.515232,
+    "longitude": -122.6783853
+   },
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQ9DFzK-XeKaBSFxXbFROGXsZk7YZGHoTAQxZ43-PVeL_gYPJj025sdmGi6uV1CeeQy8Q9I1QkSIwIqPOH6T2bj5oZEpHLGhRS8fYqWGw",
+   "destination_airport": {
+    "code": "PDX"
+   },
+   "start_date": "2026-11-05",
+   "end_date": "2026-11-12",
+   "flight_price": 740,
+   "hotel_price": 118,
+   "flight_duration": 1368,
+   "number_of_stops": 2,
+   "airline": "Alaska, Condor, and Air Europa",
+   "airline_code": "multi",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTA1agcIARIDTUFEGhUSCjIwMjYtMTEtMTJyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBECoOCAMSCi9tLzAyZnJoYmM",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F02frhbc&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-05&return_date=2026-11-12"
+  },
+  {
+   "destination_id": "/m/0162v",
+   "name": "Barbados",
+   "country": "Barbados",
+   "gps_coordinates": {
+    "latitude": 13.193887,
+    "longitude": -59.543198
+   },
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQ85aLoAzyqiuhEOehDkrKI7J7MfuoEW09gTPZfj_is0mA8N1yht-28CMDbyiJWWu5Ys_-km6pJKuDOyIlOnyTjeVK4ql8xlTE3rcNIiA",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzAxNjJ2",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0162v&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/06s0l",
+   "name": "Saint Lucia",
+   "country": "St. Lucia",
+   "gps_coordinates": {
+    "latitude": 13.909444,
+    "longitude": -60.978893
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSm_ZqCHCsz-jK7Ne78ugdu79DRsmXW_KTMTYXLRQJsrKqUr1Cv0ntgv8Snfc-IZzKaYXh6oReNV0UnQelvd2e3Gb0ljSe1HCDf5u9uhw",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzA2czBs",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F06s0l&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/01626x",
+   "name": "Zion National Park",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 37.2982022,
+    "longitude": -113.0263005
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQKGE_W9V0oG_b3m7jzH0Dcd8g07xaI9oj5LuZOJnZJ-AOTQf4ywbrW0cauvDqslx0mUxbZh1DjeD5EVEiqF0NgzZCdOm3zl4pGQhp27lM",
+   "start_date": "2026-11-19",
+   "end_date": "2026-11-26",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTE5agcIARIDTUFEGhUSCjIwMjYtMTEtMjZyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDyoNCAMSCS9tLzAxNjI2eA",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F01626x&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-19&return_date=2026-11-26"
+  },
+  {
+   "destination_id": "/m/0gkgp",
+   "name": "Charleston",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 32.7833163,
+    "longitude": -79.9319664
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcT4s_H-QqeKok5hV6x-tqeaEaLYiztFQXNrD2hNAylocLI0sqj55HcKwfc1EACnuEbG0Qm_vyAtu4eyl--uojll1kBR-4pOD6H9gevaYw",
+   "start_date": "2026-11-02",
+   "end_date": "2026-11-09",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAyagcIARIDTUFEGhUSCjIwMjYtMTEtMDlyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBna2dw",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0gkgp&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-02&return_date=2026-11-09"
+  },
+  {
+   "destination_id": "/m/03l2n",
+   "name": "Houston",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 29.7600771,
+    "longitude": -95.3701108
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSLSVtDuQcEdJJS8RjGeZ5FuHs5RjCwjfwibZIvdVAvcV1TKpYtARXx7kWVQoPKbpKoEqcNtBRZsQ98h3-PnOGuNsC2fni2txiMCMVrtQ",
+   "destination_airport": {
+    "code": "IAH"
+   },
+   "start_date": "2026-11-02",
+   "end_date": "2026-11-09",
+   "flight_price": 691,
+   "hotel_price": 103,
+   "flight_duration": 1050,
+   "number_of_stops": 1,
+   "airline": "ITA",
+   "airline_code": "AZ",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAyagcIARIDTUFEGhUSCjIwMjYtMTEtMDlyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzAzbDJu",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F03l2n&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-02&return_date=2026-11-09"
+  },
+  {
+   "destination_id": "/m/01q98m",
+   "name": "Cancún",
+   "country": "Mexico",
+   "gps_coordinates": {
+    "latitude": 21.161908,
+    "longitude": -86.8515279
+   },
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQA3yyNVuXIdBe5MvQRSSI5e4zv09EGmak2FpK7NWflYG-fqVSEHexwt9dxW4IXiTblt9M73sQQbGTiGDqtjGuOeOoQ8c_NsGaXUs1irw",
+   "destination_airport": {
+    "code": "CUN"
+   },
+   "start_date": "2026-11-27",
+   "end_date": "2026-12-04",
+   "flight_price": 627,
+   "hotel_price": 58,
+   "flight_duration": 665,
+   "number_of_stops": 0,
+   "airline": "World 2 Fly and Air Europa",
+   "airline_code": "multi",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTI3agcIARIDTUFEGhUSCjIwMjYtMTItMDRyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDyoNCAMSCS9tLzAxcTk4bQ",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F01q98m&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-27&return_date=2026-12-04"
+  },
+  {
+   "destination_id": "/m/0f2rq",
+   "name": "Dallas",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 32.7766642,
+    "longitude": -96.7969879
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSbHmpLzR2Njm15dx_j_L2njPjHSZULRbl9LdB_Qb_PGQrfiGVRO1sDN3t7J6Aa3QfouUysAO42bmCdvJUpOfb4exFPDt1qQqzuA6EQKA",
+   "destination_airport": {
+    "code": "DFW"
+   },
+   "start_date": "2026-11-05",
+   "end_date": "2026-11-11",
+   "flight_price": 793,
+   "hotel_price": 107,
+   "flight_duration": 1210,
+   "number_of_stops": 1,
+   "airline": "Turkish Airlines",
+   "airline_code": "TK",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTA1agcIARIDTUFEGhUSCjIwMjYtMTEtMTFyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBmMnJx",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0f2rq&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-05&return_date=2026-11-11"
+  },
+  {
+   "destination_id": "/m/018gyg",
+   "name": "Joshua Tree National Park",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 33.873415,
+    "longitude": -115.9009923
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQFqe1VNkTYqoTlcc4MWxBLWAUIKzidsRjiS6l536qM3GKULcgDHhlTjxXFykO9T1jA8_sJAsHS3-u2stT2yJJODBkQFophxaVx_fgcxQ",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDyoNCAMSCS9tLzAxOGd5Zw",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F018gyg&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/0jbs5",
+   "name": "Maui",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 20.7983626,
+    "longitude": -156.3319253
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQdIm-WAVVzKaMwXTfX3WuWskI2iJ752Y1BYYTWQTg-xk4kQrmPmYfNNeGHZoFkzH-kF0383RpzEf54mjxcPnddlurA_WAsY42x-HDi1Q",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBqYnM1",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0jbs5&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/0f2w0",
+   "name": "San Antonio",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 29.4251905,
+    "longitude": -98.4945922
+   },
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcTEIUBJuIa1h9KQZlupmYHjs3ViSKJXgwqJbgVbY8qU5Rxt2_HKYcscF3Up5govUW7oC6Y-7L4jTLEufYu12RcsM5ysiQq0ZkGvuvmi0w",
+   "destination_airport": {
+    "code": "SAT"
+   },
+   "start_date": "2026-11-09",
+   "end_date": "2026-11-16",
+   "flight_price": 819,
+   "hotel_price": 108,
+   "flight_duration": 1341,
+   "number_of_stops": 2,
+   "airline": "Air France, Delta, and KLM",
+   "airline_code": "multi",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTA5agcIARIDTUFEGhUSCjIwMjYtMTEtMTZyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBmMncw",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0f2w0&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-09&return_date=2026-11-16"
+  },
+  {
+   "destination_id": "/m/0cnsp",
+   "name": "Bryce Canyon National Park",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 37.5930377,
+    "longitude": -112.1870895
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRnAPI4arN81ipm21ETVgC9-sJbgfLwU4g0AQqYlCXwRMi_kFlhgu9yeCIbCx0SGmVXsJ2Fc8qbYwD0C4348vG3OItNq5m1ygsSeNJc-g",
+   "start_date": "2026-11-19",
+   "end_date": "2026-11-26",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTE5agcIARIDTUFEGhUSCjIwMjYtMTEtMjZyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBjbnNw",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0cnsp&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-19&return_date=2026-11-26"
+  },
+  {
+   "destination_id": "/m/01gznn",
+   "name": "Glacier National Park",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 48.756063,
+    "longitude": -113.7797316
+   },
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcRsMh3klsvnVGAz3dzZLaMHi029od27z70CIAnaZ1qq2h-6vOwLo6IqFDrJ_13mXpsJd86ErMI38QXShNlYIPhlp-50TgrhoN4lZWhNYA",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDyoNCAMSCS9tLzAxZ3pubg",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F01gznn&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/0pmp2",
+   "name": "Québec City",
+   "country": "Canada",
+   "gps_coordinates": {
+    "latitude": 46.8130816,
+    "longitude": -71.2074596
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSe7Tz7T61AzbmX7RmAAA2tEeTrwOn_vBoUiWiqyhqZL8gNGCs-8Yu6fAWOYKCDxuyEGYsNgbAWnn57hg",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBwbXAy",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0pmp2&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/09b1k",
+   "name": "Walt Disney World® Resort",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 28.3771857,
+    "longitude": -81.57074
+   },
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcSCXvHNGeXyoD24XW6_CeO4uHdfC9R83zLoYEtpshXqeO7R_OSDbBT7UZIk4nxhHFFI0qgz0GoLizGElmYlDSrSpkYYDykpTSFQ3TGDRw",
+   "destination_airport": {
+    "code": "MCO",
+    "location": "Orlando",
+    "location_id": "/m/0ply0"
+   },
+   "start_date": "2026-11-02",
+   "end_date": "2026-11-09",
+   "flight_price": 529,
+   "hotel_price": 118,
+   "flight_duration": 780,
+   "number_of_stops": 1,
+   "airline": "Tap Air Portugal",
+   "airline_code": "TP",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAyagcIARIDTUFEGhUSCjIwMjYtMTEtMDlyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzA5YjFr",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F09b1k&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-02&return_date=2026-11-09"
+  },
+  {
+   "destination_id": "/m/0d35y",
+   "name": "Phoenix",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 33.4482948,
+    "longitude": -112.0725488
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQzlmJiBnd1MroBffESp3yiYMSOJntlzNPNwMWnn8SG8TKG_op8z3qXHfXbXFK_cIZCqboMa7FepMb_orcjRaUKjtnQffWJzlBVP1NY2g",
+   "destination_airport": {
+    "code": "PHX"
+   },
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-08",
+   "flight_price": 789,
+   "hotel_price": 147,
+   "flight_duration": 1288,
+   "number_of_stops": 2,
+   "airline": "Air France, Delta, and KLM",
+   "airline_code": "multi",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDhyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBkMzV5",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0d35y&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-08"
+  },
+  {
+   "destination_id": "/m/035yg",
+   "name": "Grenada",
+   "country": "Grenada",
+   "gps_coordinates": {
+    "latitude": 12.1165,
+    "longitude": -61.679
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS5gr7JavsGaDtYvMGSD-IBPxjP5UpH4xeYzQ3UcqjKj-mi6UsMmi8H2dvGMYNKOW3fxLbCIbOuDalMl0_XHTgncBAa0x1g892SFgmJ8Q",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzAzNXln",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F035yg&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/0cnrr",
+   "name": "Grand Canyon National Park",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 36.2678855,
+    "longitude": -112.3535253
+   },
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcTW4h72CI44tms7eyv4mvuqdaoDHoa2OBquS-Yg9zmxBu6UCAsYGqTSFWpAR5PU0nJlDLNmd5RIlACmRGU6TkXyafM5vG57CckP7InjYQ",
+   "destination_airport": {
+    "code": "LAS",
+    "location": "Las Vegas",
+    "location_id": "/m/0cv3w"
+   },
+   "start_date": "2026-11-05",
+   "end_date": "2026-11-14",
+   "flight_price": 672,
+   "hotel_price": 160,
+   "flight_duration": 970,
+   "number_of_stops": 1,
+   "airline": "Aer Lingus",
+   "airline_code": "EI",
+   "car_duration": 300,
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTA1agcIARIDTUFEGhUSCjIwMjYtMTEtMTRyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBjbnJy",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0cnrr&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-05&return_date=2026-11-14"
+  },
+  {
+   "destination_id": "/m/02hrh0_",
+   "name": "Honolulu",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 21.3098845,
+    "longitude": -157.8581401
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcSY5uFNiclOtDJM0OFQ3U-C4cd1zcVAt5JvAQLI2ud7heC6NYes-MU16oqhxbdymQe733dKHRb2zLmBV3T4EfT6PS4t5GczosWSoO-p1g",
+   "destination_airport": {
+    "code": "HNL"
+   },
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-08",
+   "flight_price": 1117,
+   "hotel_price": 184,
+   "flight_duration": 1543,
+   "number_of_stops": 2,
+   "airline": "American, British Airways, Delta, and KLM",
+   "airline_code": "multi",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDhyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBECoOCAMSCi9tLzAyaHJoMF8",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F02hrh0_&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-08"
+  },
+  {
+   "destination_id": "/m/05ksh",
+   "name": "Ottawa",
+   "country": "Canada",
+   "gps_coordinates": {
+    "latitude": 45.4200572,
+    "longitude": -75.7003397
+   },
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcRIqq_MlCKzxi1sK6K0N71EoXQiiPemuYdwP3p7UD051XU9vauNeBXf1ojWfJmeL46ByVJV6g2chFLM7NQc4YefQujpxAYNw5bQupyKQg",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoJagcIARIDTUFEGglyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzA1a3No",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F05ksh&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11"
+  },
+  {
+   "destination_id": "/m/0jbsn",
+   "name": "Kauai",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 22.0964396,
+    "longitude": -159.5261238
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQOd-hemzd-OJ_B3eDSMnACJvoR49ouA4pqXKRjcIAe978cthPn2qryTy6epG6roq6z3QsLJqqlcA-ZwHCy6VkIs3X6YkWuWsJQTF6B7A",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBqYnNu",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0jbsn&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/01btzt",
+   "name": "Puerto Vallarta",
+   "country": "Mexico",
+   "gps_coordinates": {
+    "latitude": 20.6565177,
+    "longitude": -105.211358
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRWg7YOM5TVnTiX0WLJ_WKgh1KVGw_rWQbxTJWG0wSzNiFqhTEfEqtwhUYYK2BkXaptTZrRv9utmIL76CTf7hxap_3CpnY-iVC2CIqUFQ",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDyoNCAMSCS9tLzAxYnR6dA",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F01btzt&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/01nty",
+   "name": "Cayman Islands",
+   "country": "Cayman Islands",
+   "gps_coordinates": {
+    "latitude": 19.3133,
+    "longitude": -81.2546
+   },
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcR_9V-sHrLIc7q1WfzbXhtinxTzy8no5IPtvVHdz8E-b3wAaCHecZmpyENryExe6D0kiftmvfRKdD-cxT8y9u6LQANjvy6Y_iA_m-_YsA",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzAxbnR5",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F01nty&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/017kpv",
+   "name": "Chichén Itzá",
+   "country": "Mexico",
+   "gps_coordinates": {
+    "latitude": 20.6842849,
+    "longitude": -88.5677826
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR5Z8l-lv3VUCIdQbyknrGWhieqjP15VVtnus7JDPOtzxK3OTKIqyhI0R5LwwBxc_ZY8Nsgxi1qL6r_lUW54_Tjpxx91J9eTkqZnRZcWA",
+   "start_date": "2026-11-27",
+   "end_date": "2026-12-04",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTI3agcIARIDTUFEGhUSCjIwMjYtMTItMDRyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDyoNCAMSCS9tLzAxN2twdg",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F017kpv&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-27&return_date=2026-12-04"
+  },
+  {
+   "destination_id": "/m/0g_wn2",
+   "name": "Anchorage",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 61.2175758,
+    "longitude": -149.8996785
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRQJjh-q1CqmLlVbsYSyxmP5jthuPxYjuN0FHotgoMgZGfvyTT0aFrvqbLm2SuKfXWtGBpPJ0pb-R0PAcolhk_O9oAVonwUnYxBpSW-6Q",
+   "start_date": "2026-11-19",
+   "end_date": "2026-11-26",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTE5agcIARIDTUFEGhUSCjIwMjYtMTEtMjZyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDyoNCAMSCS9tLzBnX3duMg",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0g_wn2&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-19&return_date=2026-11-26"
+  },
+  {
+   "destination_id": "/m/02rgb1",
+   "name": "Hawaiʻi Volcanoes National Park",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 19.4963669,
+    "longitude": -155.4661859
+   },
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcSGytojYqyF2pHmY66889mKGO2gC0i77cv8VNcGYGrvEKDGAU8avWxe9MXY2m5zGPx3J8HPusl64FK9jW1vKyw2ItA2yg0Ibe5pdN13Pg",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDyoNCAMSCS9tLzAycmdiMQ",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F02rgb1&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/01bl0v",
+   "name": "Oaxaca",
+   "country": "Mexico",
+   "gps_coordinates": {
+    "latitude": 17.0731842,
+    "longitude": -96.7265889
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcTI0hdF_NTMd5m68lE3vdrR6kIqykkfnKL-NKXZaayEhG_9FpjvL-KDEAj4czG7NLKvholiS8tRIAwV3Fv0l_6MYBSgSQkcngI-C2IHrg",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoJagcIARIDTUFEGglyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDyoNCAMSCS9tLzAxYmwwdg",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F01bl0v&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11"
+  },
+  {
+   "destination_id": "/m/01nb6p",
+   "name": "Denali National Park and Preserve",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 63.2827613,
+    "longitude": -150.7893981
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR7hREHgihB6KhjbiUpKvShnOEw3MQEgmPxbZg5it5rQcpzXFE2ykdz2KE-tmn6rsbKmHavKKmytUBrcxrwoGDkHM0HMGgVKtbGhKPdvA",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDyoNCAMSCS9tLzAxbmI2cA",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F01nb6p&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/02qjb7z",
+   "name": "Halifax",
+   "country": "Canada",
+   "gps_coordinates": {
+    "latitude": 44.6508608,
+    "longitude": -63.5923256
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRbQTv3tb0Zv5kNh8qjDKNIfIJgjOSP1UqavbqkwMAICAFqDYi-lV2aMQAgMG3iG3PQlqQ0ANV4BX7a0ks13078d6tUhbO0Lcxo5PDflA",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBECoOCAMSCi9tLzAycWpiN3o",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F02qjb7z&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/0pmq2",
+   "name": "Winnipeg",
+   "country": "Canada",
+   "gps_coordinates": {
+    "latitude": 49.8954221,
+    "longitude": -97.1385145
+   },
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcR6di1dGbKg3tuSBKb_hQs-F5vopEktnZBHiZ2kPTNb1vlyfia3bujOnXvfFj45-iafRO-sQeMRsgiJf-YbCitvEPJC3pvwNyBxiTtpLg",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBwbXEy",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0pmq2&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/0qf5p",
+   "name": "Fairbanks",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 64.8400511,
+    "longitude": -147.7199756
+   },
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcQJ7Gctwp0DwxGkin_yXGSzf2VJ2IaAj71pg9NgYxs_fTRmFMKZr-60E9WLog3fSOPTBBzfoCyDtoYN_IkmRlzDFE_CfQr0qIy5zoNCgw",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBxZjVw",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0qf5p&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/0r_g0",
+   "name": "Kailua-Kona",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 19.6419129,
+    "longitude": -155.9962255
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQYGcRtysfawVHUggceguoEcIUqk6y0_M4lrAsOJDAxRlIH2zKuminDcBJAZmdP-i9K8cVYZt-VKB_ACDeSQer3FBqDtejKtFBS6amZfg",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzByX2cw",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0r_g0&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/0j8p6",
+   "name": "St. John's",
+   "country": "Canada",
+   "gps_coordinates": {
+    "latitude": 47.5556097,
+    "longitude": -52.7452511
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcRscayzwKPHRREFvy17IYbPlZnZdAJcix_b-fvwB7ymcBw1jaP7oGOIceMj4bJNcu1GYz9zZwuEwPWz1UTYPj2kh6Xw-YB29Efw5AVtTA",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBqOHA2",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0j8p6&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/0x1y7",
+   "name": "Bozeman",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 45.6793119,
+    "longitude": -111.037259
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTuAMfjkrYMNCLnUYNB7MD-cwyfYNu9qOJzkn0wPQ4Sk5Z_cDMcsvi6StRZIADVoK29ZFPlVKeRpm0OoRlsz9NJD85WRGcsWP4GX5b0Sg",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzB4MXk3",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0x1y7&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/038xsf",
+   "name": "Theodore Roosevelt National Park",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 46.9508897,
+    "longitude": -103.4627031
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQHiaBOs_itm1sz77IZFpC2raYO1Vv39GVpbDpo_ZsYNrAIMkH5YaSyainGDj0tWuxQGtUZfKhSf39cxXJ_kqA7oERBLq7Nv7mvVxFBjg",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoJagcIARIDTUFEGglyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDyoNCAMSCS9tLzAzOHhzZg",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F038xsf&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11"
+  },
+  {
+   "destination_id": "/m/0fnx1",
+   "name": "Charlottetown",
+   "country": "Canada",
+   "gps_coordinates": {
+    "latitude": 46.23824,
+    "longitude": -63.1310704
+   },
+   "thumbnail": "https://encrypted-tbn2.gstatic.com/images?q=tbn:ANd9GcRP3SLswm0RFgJss9eZHuzztT23F4FlU00sNc3FdzGa3e8nnGdWLT31UJy3j3QoZXvyCq8qmpnBMd-eC0p61SOuscxGGS5uzZBNBoOnhw",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBmbngx",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0fnx1&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/04_lb",
+   "name": "Moncton",
+   "country": "Canada",
+   "gps_coordinates": {
+    "latitude": 46.0878165,
+    "longitude": -64.7782313
+   },
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcSUrnVspV_XLYSpMyrtzaXm2rK06k30ChcZ95KjwOBqWdbMlykIW3nWulkj8g-jyGmAsy4FEsjhuxKyupyDq1OKhtXqhscjwbDHgaOfBQ",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoJagcIARIDTUFEGglyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzA0X2xi",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F04_lb&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11"
+  },
+  {
+   "destination_id": "/m/0pgp0",
+   "name": "Lunenburg",
+   "country": "Canada",
+   "gps_coordinates": {
+    "latitude": 44.377979,
+    "longitude": -64.3144311
+   },
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcSLTBZCNkIRjwy7OBVn7LJrtpF3_iqfb6Br8o9pOIqEb9gshCB4e1HCXzC2fP1yw2g4uM2CmA7JMORQ-gyKeha8yAJS__xj7RY2S7w7-w",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzBwZ3Aw",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0pgp0&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/03h91q",
+   "name": "Peggy's Cove",
+   "country": "Canada",
+   "gps_coordinates": {
+    "latitude": 44.4939204,
+    "longitude": -63.9140476
+   },
+   "thumbnail": "https://encrypted-tbn3.gstatic.com/images?q=tbn:ANd9GcQgwy12EkIWGn41zGmFnNG7MKMEoBKIgvpI3kJtx5gRVN1KKElzVuKm6YwoNkJ6EX2OsQVK4fBTLG0fBLMS7ckqF7PEEdvFJqyE78aUlw",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDyoNCAMSCS9tLzAzaDkxcQ",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F03h91q&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/038wz1",
+   "name": "Kobuk Valley National Park",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 67.3575107,
+    "longitude": -159.213676
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/licensed-image?q=tbn:ANd9GcTANUfdRBSmYm5uN8kLtohEhhYP9Q_VkhARLvsOHvwiii5qCBNjaZnjo_SAWtftyyDeRJ4efYeImDjDDybGX-mzSUYm-AW3NvQqOFU9wA",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDyoNCAMSCS9tLzAzOHd6MQ",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F038wz1&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  },
+  {
+   "destination_id": "/m/01r6hw",
+   "name": "Ilulissat",
+   "country": "Greenland",
+   "gps_coordinates": {
+    "latitude": 69.2198118,
+    "longitude": -51.0986032
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQTAdTLAwkfxhr4bpsrOCN_D_wp2Dkb_2VrnciTTzGtdzCJzKOtd3tPv8b0Jwduikt8A7NeWgwijjncwQuq1PM18vSPvazJAaAQE7iAqg",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-08",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDhyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDyoNCAMSCS9tLzAxcjZodw",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F01r6hw&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-08"
+  },
+  {
+   "destination_id": "/m/0r_ss",
+   "name": "Haleiwa",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 21.5927614,
+    "longitude": -158.1034112
+   },
+   "thumbnail": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR8wicPhZt_iMaivbzINllNDnW49mqi-zvvobqzN7tkN39CKNl_RTbqcBC6EBaCIjMalkCHOyfDS8DATs0lvmdwPvxDEvm07AUwRQl1hQ",
+   "destination_airport": {
+    "code": "HNL",
+    "location": "Honolulu",
+    "location_id": "/m/02hrh0_"
+   },
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-08",
+   "flight_price": 1117,
+   "flight_duration": 1543,
+   "number_of_stops": 2,
+   "airline": "American, British Airways, Delta, and KLM",
+   "airline_code": "multi",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDhyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBDioMCAMSCC9tLzByX3Nz",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F0r_ss&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-08"
+  },
+  {
+   "destination_id": "/m/01z1nwf",
+   "name": "Utqiagvik",
+   "country": "United States",
+   "gps_coordinates": {
+    "latitude": 71.2905556,
+    "longitude": -156.7886111
+   },
+   "thumbnail": "https://encrypted-tbn1.gstatic.com/images?q=tbn:ANd9GcQ6_N9EcEtEgDLRREo5prI4cHRseMtQg4fqQQgJxxiZCBUneI6zYHtmb5WS3NsaVL2VJapJPMJlW1QUfiAY333vqLczSEncyJb4Es6o1A",
+   "start_date": "2026-11-01",
+   "end_date": "2026-11-07",
+   "link": "https://www.google.com/travel/explore?hl=en&gl=es&curr=EUR&tfs=CBwQAxoVEgoyMDI2LTExLTAxagcIARIDTUFEGhUSCjIwMjYtMTEtMDdyBwgBEgNNQURAAUgBcAGCAQsI____________AZgBAbIBECoOCAMSCi9tLzAxejFud2Y",
+   "serpapi_link": "https://serpapi.com/search.json?arrival_id=%2Fm%2F01z1nwf&currency=EUR&departure_id=MAD&engine=google_travel_explore&gl=es&hl=en&month=11&outbound_date=2026-11-01&return_date=2026-11-07"
+  }
+ ]
+}

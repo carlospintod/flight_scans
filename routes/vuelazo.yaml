@@ -21,6 +21,29 @@ sweep_sortings: [price, route]
 sweep_limit_price: 100
 sweep_limit_route: 1000
 
+# Google Travel Explore — origin->anywhere discovery on GOOGLE's data
+# (D1 amendment 2026-08-09). The cached sweep stays: it is free and
+# covers intra-EU breadth well. Explore covers what the cache is bad at
+# — long-haul, with real airport codes and real date pairs, from the
+# same corpus we verify against.
+#
+# Measured, MAD + North America + November, one call: EWR 398, YYZ 429,
+# ORD 448, IAD 467, LAX 478, SFO 487. The same call WITHOUT an area
+# returns Google's default list: Europe-heavy, nothing above 325 — so
+# `areas` is what makes this a long-haul rail and Europe is excluded
+# from it on purpose.
+explore:
+  enabled: true
+  # serpapi (free 250/mo, today) | searchapi (Developer 10k, on flip).
+  # Same engine and parameter names on both, so this is the only line
+  # that changes when Carlos buys SearchAPI.
+  provider: serpapi
+  # Full grid = origins x areas x months = 120 windows. calls_per_day
+  # walks it in a deterministic rotation so nothing starves.
+  # 4/day = ~120/mo, leaving ~130 of the free 250 for verification.
+  calls_per_day: 4
+  areas: [north_america, south_america, asia, africa, oceania]
+
 # Watchlist: per-route cached refresh, once a day. Long-haul is the
 # product's reason to exist, so it gets the deeper date coverage.
 watchlist:

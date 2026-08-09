@@ -65,6 +65,36 @@ watchlist still fit the ceiling (196-combo geometry, ~1,700 calls/mo biweekly).
 Resend Pro ~€19 (from ~100 subscribers) ≈ **€60/mo**, vs €50 soft ceiling — flex
 explicitly blessed by Carlos. Pre-revenue phases run €0–20.
 
+**Amendment (Aug 2026):** Google Travel Explore engines now exist on both SerpAPI and
+SearchAPI, adding live origin→anywhere discovery to the Google family — unavailable
+when this decision was written. Single-paid-API pick reconfirmed as SearchAPI Developer
+($40/10k): includes Explore and the calendar engine (SerpAPI's date grid remains
+unbuilt, roadmap-frozen), at 1/6 the per-call price. SerpAPI paid remains rejected; its
+free 250/mo is re-pointed Explore-first. Paid flip trigger unchanged (evidence, not
+calendar); bounded 1–2 month seeding sprint authorized as the low-burn pattern.
+
+*Implementation notes (2026-08-09, measured — see
+`docs/notes/long-haul-and-separation-2026-08-09.md`):*
+
+- Vuelazo runs its **own** SerpAPI account (`SERPAPI_KEY_VZ`, 250/250 probed). The
+  Nairobi tracker keeps its own; neither can spend the other's (`lib/sources.py`
+  `_vz` source ids, `ledger_runs.scope`).
+- Explore is wired provider-agnostically (`lib/explore_api.py`, engine
+  `google_travel_explore` on both vendors). **The SearchAPI flip is one config line**
+  — `explore.provider` in `routes/vuelazo.yaml` — with no parsing changes.
+- **Undirected Explore calls are a trap.** `departure_id` alone returns Google's
+  default list: Europe-heavy, 66 destinations, nothing above €325 — the same intra-EU
+  bias that made the cached sweep useless for long-haul. Long-haul requires
+  `arrival_area_id` (continent kgmid). Europe is deliberately excluded from the area
+  list: the free Aviasales sweep already covers it at zero quota.
+- With areas, one MAD/North America/November call returned EWR 398, YYZ 429, ORD 448,
+  IAD 467, LAX 478, SFO 487 — real airport codes (not the metro codes Google Flights
+  rejects) and real date pairs, from the same corpus verification queries.
+- Efficiency: the grid (origins × areas × months = 120 windows) is walked by a
+  deterministic day-keyed rotation at `calls_per_day` (4 ≈ 120/mo), leaving ~130 of
+  the free 250 for verification. Verification itself is now free-first (Playwright
+  scraper), so SerpAPI only pays for publish-bound candidates.
+
 ## D2 — Deal detection [R]
 
 **Choice:** Hybrid detector, **implemented incrementally** ("start simple, tune as we
