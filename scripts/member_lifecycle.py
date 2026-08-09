@@ -79,7 +79,7 @@ def main() -> int:
     from lib.clients import guard_clients
     from lib.dealconfig import load_deal_config
     from lib.planner import CostLine, CostVector
-    from lib.quota import QuotaLedger
+    from lib.quota import SCOPE_VUELAZO, QuotaLedger
     from lib.resend_api import ResendClient
     from lib.telegram_api import TelegramClient
 
@@ -101,7 +101,7 @@ def main() -> int:
         ledger = QuotaLedger(conn)
         ledger.seed_pools()
         ledger.expire_orphans()
-        run_id = ledger.begin_run(trigger=args.trigger)
+        run_id = ledger.begin_run(trigger=args.trigger, scope=SCOPE_VUELAZO)
         if run_id is None:
             print("another run holds the lease — exiting")
             return 0

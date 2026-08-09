@@ -157,6 +157,16 @@ class Observation:
     is_verified: bool = False
 
 
+# Rows per INSERT batch over the Turso HTTP backend. The widened sweep
+# (6 months x 2 sortings x 4 origins, breadth pass included) turned a
+# ~700-row insert into a ~8000-row one, and a single executemany of that
+# size reliably blew the 60s HTTP read timeout — the run died AFTER
+# spending its whole free discovery budget. Chunking keeps each request
+# comfortably inside the timeout; the table is append-only, so a partial
+# insert is just fewer observations, never a corrupt state.
+OBS_CHUNK = 400
+
+
 def insert_observations(conn, obs: list[Observation]) -> int:
     now = _now_iso()
     payload = [
@@ -166,15 +176,16 @@ def insert_observations(conn, obs: list[Observation]) -> int:
     ]
     if not payload:
         return 0
-    conn.executemany(
-        """
-        INSERT INTO fare_observations
-            (origin, dest, depart_date, return_date, price, currency,
-             source, source_family, found_at, observed_at, is_verified)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        payload,
-    )
+    for start in range(0, len(payload), OBS_CHUNK):
+        conn.executemany(
+            """
+            INSERT INTO fare_observations
+                (origin, dest, depart_date, return_date, price, currency,
+                 source, source_family, found_at, observed_at, is_verified)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            payload[start:start + OBS_CHUNK],
+        )
     return len(payload)
 
 

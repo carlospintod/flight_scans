@@ -18,12 +18,22 @@ export const dynamic = "force-dynamic";
 
 const ROUTE_ID = "spain-nairobi";
 
+// Two projects share this ledger. The `_vz` pools are Vuelazo's own
+// budget; the unsuffixed ones are the Nairobi tracker's free tier. They
+// are labelled apart on purpose — reading "SerpAPI: 40 left" without
+// knowing WHOSE 40 is how a shared key gets drained by surprise.
 const QUOTA_LABELS: Record<string, string> = {
-  serpapi: "SerpAPI (verify)",
-  kiwi: "Kiwi (discovery)",
-  aviasales: "Aviasales (bonus)",
-  skyscanner: "Sky Scrapper (curve)",
-  searchapi: "SearchAPI (break-glass)",
+  serpapi: "SerpAPI (verify) · tracker",
+  kiwi: "Kiwi (discovery) · tracker",
+  aviasales: "Aviasales (bonus) · tracker",
+  skyscanner: "Sky Scrapper (curve) · tracker",
+  searchapi: "SearchAPI (break-glass) · tracker",
+  serpapi_vz: "SerpAPI (verify) · Vuelazo",
+  searchapi_vz: "SearchAPI (sweep) · Vuelazo",
+  aviasales_vz: "Aviasales (discovery) · Vuelazo",
+  anthropic: "Claude (drafting) · Vuelazo",
+  telegram: "Telegram · Vuelazo",
+  resend: "Resend (email) · Vuelazo",
 };
 
 export default async function OpsPage() {

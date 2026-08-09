@@ -10,18 +10,26 @@
 # publishes without Carlos's approve tap (D3). The /ops approve button
 # dispatches this workflow with publish_only=true for the fan-out.
 #
-# Secrets: TURSO_*, TRAVELPAYOUTS_TOKEN, SERPAPI_KEY, NTFY_TOPIC (shared
-# with scan.yml) + ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN,
-# TELEGRAM_TEST_CHAT_ID, RESEND_API_KEY (Vuelazo service rails).
+# Secrets: TURSO_*, NTFY_TOPIC (shared with scan.yml) + ANTHROPIC_API_KEY,
+# TELEGRAM_BOT_TOKEN, TELEGRAM_TEST_CHAT_ID, RESEND_API_KEY (Vuelazo
+# service rails).
+#
+# FARE KEYS: Vuelazo prefers its OWN — SERPAPI_KEY_VZ,
+# TRAVELPAYOUTS_TOKEN_VZ, SEARCHAPI_KEY_VZ — and falls back to the
+# tracker's (SERPAPI_KEY, TRAVELPAYOUTS_TOKEN) with a loud warning when
+# they are unset. Both are passed so the fallback works today; setting
+# the _VZ secrets is what actually separates the two projects at the
+# PROVIDER (the ledger already separates them at the budget).
 
 name: deals
 
 on:
   schedule:
-    # 3x/day; odd minute dodges queue spikes. 06:41 (not 05:41) keeps
-    # the morning run clear of scan.yml (05:23 Mon/Wed/Sat, up to 50
-    # min) — the two share the single-run ledger lease, and a collision
-    # would silently skip the whole deal run.
+    # 3x/day; odd minute dodges queue spikes. 06:41 (not 05:41) still
+    # keeps the morning run clear of scan.yml (05:23 Mon/Wed/Sat, up to
+    # 50 min) — not for the lease any more (leases are per-project since
+    # 2026-08-08), but because two concurrent runs on a SHARED provider
+    # key still contend for the same rate limits.
     - cron: "41 6,12,18 * * *"
   workflow_dispatch:
     inputs:
@@ -59,6 +67,9 @@ jobs:
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          TRAVELPAYOUTS_TOKEN_VZ: ${{ secrets.TRAVELPAYOUTS_TOKEN_VZ }}
+          SERPAPI_KEY_VZ: ${{ secrets.SERPAPI_KEY_VZ }}
+          SEARCHAPI_KEY_VZ: ${{ secrets.SEARCHAPI_KEY_VZ }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_TEST_CHAT_ID: ${{ secrets.TELEGRAM_TEST_CHAT_ID }}

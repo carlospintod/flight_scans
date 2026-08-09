@@ -40,11 +40,29 @@ INTRA = [_obs("MRS", 38), _obs("FCO", 96), _obs("CDG", 121),
          _obs("AMS", 134), _obs("MXP", 118), _obs("LGW", 142)]
 
 
-def test_classify_route_defaults_to_medium(config):
+def test_classify_route_never_guesses(config):
+    """An unknown code must NOT inherit a class. Defaulting to 'medium'
+    is what benchmarked Turin against a Tel Aviv median and gave a EUR 37
+    Ryanair hop the 1.3x medium weight."""
     assert classify_route("MRS", config) == "intra_eu"
     assert classify_route("NBO", config) == "medium"
     assert classify_route("JFK", config) == "long"
-    assert classify_route("XXX", config) == "medium"  # unlisted
+    assert classify_route("XXX", config) == "unclassified"
+    # The exact codes behind the phantom BCN->TRN "vuelazo".
+    for code in ("TRN", "AHO", "VIL"):
+        assert classify_route(code, config) == "intra_eu"
+    # Russia/CIS is classified-but-never-alerted, not unclassified.
+    assert classify_route("MOW", config) == "excluded"
+
+
+def test_unclassified_and_excluded_never_become_candidates(conn, config):
+    """They must not even form a cross-section — otherwise the unknown
+    bucket sets its own median and manufactures savings."""
+    routes = [_obs("XXX", 20), _obs("YYY", 25), _obs("ZZZ", 30),
+              _obs("WWW", 200), _obs("MOW", 40), _obs("LED", 45),
+              _obs("KZN", 50), _obs("UFA", 300)]
+    cands = gate_candidates(conn, routes, config, today=NOW)
+    assert cands == []
 
 
 def test_cheapest_per_route_keeps_the_minimum():

@@ -36,6 +36,14 @@ class SourceSpec:
     family: str
     roles: tuple[str, ...]                 # discovery | verification | corroboration
     env_var: str | None = None             # API key env var (None = keyless)
+    # The adapter this source is built from (default: its own id). Two
+    # source ids can share one adapter — that is how a project gets its
+    # OWN ledger pool on the same provider (serpapi_vz -> serpapi).
+    backend: str | None = None
+    # Used when env_var is unset: the other project's key, with a loud
+    # warning. Sharing a key means sharing the PROVIDER's allowance, so
+    # the pool below must be a self-imposed slice, not the full plan.
+    env_var_fallback: str | None = None
     metered: dict[str, int] = field(default_factory=dict)
     # POOL_SEEDS payload minus the id, or None if metered-but-unpooled
     # (break-glass / optional sources): (pool_kind, period_limit,
@@ -116,6 +124,67 @@ REGISTRY: tuple[SourceSpec, ...] = (
              "in ~28 calls — the only true no-blind-spots discovery. "
              "Biweekly cadence, owner round-trip searches only "
              "(run_batch gates). 100 lifetime credits ~= 3 full sweeps."),
+    # -- Vuelazo fare rails ---------------------------------------------
+    # flight_scans (the Spain-Nairobi tracker) and Vuelazo are SEPARATE
+    # projects that happen to share this repo, this database and — until
+    # Carlos provisions dedicated accounts — these provider keys. They
+    # must NOT share a quota pool: the tracker is a free-tier-only
+    # project and a Vuelazo sweep that ate its 250 SerpAPI searches would
+    # silently kill the tracker's verification rail.
+    #
+    # A distinct source id gives a distinct pool for free: quota_pools is
+    # keyed by source, spend_events are summed per source, and
+    # reserve()/GuardedClient already work per source. `backend` points
+    # at the adapter to construct, so no new client code exists.
+    #
+    # Pool semantics with a SHARED key (env_var unset, fallback used):
+    # the provider allowance is one pot, so the _vz pool is a SELF-imposed
+    # slice seeded like the service rails — never anchored from the
+    # provider counter, which reports the whole account and would let
+    # both pools believe they own it. With a DEDICATED key, run_deals
+    # anchors it from that account's own /account probe instead.
+    SourceSpec(
+        "serpapi_vz", family=FAMILY_GOOGLE, roles=("discovery", "verification"),
+        env_var="SERPAPI_KEY_VZ", backend="serpapi",
+        env_var_fallback="SERPAPI_KEY",
+        metered={"point_query": 1, "booking_options": 1},
+        # 50/mo: the measured headroom on the shared free key after the
+        # tracker's own needs (2026-08-08 audit: ~194 of 250 committed).
+        # This is a HOLDING number — it does not fund a daily deal
+        # pipeline. Raising it means either starving the tracker or
+        # buying capacity, which is Carlos's call (CLAUDE.md, budget).
+        pool=("monthly", 50, None, 5, 7, None),
+        failure_mode="clean_429", enabled=True,
+        note="Vuelazo's slice of the Google rail. Verification of "
+             "candidates + price_insights. Own pool so a deal sweep can "
+             "never drain the NBO tracker's free 250."),
+    SourceSpec(
+        "searchapi_vz", family=FAMILY_GOOGLE, roles=("discovery", "verification"),
+        env_var="SEARCHAPI_KEY_VZ", backend="searchapi",
+        env_var_fallback=None,   # deliberately NO fallback: see note
+        metered={"point_query": 1, "calendar": 1},
+        # Developer plan = 10k searches/mo. Margin 200 ~= one heavy day.
+        pool=("monthly", 10000, None, 200, 28, None),
+        failure_mode="clean_429", enabled=False,
+        note="OFF until Carlos buys the SearchAPI.io Developer plan and "
+             "sets SEARCHAPI_KEY_VZ (CLAUDE.md: flipping a paid tier is "
+             "his explicit action, never a code default). NO fallback to "
+             "SEARCHAPI_KEY on purpose — those are 100 LIFETIME credits "
+             "reserved for the tracker's rectangle sweeps."),
+    SourceSpec(
+        "aviasales_vz", family=FAMILY_CACHED, roles=("discovery", "corroboration"),
+        env_var="TRAVELPAYOUTS_TOKEN_VZ", backend="aviasales",
+        env_var_fallback="TRAVELPAYOUTS_TOKEN",
+        metered={"cheap_prices": 1, "prices_for_dates": 1,
+                 "latest_prices": 1, "one_way_month_prices": 1,
+                 "anywhere_prices": 1},
+        # Travelpayouts caps requests per second, not per month — sharing
+        # the token costs the tracker nothing. Separate id anyway, so the
+        # ledger can answer "what did Vuelazo spend" per project.
+        pool=("rate_only", None, None, 0, None, None),
+        failure_mode="clean_429", enabled=True,
+        note="Vuelazo's cached scout. Unmetered by the provider; the "
+             "separate pool exists for per-project attribution."),
     # -- Vuelazo service rails (M0). env_var=None on purpose: their keys
     #    (ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, RESEND_API_KEY) are infra
     #    secrets per CLAUDE.md #6 — env / Actions secrets only, never the
@@ -167,6 +236,37 @@ METERED: dict[str, dict[str, int]] = {
 
 def spec(source: str) -> SourceSpec | None:
     return _BY_ID.get(source)
+
+
+def backend_of(source: str) -> str:
+    """The adapter a source is built from. Distinct source ids may share
+    one adapter (serpapi_vz -> serpapi) to get their own quota pool."""
+    s = _BY_ID.get(source)
+    return (s.backend or s.id) if s else source
+
+
+def resolve_env_var(source: str, environ) -> tuple[str | None, bool]:
+    """(env_var_to_use, is_shared_fallback) for a source.
+
+    Returns the source's own key var when it holds a value; otherwise the
+    declared fallback (the other project's key) with True, so the caller
+    can warn that the provider allowance is now shared. (None, False)
+    means keyless or no key available anywhere."""
+    s = _BY_ID.get(source)
+    if s is None or s.env_var is None:
+        return None, False
+    if (environ.get(s.env_var) or "").strip():
+        return s.env_var, False
+    if s.env_var_fallback and (environ.get(s.env_var_fallback) or "").strip():
+        return s.env_var_fallback, True
+    return s.env_var, False   # missing: build anyway so the error names it
+
+
+def shares_key_with_other_project(source: str, environ) -> bool:
+    """True when `source` is falling back to another project's key — the
+    condition under which its pool must stay a self-imposed slice rather
+    than be anchored from the provider's account-wide counter."""
+    return resolve_env_var(source, environ)[1]
 
 
 def family_of(source: str) -> str | None:

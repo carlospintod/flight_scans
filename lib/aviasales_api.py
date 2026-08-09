@@ -122,22 +122,32 @@ class AviasalesClient:
         *,
         origin: str,
         destination: str,
-        depart_date: date,
+        depart_date: date | None = None,
+        depart_month: str | None = None,
         return_date: date | None = None,
         currency: str = DEFAULT_CURRENCY,
         one_way: bool = False,
+        limit: int = 30,
     ) -> PriceResponse:
-        """Cached price for a specific (origin, destination, dep, ret).
+        """Cached prices for (origin, destination), for one DAY
+        (`depart_date`) or a whole MONTH (`depart_month`, "YYYY-MM").
+
+        The month form is the watchlist rail: it returns real
+        (departure, return) pairs across the month, which is what a
+        verification can actually be run against.
 
         Cheap and forgiving — Travelpayouts serves it from cache.
         """
+        if depart_date is None and depart_month is None:
+            raise ValueError("depart_date or depart_month is required")
         params: dict[str, Any] = {
             "origin": origin,
             "destination": destination,
-            "departure_at": depart_date.isoformat(),
+            "departure_at": (depart_month if depart_month is not None
+                             else depart_date.isoformat()),
             "currency": currency.lower(),
             "one_way": str(one_way).lower(),
-            "limit": 30,
+            "limit": limit,
             "sorting": "price",
         }
         if return_date is not None and not one_way:
@@ -197,6 +207,7 @@ class AviasalesClient:
         currency: str = DEFAULT_CURRENCY,
         one_way: bool = False,
         limit: int = 100,
+        sorting: str = "price",
     ) -> PriceResponse:
         """Cached prices from `origin` to ANY destination — the free
         "vuelazos desde tu aeropuerto" discovery sweep.
@@ -206,13 +217,19 @@ class AviasalesClient:
         `month` ("YYYY-MM") restricts departures; omitted = the cache's
         default horizon. Cached rows NOMINATE only — they never alert
         without live verification (non-negotiable #2).
+
+        `sorting` matters more than it looks. "price" returns the N
+        CHEAPEST fares, which from a Spanish origin skews hard to
+        intra-EU ULCC seats; "route" returns breadth across destinations.
+        Measured 2026-08-08 for BCN at +3 months: price/100 gave 0
+        long-haul rows, route/1000 gave 47. Both calls are free.
         """
         params: dict[str, Any] = {
             "origin": origin,
             "currency": currency.lower(),
             "one_way": str(one_way).lower(),
             "limit": limit,
-            "sorting": "price",
+            "sorting": sorting,
         }
         if month is not None:
             params["departure_at"] = month
@@ -418,6 +435,16 @@ def _parse_quotes(
         price = it.get("price") or it.get("value")
         if not dep or not isinstance(price, (int, float)) or price <= 0:
             continue
+        # /v2/prices/latest echoes return_at == departure_at on round-trip
+        # rows. Passing that pair downstream asks Google Flights for a
+        # same-day round trip, which returns nothing — it silently killed
+        # 100% of long-haul verifications (deal #2 MAD->NYC died on
+        # '2026-10-16..2026-10-16'). Drop the return leg instead of
+        # inventing one: a one-way quote is honest, a same-day round trip
+        # is not. Guarded here so the bug class cannot come back via a
+        # different caller.
+        if ret and ret == dep:
+            ret = None
         origin = (it.get("origin") or it.get("origin_airport")
                   or origin_default)
         destination = (it.get("destination") or it.get("destination_airport")

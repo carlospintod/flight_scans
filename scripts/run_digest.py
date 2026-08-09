@@ -50,7 +50,7 @@ def main() -> int:
     from lib.dealconfig import load_deal_config
     from lib.planner import CostLine, CostVector
     from lib.pushes import push
-    from lib.quota import QuotaLedger
+    from lib.quota import SCOPE_VUELAZO, QuotaLedger
     from lib.resend_api import ResendClient
     from run_deals import _ensure_service_anchor
 
@@ -118,7 +118,7 @@ def main() -> int:
         ledger = QuotaLedger(conn)
         ledger.seed_pools()
         ledger.expire_orphans()
-        run_id = ledger.begin_run(trigger=args.trigger)
+        run_id = ledger.begin_run(trigger=args.trigger, scope=SCOPE_VUELAZO)
         if run_id is None:
             print("another run holds the lease — try later")
             return 0

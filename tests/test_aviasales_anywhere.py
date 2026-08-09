@@ -68,6 +68,49 @@ def test_anywhere_without_month_omits_departure_at(payload):
     assert "departure_at" not in session.seen_params
 
 
+def test_anywhere_sorting_and_limit_are_caller_controlled(payload):
+    """price-sorted returns the cheapest N (intra-EU heavy); route-sorted
+    returns breadth (where long-haul lives). Both are free."""
+    session = _Session(payload)
+    client = AviasalesClient(token="t", session=session)
+    client.anywhere_prices(origin="BCN", month="2026-11")
+    assert session.seen_params["sorting"] == "price"
+    assert session.seen_params["limit"] == 100
+    client.anywhere_prices(origin="BCN", month="2026-11",
+                           sorting="route", limit=1000)
+    assert session.seen_params["sorting"] == "route"
+    assert session.seen_params["limit"] == 1000
+
+
+def test_same_day_round_trip_is_dropped_to_one_way():
+    """/v2/prices/latest echoes return_at == departure_at; passing that
+    downstream asked Google for a same-day round trip and returned
+    nothing — it killed every long-haul verification."""
+    from lib.aviasales_api import _parse_quotes
+    payload = {"data": [
+        {"origin": "MAD", "destination": "NYC", "price": 549,
+         "departure_at": "2026-10-16T10:00:00Z",
+         "return_at": "2026-10-16T22:00:00Z"},
+        {"origin": "MAD", "destination": "MIA", "price": 620,
+         "departure_at": "2026-10-16T10:00:00Z",
+         "return_at": "2026-10-30T22:00:00Z"},
+    ]}
+    quotes = _parse_quotes(payload, "eur", origin_default="MAD")
+    nyc = next(q for q in quotes if q.destination == "NYC")
+    mia = next(q for q in quotes if q.destination == "MIA")
+    assert nyc.return_date is None          # honest one-way, not a fake pair
+    assert mia.return_date == "2026-10-30"  # a real pair survives
+
+
+def test_prices_for_dates_accepts_a_month(payload):
+    session = _Session(payload)
+    client = AviasalesClient(token="t", session=session)
+    client.prices_for_dates(origin="MAD", destination="NYC",
+                            depart_month="2026-11")
+    assert session.seen_params["departure_at"] == "2026-11"
+    assert session.seen_params["destination"] == "NYC"
+
+
 def test_every_aviasales_price_method_is_metered():
     """Introspection pin (the kiwi lesson, 2026-07-08): any public
     *_prices method that bypasses METERED would spend unguarded."""

@@ -4,17 +4,40 @@
 origins: [MAD, BCN, VLC, ALC]   # D0: all four instrumented from day one
 currency: EUR
 
-# Discovery sweep: months ahead of today to query per origin (each month
-# is one aviasales anywhere call).
-sweep_months_ahead: 2
+# Discovery sweep: months ahead of today to query per origin.
+#
+# MUST stay well past 60 days. Measured 2026-08-08 on the live cache: at
+# +1/+2 months the price-sorted top-100 from EVERY Spanish origin is 100%
+# intra-EU (price ceilings 59-160 EUR) — long-haul does not exist in that
+# window. At +3 months the SAME call returns MAD->NYC 372, VLC->NYC 496,
+# VLC->BKK 534, ALC->MIA 671. A 2-month horizon made the product
+# structurally blind to the fares it exists to find.
+sweep_months_ahead: 6
 
-# Watchlist (~35 destinations x 4 origins, D1): refreshed once per day
-# with one cached aviasales call per route. Metro codes preferred where
-# Aviasales uses them.
+# Each (origin, month) is swept twice, both free:
+#   price — the cheapest 100 (the intra-EU firehose)
+#   route — breadth across destinations (BCN: 0 -> 47 long-haul rows)
+sweep_sortings: [price, route]
+sweep_limit_price: 100
+sweep_limit_route: 1000
+
+# Watchlist: per-route cached refresh, once a day. Long-haul is the
+# product's reason to exist, so it gets the deeper date coverage.
 watchlist:
-  [LON, PAR, ROM, MIL, AMS, BER, BRU, VIE, PRG, BUD, ATH, LIS, OPO, DUB,
-   EDI, CPH, ARN, ZRH, IST, RAK, CMN, TUN, CAI, TLV, DXB,
-   NYC, MIA, CUN, MEX, HAV, PUJ, BOG, EZE, SCL, LIM, BKK, TYO, DEL]
+  long:
+    [NYC, MIA, CUN, MEX, HAV, PUJ, BOG, EZE, SCL, LIM, BKK, TYO, DEL,
+     JFK, LAX, YYZ, GRU, PTY, SJO, HKT, SGN, HAN, SIN, KUL, PEK, ICN,
+     JNB, CPT, MRU, DXB]
+  medium:
+    [TLV, CAI, AMM, RUH, JED, DOH, AUH, NBO, DKR, ACC, LOS, ADD, MRU]
+  intra_eu:
+    [LON, PAR, ROM, MIL, AMS, BER, BRU, VIE, PRG, BUD, ATH, LIS, OPO,
+     DUB, EDI, CPH, ARN, ZRH, IST, RAK, CMN, TUN]
+# Months of date coverage per watchlist route (long-haul gets more).
+watchlist_months:
+  long: 4
+  medium: 2
+  intra_eu: 1
 
 detector:
   # D2 day-one gate: absolute route-class floors + same-day cross-section.
@@ -33,6 +56,20 @@ detector:
   # below this % of the typical LOW => mistake. (D2's trailing-P25 form
   # activates with per-route baselines in M1.)
   mistake_pct_of_typical: 50
+  # ROUTE-SPECIFIC floor, measured against Google's own typical range on
+  # the verification we already pay for: require
+  # (typical_low - live_price) >= class floor.
+  #
+  # A class cross-section median is a weak comparator — it made a EUR 37
+  # Turin hop look like a EUR 275 saving, and it still values a EUR 117
+  # Yerevan fare against Gulf medians. This gate compares a route to
+  # ITSELF, which is the honest form of "el precio normal, demostrado".
+  #
+  # OFF by default: enabling it changes WHAT PUBLISHES, which D2 reserves
+  # for Carlos. While false, every verification still RECORDS whether it
+  # would have passed (verification_refs.insights_floor), so a week of
+  # data shows exactly what flipping it would cost and buy.
+  insights_floor: false
 
 guardrails:               # non-negotiable #3 — day one
   daily_candidate_cap: 15
@@ -55,5 +92,10 @@ drafting:
   max_tokens: 1200
 
 publish:
+  # Where approved deals go. Telegram is postponed: `ntfy` uses the same
+  # phone-push rail the NBO tracker already uses (NTFY_TOPIC), so the
+  # chain is provable end-to-end with no bot, no channels, no members.
+  # Add tg_private (and drop ntfy) when the Telegram side is ready.
+  channels: [ntfy, email]
   alert_email_to: pintodiazc@gmail.com
   email_from: "Vuelazo <onboarding@resend.dev>"   # Resend test sender until vuelazo.es DNS is live

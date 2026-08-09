@@ -78,7 +78,7 @@ def main() -> int:
     from lib.deals_db import ensure_deals_schema
     from lib.drafting import AnthropicDraftClient, load_template
     from lib.planner import CostLine, CostVector
-    from lib.quota import QuotaLedger
+    from lib.quota import SCOPE_VUELAZO, QuotaLedger
     from run_deals import _ensure_service_anchor
 
     config = load_deal_config()
@@ -143,7 +143,7 @@ def main() -> int:
         ledger = QuotaLedger(conn)
         ledger.seed_pools()
         ledger.expire_orphans()
-        run_id = ledger.begin_run(trigger=args.trigger)
+        run_id = ledger.begin_run(trigger=args.trigger, scope=SCOPE_VUELAZO)
         if run_id is None:
             print("another run holds the lease — try later")
             return 0

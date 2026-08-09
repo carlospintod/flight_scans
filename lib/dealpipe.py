@@ -32,6 +32,20 @@ LOG = logging.getLogger(__name__)
 
 # -- 1. Discover (free, cached — nominates, never alerts) -------------------
 
+def watchlist_routes(config) -> list[tuple[str, str, int]]:
+    """(origin, dest, months) for every watchlist route, with long-haul
+    getting the deeper date coverage — it is the product's reason to
+    exist, and its cache is the thinnest."""
+    out: list[tuple[str, str, int]] = []
+    for route_class, dests in config.watchlist.items():
+        months = config.watchlist_months.get(route_class, 1)
+        for origin in config.origins:
+            for dest in dests:
+                if dest != origin:
+                    out.append((origin, dest, months))
+    return out
+
+
 def sweep_months(today: date, months_ahead: int) -> list[str]:
     """["YYYY-MM", ...] for the current month plus `months_ahead - 1`."""
     out = []
@@ -45,51 +59,71 @@ def sweep_months(today: date, months_ahead: int) -> list[str]:
 
 
 def sweep_origin(aviasales, *, origin: str, months: list[str],
-                 currency: str) -> list[Observation]:
-    """Origin-only anywhere sweep: one metered aviasales call per month.
-    Failures of a single month degrade (logged), they don't abort."""
+                 currency: str, sortings: tuple[str, ...] = ("price",),
+                 limits: dict[str, int] | None = None) -> list[Observation]:
+    """Origin-only anywhere sweep: one metered aviasales call per
+    (month, sorting). Two sortings are used because they return
+    different populations — "price" the cheapest N (intra-EU heavy),
+    "route" breadth across destinations (where long-haul lives).
+    Failures of a single call degrade (logged), they don't abort."""
+    limits = limits or {}
     obs: list[Observation] = []
     for month in months:
-        try:
-            resp = aviasales.anywhere_prices(origin=origin, month=month,
-                                             currency=currency)
-        except Exception as exc:  # noqa: BLE001 — degrade per month, loudly
-            LOG.warning("sweep %s %s failed: %s", origin, month, exc)
-            continue
-        for q in resp.quotes:
-            if q.origin.upper() != origin.upper():
-                continue  # defensive: cross-origin rows out of a cached mirror
-            obs.append(Observation(
-                origin=q.origin.upper(), dest=q.destination.upper(),
-                depart_date=q.departure_date, return_date=q.return_date,
-                price=q.price, currency=q.currency,
-                source="aviasales", source_family="cached",
-                found_at=q.found_at, is_verified=False,
-            ))
+        for sorting in sortings:
+            try:
+                resp = aviasales.anywhere_prices(
+                    origin=origin, month=month, currency=currency,
+                    sorting=sorting, limit=limits.get(sorting, 100))
+            except Exception as exc:  # noqa: BLE001 — degrade per call
+                LOG.warning("sweep %s %s (%s) failed: %s",
+                            origin, month, sorting, exc)
+                continue
+            for q in resp.quotes:
+                if q.origin.upper() != origin.upper():
+                    continue  # defensive: cross-origin cached mirror rows
+                obs.append(Observation(
+                    origin=q.origin.upper(), dest=q.destination.upper(),
+                    depart_date=q.departure_date, return_date=q.return_date,
+                    price=q.price, currency=q.currency,
+                    source="aviasales", source_family="cached",
+                    found_at=q.found_at, is_verified=False,
+                ))
     return obs
 
 
-def watchlist_refresh(aviasales, *, routes: list[tuple[str, str]],
-                      currency: str) -> list[Observation]:
-    """Daily watchlist refresh (D1): one cached latest_prices call per
-    (origin, dest). Broadens coverage beyond the sweep's top-100-by-price
-    horizon; failures degrade per route."""
+def watchlist_refresh(aviasales, *, routes: list[tuple[str, str, int]],
+                      currency: str,
+                      today: date | None = None) -> list[Observation]:
+    """Daily watchlist refresh (D1): cached prices per (origin, dest),
+    one call per month of coverage. `routes` is (origin, dest, months).
+
+    Uses prices_for_dates with a MONTH departure — NOT /v2/prices/latest.
+    latest_prices echoes return_at == departure_at on round-trip rows,
+    which downstream became a same-day round-trip query that Google
+    Flights always answers empty: it killed 100% of long-haul
+    verifications and left the DB with a single verified observation, so
+    no route could ever mature a baseline. prices_for_dates returns real
+    (departure, return) pairs. Failures degrade per call."""
+    today = today or date.today()
     obs: list[Observation] = []
-    for origin, dest in routes:
-        try:
-            resp = aviasales.latest_prices(origin=origin, destination=dest,
-                                           currency=currency, limit=30)
-        except Exception as exc:  # noqa: BLE001
-            LOG.warning("watchlist %s->%s failed: %s", origin, dest, exc)
-            continue
-        for q in resp.quotes:
-            obs.append(Observation(
-                origin=q.origin.upper(), dest=q.destination.upper(),
-                depart_date=q.departure_date, return_date=q.return_date,
-                price=q.price, currency=q.currency,
-                source="aviasales", source_family="cached",
-                found_at=q.found_at, is_verified=False,
-            ))
+    for origin, dest, months in routes:
+        for month in sweep_months(today, months):
+            try:
+                resp = aviasales.prices_for_dates(
+                    origin=origin, destination=dest, depart_month=month,
+                    currency=currency)
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("watchlist %s->%s %s failed: %s",
+                            origin, dest, month, exc)
+                continue
+            for q in resp.quotes:
+                obs.append(Observation(
+                    origin=q.origin.upper(), dest=q.destination.upper(),
+                    depart_date=q.departure_date, return_date=q.return_date,
+                    price=q.price, currency=q.currency,
+                    source="aviasales", source_family="cached",
+                    found_at=q.found_at, is_verified=False,
+                ))
     return obs
 
 
@@ -102,6 +136,10 @@ class VerifyResult:
     carriers: str | None
     insights: dict | None      # parsed price_insights, when Google has them
     note: str
+    # The code actually sent to Google. Differs from the candidate's dest
+    # for metro codes (NYC -> JFK): the alert must name the airport the
+    # price was proven at, not the city Aviasales nominated.
+    airport: str | None = None
 
 
 def parse_price_insights(raw: dict) -> dict | None:
@@ -132,26 +170,67 @@ def verify_candidate(serpapi, cand: Candidate,
         ret = date.fromisoformat(cand.return_date) if cand.return_date else None
     except ValueError as exc:
         return VerifyResult(False, None, None, None, f"bad dates: {exc}")
+    # Aviasales speaks metro codes (NYC, LON, TYO); Google Flights does
+    # not — it answers "no results" and the candidate dies for a reason
+    # that has nothing to do with its price. Substitute the city's
+    # gateway airport. See routes/metro_airports.yaml.
+    dest = verification_airport(cand.dest, config)
     try:
         resp = serpapi.point_query(
-            origin=cand.origin, destination=cand.dest,
+            origin=cand.origin, destination=dest,
             outbound=dep, return_=ret, currency=config.currency)
     except Exception as exc:  # noqa: BLE001 — verification failures die quietly
-        return VerifyResult(False, None, None, None, f"serpapi error: {exc}")
+        return VerifyResult(False, None, None, None, f"serpapi error: {exc}",
+                            airport=dest)
     options = resp.best_flights
     if not options:
         return VerifyResult(False, None, None,
-                            parse_price_insights(resp.raw), "no live options")
+                            parse_price_insights(resp.raw), "no live options",
+                            airport=dest)
     best = min(options, key=lambda o: o.price)
     ceiling = cand.price * (1 + config.live_tolerance_pct / 100.0)
     insights = parse_price_insights(resp.raw)
     if best.price > ceiling:
-        return VerifyResult(
-            False, best.price, best.carriers, insights,
-            f"live {best.price} exceeds cached {cand.price} "
-            f"+{config.live_tolerance_pct:.0f}% tolerance")
+        note = (f"live {best.price} exceeds cached {cand.price} "
+                f"+{config.live_tolerance_pct:.0f}% tolerance")
+        if dest != cand.dest:
+            # Worth saying out loud: the cached metro price is the
+            # cheapest across ALL the city's airports, so this may be a
+            # real fare at another one rather than a stale cache.
+            note += (f" (verified at {dest}; cached price was for the "
+                     f"{cand.dest} metro area)")
+        return VerifyResult(False, best.price, best.carriers, insights, note,
+                            airport=dest)
     return VerifyResult(True, best.price, best.carriers, insights,
-                        "live-confirmed")
+                        "live-confirmed", airport=dest)
+
+
+def verification_airport(dest: str, config: DealConfig) -> str:
+    """The code to send to Google for a destination — the metro's
+    gateway airport when `dest` is a city code, else `dest` itself."""
+    return config.metro_airports.get(dest.upper(), dest.upper())
+
+
+def insights_floor_check(cand: Candidate, verify: VerifyResult,
+                         config: DealConfig) -> tuple[bool | None, str]:
+    """Would this deal clear its ROUTE'S OWN typical price by the class
+    floor? Returns (passed, human explanation); passed is None when
+    Google gave no typical range for the route.
+
+    This is the honest comparator: a class cross-section median can make
+    an ordinary fare look like a bargain (a EUR 37 Turin hop "saving"
+    EUR 275 against a Middle-East median). Computed on every
+    verification and recorded even when the gate is disabled, so the
+    decision to enforce it can be made from data."""
+    if not verify.insights or "typical_low" not in verify.insights:
+        return None, "sin rango tipico de Google para esta ruta"
+    price = verify.live_price if verify.live_price is not None else cand.price
+    low = verify.insights["typical_low"]
+    floor = config.floors.get(cand.route_class, 0)
+    saving = low - price
+    return saving >= floor, (
+        f"ahorro vs. tipico bajo ({low}) = {saving} EUR, "
+        f"floor {cand.route_class} = {floor}")
 
 
 def classify_deal(cand: Candidate, verify: VerifyResult,

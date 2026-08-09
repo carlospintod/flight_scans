@@ -105,30 +105,54 @@ def test_baseline_p10_never_extrapolates_below_min(conn):
     assert bl is not None and bl.p10 >= 100
 
 
-def test_watchlist_refresh_collects_observations():
-    from lib.dealpipe import watchlist_refresh
+def test_watchlist_refresh_uses_month_pairs_not_latest_prices():
+    """latest_prices echoed return==depart, which asked Google for a
+    same-day round trip and killed 100% of long-haul verifications."""
+    from datetime import date
     from types import SimpleNamespace
+
+    from lib.dealpipe import watchlist_refresh
 
     class _Avia:
         def __init__(self):
             self.calls = []
 
-        def latest_prices(self, *, origin, destination, currency, limit):
-            self.calls.append((origin, destination))
+        def prices_for_dates(self, *, origin, destination, depart_month,
+                             currency):
+            self.calls.append((origin, destination, depart_month))
             q = SimpleNamespace(origin=origin, destination=destination,
                                 departure_date="2026-09-01",
-                                return_date="2026-09-08", price=100,
+                                return_date="2026-09-15", price=480,
                                 currency="EUR", found_at=None)
             return SimpleNamespace(quotes=(q,))
 
+        def latest_prices(self, **kw):  # must never be called
+            raise AssertionError("latest_prices is banned from the pipeline")
+
     avia = _Avia()
-    obs = watchlist_refresh(avia, routes=[("VLC", "LON"), ("MAD", "NYC")],
-                            currency="EUR")
-    assert avia.calls == [("VLC", "LON"), ("MAD", "NYC")]
-    assert len(obs) == 2 and obs[0].source_family == "cached"
+    obs = watchlist_refresh(avia, routes=[("MAD", "NYC", 2), ("VLC", "LON", 1)],
+                            currency="EUR", today=date(2026, 8, 8))
+    assert avia.calls == [("MAD", "NYC", "2026-08"), ("MAD", "NYC", "2026-09"),
+                          ("VLC", "LON", "2026-08")]
+    assert len(obs) == 3
+    assert all(o.return_date != o.depart_date for o in obs)
 
 
-def test_config_has_four_origins_and_watchlist():
+def test_config_horizon_reaches_long_haul_window():
+    """At +1/+2 months the cache holds no long-haul from any Spanish
+    origin; it appears from +3. The horizon is the whole ballgame."""
     assert set(CONFIG.origins) == {"MAD", "BCN", "VLC", "ALC"}
-    assert len(CONFIG.watchlist) >= 35
+    assert CONFIG.sweep_months_ahead >= 4
+    assert "route" in CONFIG.sweep_sortings  # breadth pass, not just cheapest
+    assert len(CONFIG.watchlist["long"]) >= 20
+    assert CONFIG.watchlist_months["long"] > CONFIG.watchlist_months["intra_eu"]
     assert CONFIG.min_observations >= 2
+
+
+def test_watchlist_routes_expand_per_origin_and_class():
+    from lib.dealpipe import watchlist_routes
+    routes = watchlist_routes(CONFIG)
+    longs = [r for r in routes if r[1] == "NYC"]
+    assert len(longs) == 4  # one per origin
+    assert all(r[2] == CONFIG.watchlist_months["long"] for r in longs)
+    assert all(o != d for o, d, _ in routes)

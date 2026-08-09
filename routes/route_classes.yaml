@@ -2,9 +2,30 @@
 # intra_eu ~ short-haul (EU/Schengen + UK + Morocco/Algeria/Tunisia),
 # medium   ~ Middle East / West & North-East Africa / Caucasus / Canaries-adjacent islands,
 # long     ~ Americas, Asia, southern Africa, Oceania.
-# Unlisted destinations default to `medium` (the middle floor — conservative
-# for short-haul noise, slightly lax for long-haul; acceptable at M0 where a
-# human approves every alert).
+#
+# UNLISTED destinations are 'unclassified' and are EXCLUDED from the gate —
+# they never form a cross-section and never become candidates. They were
+# silently defaulting to `medium` before, which is exactly how BCN->TRN
+# (Turin, an intra-EU hop) got benchmarked against a Tel Aviv / Sharjah
+# median and out-scored a transatlantic fare. Unknown codes now surface in
+# /ops as `unclassified_route` rejections so this list can be grown from
+# real data instead of guesswork.
+#
+# `excluded` destinations are classified but deliberately never alerted
+# (unsellable to the audience) — Russia/CIS dominates the Aviasales cache
+# from BCN and would otherwise flood the queue.
+
+excluded:
+  # Russia / Belarus / Ukraine ONLY — no sellable routing for a Spanish
+  # audience (closed airspace; cached fares are multi-stop fictions).
+  # Deliberately NOT excluded: the Caucasus (EVN, TBS, GYD/BAK) and
+  # Central Asia (ALA, TAS, ...) are ordinary, flyable, sellable
+  # destinations and stay in `medium`.
+  [MOW, SVO, DME, VKO, LED, KZN, UFA, MRV, OVB, AER, KUF, ROV, KRR, GOJ,
+   SVX, KJA, IKT, CEK, ESL, IJK, KHV, OMS, PEE, REN, RTW, STW, TOF, UUD,
+   UUS, VOG, VVO,
+   MSQ,
+   KBP, IEV, ODS, LWO]
 
 intra_eu:
   # Spanish domestic (mainland + Baleares + Canarias) — Aviasales sweeps
@@ -16,6 +37,27 @@ intra_eu:
    LON, PAR, ROM, MIL, STO, BUH,
   # Iberia + islands
    LIS, OPO, FAO, FNC, PDL, TER,
+  # Italy beyond the majors — TRN, AHO and VIL are the codes that produced
+  # the phantom BCN->TRN "vuelazo" by defaulting to medium
+   TRN, AHO, VIL, GOA, TRS, VRN, BZO, SUF, REG, BDS, AOI, PEG, PSR, CUF,
+   OLB, TPS, LMP, PNL,
+  # France / Germany / Benelux / Nordics fill-ins seen in the caches
+   BES, RNS, TLN, MPL, PGF, CCF, EGC, LDE, AJA, BIA, FSC, CLY,
+   DTM, FMM, HHN, PAD, FKB, LEJ, DRS, ERF, BRE, HAJ, MST, RTM, GRQ,
+   AAR, BLL, KRP, SVG, TRD, HAU, AES, KRS, VXO, MMX, JKG,
+   TMP, TKU, OUL, RVN, PLQ, KUN,
+  # British Isles + Ireland fill-ins
+   BFS, BHD, NCL, LBA, EMA, CWL, SOU, EXT, BOH, NQY, ABZ, INV, PIK, KIR,
+   NOC, GWY,
+  # Central / SE Europe + Balkans fill-ins
+   POZ, KTW, RZE, BZG, SZZ, OSR, BRQ, KSC, PED, DBV, SPU, ZAD,
+   PUY, RJK, TGD, TIV, INI, OHD, VAR, PDV,
+  # Greek + Turkish islands / secondary
+   MJT, SMI, KGS, JMK, JSI, PVK, KLX, KVA, AXD, LRS,
+   GZP, ASR, ADA, TZX, ESB, IZM, ANK,
+  # Classified from the live 2026-08-08 sweep (were unclassified)
+   BCM, BNX, COV, CRA, EAP, FLW, GIB, GRO, IAS, LCA, LNZ, PFO, REK, RMO,
+   SXB, TOS, SCV,
   # France / Benelux / British Isles
    CDG, ORY, BVA, NTE, LYS, MRS, NCE, TLS, BOD, BRU, CRL, AMS, EIN, LUX,
    LHR, LGW, STN, LTN, MAN, BHX, EDI, GLA, BRS, LPL, DUB, ORK, SNN,
@@ -38,6 +80,11 @@ medium:
   # West / East / Central Africa
    DSS, DKR, BJL, ABJ, ACC, LOS, ABV, LFW, COO, DLA, NSI, BKO, OUA, NIM,
    ADD, NBO, MBA, EBB, KGL, DAR, JIB, KRT,
+  # Classified from the live 2026-08-08 sweep (were unclassified)
+   BGW, CKY, FIH, LXR, NDB, TIN, ZNZ,
+  # Caucasus + Central Asia: flyable and sellable, so `medium`, NOT
+  # `excluded` (only Russia/Belarus/Ukraine are unsellable)
+   BAK, NQZ, FRU, ASB, DYU, SKD, UGC, CIT, AKX, PPK, KUT, BUS,
   # Atlantic islands beyond Canaries
    SID, RAI, BVC]
 
@@ -61,4 +108,11 @@ long:
   # Southern Africa + Indian Ocean
    JNB, CPT, DUR, WDH, GBE, HRE, LUN, LLW, TNR, MRU, RUN, SEZ, MPM,
   # Oceania
-   SYD, MEL, BNE, PER, ADL, AKL, CHC, WLG, NAN, PPT]
+   SYD, MEL, BNE, PER, ADL, AKL, CHC, WLG, NAN, PPT,
+  # Classified from the live 2026-08-08 sweep (were unclassified).
+  # Americas
+   YMQ, YTO, ROC, DAY, FMY, PXM, LRM, PTP, FDF, SCU, XPL, MGA, CUC, PEI,
+   PPN, PSO, SMR, MAR, VLN, SRZ, PVH, UDI, XAP, CWB, FLN, POA,
+  # Asia
+   ATQ, GOI, ISB, LHE, CKG, FOC, HEK, SYX, TAO, PUS, SPK, NHA, PQC, USM,
+   UTP, ROR, BSZ]

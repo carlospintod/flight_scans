@@ -84,12 +84,14 @@ def test_holds_from_live_runs_reduce_availability(conn):
     ledger.record_anchor("kiwi", remaining=100, limit_total=300,
                          origin="manual")
     # A live run holds 30 units; an expired-lease run holds 40 (ignored).
-    conn.execute("INSERT INTO ledger_runs VALUES "
-                 "('live', '2026-07-07T00:00:00Z', '2099-01-01T00:00:00Z', "
-                 "NULL, 'cron', 'running', 0, 0, NULL)")
-    conn.execute("INSERT INTO ledger_runs VALUES "
-                 "('dead', '2026-07-07T00:00:00Z', '2000-01-01T00:00:00Z', "
-                 "NULL, 'cron', 'running', 0, 0, NULL)")
+    # Columns named explicitly: ledger_runs grows (scope, 2026-08-08) and
+    # a positional VALUES would break on every future column.
+    for run_id, expires in (("live", "2099-01-01T00:00:00Z"),
+                            ("dead", "2000-01-01T00:00:00Z")):
+        conn.execute(
+            "INSERT INTO ledger_runs (run_id, started_at, lease_expires_at, "
+            "trigger, status) VALUES (?, '2026-07-07T00:00:00Z', ?, "
+            "'cron', 'running')", (run_id, expires))
     for run, units in (("live", 30), ("dead", 40)):
         conn.execute(
             "INSERT INTO run_reservations (run_id, search_id, source, kind, "

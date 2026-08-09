@@ -56,7 +56,9 @@ export function isStale(iso: string): boolean {
  *  searchapi are all the same Google Flights corpus; aviasales is the
  *  cached date scout (a lead, not a bookable-verified fare). */
 export function providerLabel(source: string): string {
-  switch (source) {
+  // A `_vz` suffix names the PROJECT paying for the call, not a
+  // different corpus — the reader should still see "Google Flights".
+  switch (source.replace(/_vz$/, "")) {
     case "serpapi":
     case "googleflights":
     case "searchapi":

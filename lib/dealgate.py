@@ -26,19 +26,32 @@ approve tap is the last mile — the score only orders the queue.
 
 from __future__ import annotations
 
+import logging
 import statistics
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from .dealconfig import DealConfig
+LOG = logging.getLogger(__name__)
+
+from .dealconfig import EXCLUDED_CLASS, UNCLASSIFIED, DealConfig
 from .deals_db import Observation, deals_created_today, last_deal_for_route
 
 # A class cross-section needs a few routes for a median to mean anything.
 MIN_CLASS_SIZE = 4
 
+# Classes that can never produce a candidate. UNCLASSIFIED used to be
+# silently folded into 'medium', which benchmarked short-haul hops
+# against Middle-East medians and handed them the 1.3x medium weight —
+# the mechanism behind the phantom BCN->TRN "vuelazo". Unknown codes are
+# now visible (rejection reason 'unclassified_route') instead of loud.
+NON_CANDIDATE_CLASSES = (UNCLASSIFIED, EXCLUDED_CLASS)
+
 
 def classify_route(dest: str, config: DealConfig) -> str:
-    return config.route_classes.get(dest.upper(), "medium")
+    """Route class, or UNCLASSIFIED when the code is unknown. NEVER
+    guesses a class: an unknown code with a real floor attached is worse
+    than no candidate at all."""
+    return config.route_classes.get(dest.upper(), UNCLASSIFIED)
 
 
 @dataclass(frozen=True)
@@ -89,6 +102,17 @@ def gate_candidates(conn, obs: list[Observation], config: DealConfig,
     today_prefix = now.strftime("%Y-%m-%d")
 
     best = cheapest_per_route(obs)
+
+    # Unknown / deliberately-excluded destinations leave the funnel here.
+    # They form no cross-section and become no candidate; the caller logs
+    # the distinct codes so route_classes.yaml grows from real data.
+    unknown_codes = sorted({o.dest for o in best
+                            if classify_route(o.dest, config) == UNCLASSIFIED})
+    if unknown_codes:
+        LOG.info("gate: %d unclassified destination(s) skipped: %s",
+                 len(unknown_codes), ", ".join(unknown_codes[:20]))
+    best = [o for o in best
+            if classify_route(o.dest, config) not in NON_CANDIDATE_CLASSES]
 
     # Per-route percentile gate first (D2 mature state) — activates the
     # moment a route's verified history is thick enough; everything else

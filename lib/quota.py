@@ -38,6 +38,11 @@ LOG = logging.getLogger(__name__)
 # safety_margin, per_search_cap, per_run_cap).
 from .sources import METERED, POOL_SEEDS  # noqa: E402,F401 (re-export)
 
+# Run-lease scopes: the two projects sharing this database. The lease is
+# single-run WITHIN a scope, never across them (see begin_run).
+SCOPE_TRACKER = "flight_scans"   # the Spain-Nairobi corridor tracker
+SCOPE_VUELAZO = "vuelazo"        # the deal membership
+
 
 class QuotaExceeded(RuntimeError):
     """spend() at 0 remaining. Catching one means a planner/executor
@@ -304,14 +309,19 @@ class QuotaLedger:
         )
         return run_id
 
-    def begin_run(self, *, trigger: str,
+    def begin_run(self, *, trigger: str, scope: str = SCOPE_TRACKER,
                   lease_minutes: int = 20) -> str | None:
-        """Acquire the single-run lease (CAS: insert-unless-live-run).
+        """Acquire the single-run lease FOR ONE SCOPE (CAS:
+        insert-unless-live-run-in-this-scope).
 
-        Returns None when another unexpired run holds the lease — the
-        caller exits cleanly ('another run is active'). Dead runs stop
-        blocking automatically when their lease expires; heartbeat()
-        extends it after each search.
+        Returns None when another unexpired run of the SAME scope holds
+        the lease — the caller exits cleanly ('another run is active').
+        A run in the other scope never blocks: flight_scans and vuelazo
+        share this database but are separate projects on separate crons,
+        and one must not be able to make the other skip a cycle.
+
+        Dead runs stop blocking automatically when their lease expires;
+        heartbeat() extends it after each search.
         """
         run_id = uuid.uuid4().hex[:12]
         now = datetime.now(timezone.utc).replace(microsecond=0)
@@ -321,14 +331,15 @@ class QuotaLedger:
         cur = self._conn.execute(
             """
             INSERT INTO ledger_runs
-                (run_id, started_at, lease_expires_at, trigger, status)
-            SELECT ?, ?, ?, ?, 'running'
+                (run_id, started_at, lease_expires_at, trigger, scope, status)
+            SELECT ?, ?, ?, ?, ?, 'running'
             WHERE NOT EXISTS (
                 SELECT 1 FROM ledger_runs
                 WHERE status = 'running' AND lease_expires_at > ?
+                  AND scope = ?
             )
             """,
-            (run_id, now_iso, expires, trigger, now_iso),
+            (run_id, now_iso, expires, trigger, scope, now_iso, scope),
         )
         return run_id if cur.rowcount == 1 else None
 

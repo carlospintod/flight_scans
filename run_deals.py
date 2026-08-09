@@ -40,6 +40,14 @@ LOG = logging.getLogger("deals")
 
 EXIT_OK, EXIT_FATAL, EXIT_DEGRADED = 0, 1, 2
 SEARCH_ID = "vuelazo-deals"
+
+# Vuelazo spends from ITS OWN ledger pools. The NBO tracker (run_batch)
+# keeps `aviasales`/`serpapi`; these `_vz` ids are the same adapters
+# against Vuelazo's own budget, so a deal sweep can never drain the
+# tracker's free tier. See lib/sources.py for the pool semantics.
+SRC_CACHED = "aviasales_vz"     # discovery (Travelpayouts cached)
+SRC_GOOGLE = "serpapi_vz"       # verification (live Google Flights)
+FARE_SOURCES = [SRC_CACHED, SRC_GOOGLE]
 REJECT_REASONS = ("too_common", "bad_dates", "ulcc_junk", "thin_saving", "other")
 
 
@@ -74,22 +82,44 @@ def _ensure_service_anchor(ledger, source: str) -> None:
                  source, limit, month)
 
 
-def _maybe_anchor_serpapi(ledger, serpapi) -> None:
-    """A fresh local DB has no serpapi anchor and reserve() would refuse.
-    Mirror run_batch's account-probe pattern: /account is unmetered."""
-    state = ledger.pool_state("serpapi")
-    if state is None or state.provider_view is not None or serpapi is None:
+def _ensure_fare_anchor(ledger, source: str, client) -> None:
+    """Anchor a Vuelazo fare pool, by whichever rule is HONEST for it.
+
+    Dedicated key  -> probe that account's own counter (/account is
+                      unmetered), exactly as run_batch does.
+    Shared key     -> self-imposed slice. The provider counter reports
+                      the WHOLE account, so anchoring both projects'
+                      pools from it would let each believe it owns the
+                      full allowance — the precise way a Vuelazo sweep
+                      would silently eat the tracker's free 250.
+    """
+    import os
+
+    from lib.sources import shares_key_with_other_project
+
+    state = ledger.pool_state(source)
+    if state is None or state.pool_kind != "monthly":
+        return
+    if shares_key_with_other_project(source, os.environ):
+        _ensure_service_anchor(ledger, source)
+        return
+    if state.provider_view is not None or client is None:
+        return
+    probe = getattr(client, "check_quota", None)
+    if probe is None:
+        _ensure_service_anchor(ledger, source)
         return
     try:
-        q = serpapi.check_quota()
+        q = probe()
     except Exception as exc:  # noqa: BLE001
-        LOG.warning("serpapi /account probe failed: %s", exc)
+        LOG.warning("%s /account probe failed: %s", source, exc)
         return
     if isinstance(q.get("remaining"), int):
-        ledger.record_anchor("serpapi", remaining=q["remaining"],
+        ledger.record_anchor(source, remaining=q["remaining"],
                              limit_total=q.get("limit_total"),
                              origin="account_api")
-        LOG.info("ledger: anchored serpapi at %s from /account", q["remaining"])
+        LOG.info("ledger: anchored %s at %s from /account",
+                 source, q["remaining"])
 
 
 def _print_card(deal_id, cand, verify, draft_text, confidence) -> None:
@@ -167,7 +197,7 @@ def main() -> int:
     from lib.dealgate import classify_route, gate_candidates
     from lib import dealpipe
     from lib.planner import CostLine, CostVector
-    from lib.quota import QuotaExceeded, QuotaLedger
+    from lib.quota import SCOPE_VUELAZO, QuotaExceeded, QuotaLedger
 
     config = load_deal_config()
     summary: dict = {"started_at": _now_iso(), "steps": {}, "warnings": []}
@@ -184,7 +214,7 @@ def main() -> int:
         ledger = QuotaLedger(conn)
         ledger.seed_pools()
         ledger.expire_orphans()
-        run_id = ledger.begin_run(trigger=args.trigger)
+        run_id = ledger.begin_run(trigger=args.trigger, scope=SCOPE_VUELAZO)
         if run_id is None and args.publish_only:
             # The /ops approve dispatch expects fan-out within minutes;
             # a scan holding the lease is normal — wait it out briefly.
@@ -192,7 +222,7 @@ def main() -> int:
             for _ in range(10):
                 time.sleep(30)
                 ledger.expire_orphans()
-                run_id = ledger.begin_run(trigger=args.trigger)
+                run_id = ledger.begin_run(trigger=args.trigger, scope=SCOPE_VUELAZO)
                 if run_id:
                     break
         if run_id is None:
@@ -210,7 +240,7 @@ def main() -> int:
         try:
             # ---- clients (fare rails via the shared path; service rails
             #      constructed here — their keys are env-only secrets) ----
-            raw, warnings = make_clients(["aviasales", "serpapi"], conn)
+            raw, warnings = make_clients(FARE_SOURCES, conn)
             for w in warnings:
                 LOG.warning("%s", w)
                 summary["warnings"].append(w)
@@ -245,7 +275,7 @@ def main() -> int:
                         summary["warnings"].append(f"telegram: {exc}")
             resend, resend_err = _try_service("resend", ResendClient.from_env)
 
-            _maybe_anchor_serpapi(ledger, raw.get("serpapi"))
+            _ensure_fare_anchor(ledger, SRC_GOOGLE, raw.get(SRC_GOOGLE))
             _ensure_service_anchor(ledger, "anthropic")
             _ensure_service_anchor(ledger, "resend")
 
@@ -260,15 +290,16 @@ def main() -> int:
             # aviasales outage (all charged, all failed), must not eat
             # the day's coverage of a free source.
             today_prefix = _now_iso()[:10]
-            expected_wl = max(1, len(config.origins) * len(config.watchlist))
+            all_wl = dealpipe.watchlist_routes(config)
+            expected_wl = max(1, sum(m for _, _, m in all_wl))
             refreshed_today = conn.execute(
-                "SELECT COUNT(*) FROM spend_events WHERE source='aviasales' "
-                "AND op='latest_prices' AND spent_at LIKE ? "
+                "SELECT COUNT(*) FROM spend_events WHERE source=? "
+                "AND op='prices_for_dates' AND spent_at LIKE ? "
                 "AND result IN ('ok', 'empty')",
-                (today_prefix + "%",)).fetchone()[0] >= expected_wl // 4 + 1
+                (SRC_CACHED, today_prefix + "%")
+            ).fetchone()[0] >= expected_wl // 4 + 1
             wl_routes = ([] if (args.publish_only or refreshed_today)
-                         else [(o, d) for o in config.origins
-                               for d in config.watchlist if d != o])
+                         else all_wl)
 
             # Only deals WITH a draft can fan out; a draftless approved
             # row would otherwise inflate every reservation forever
@@ -298,12 +329,16 @@ def main() -> int:
 
             lines = []
             if not args.publish_only:
+                # sweep: origins x months x sortings; watchlist: one call
+                # per (route, month) of coverage.
+                sweep_calls = (len(months) * len(config.origins)
+                               * max(1, len(config.sweep_sortings)))
+                wl_calls = sum(m for _, _, m in wl_routes)
                 lines.append(CostLine(
-                    "aviasales",
-                    len(months) * len(config.origins) + len(wl_routes),
+                    SRC_CACHED, sweep_calls + wl_calls,
                     "primary", "anywhere sweep + watchlist refresh"))
-                if raw.get("serpapi"):
-                    lines.append(CostLine("serpapi", n_cand, "primary",
+                if raw.get(SRC_GOOGLE):
+                    lines.append(CostLine(SRC_GOOGLE, n_cand, "primary",
                                           "live verification"))
                 if drafter:
                     lines.append(CostLine("anthropic", n_cand, "primary",
@@ -314,10 +349,13 @@ def main() -> int:
                         else dg.free_picks_due(conn))
             tg_public = os.environ.get("TELEGRAM_PUBLIC_CHANNEL_ID",
                                        "").strip()
-            if telegram and not args.skip_publish and (n_pub or free_due):
+            tg_on = "tg_private" in config.publish_channels
+            if (telegram and tg_on and not args.skip_publish
+                    and (n_pub or free_due)):
                 lines.append(CostLine("telegram", n_pub + len(free_due),
                                       "primary", "posts (private + public)"))
-            if resend and not args.skip_publish and n_pub:
+            if ("email" in config.publish_channels and resend
+                    and not args.skip_publish and n_pub):
                 lines.append(CostLine("resend", n_pub * (1 + n_members),
                                       "primary", "owner + member emails"))
             if not lines:
@@ -342,8 +380,8 @@ def main() -> int:
                 f"{ln.source}≤{ln.units}" for ln in lines))
 
             guarded = guard_clients(
-                {"aviasales": raw.get("aviasales"),
-                 "serpapi": raw.get("serpapi"),
+                {SRC_CACHED: raw.get(SRC_CACHED),
+                 SRC_GOOGLE: raw.get(SRC_GOOGLE),
                  "anthropic": drafter, "telegram": telegram, "resend": resend},
                 ledger=ledger, run_id=run_id, search_id=SEARCH_ID,
                 shadow=False)
@@ -365,7 +403,26 @@ def main() -> int:
                 sent_members_ids = {r["member_id"] for r in already
                                     if r["member_id"] is not None}
                 targets: list[str] = []
-                if guarded["telegram"] is not None and tg_chat:
+                # ntfy: the same free phone-push rail the NBO tracker
+                # uses. Unmetered, so outside the ledger (consistent with
+                # scripts/notify_ntfy.py); send_log still dedups it.
+                if "ntfy" in config.publish_channels:
+                    if "ntfy" in sent_channels:
+                        targets.append("ntfy")
+                    else:
+                        from lib.pushes import push
+                        if push(f"Vuelazo: {origin}→{dest} {price} {currency}",
+                                text, priority="high", tags="airplane"):
+                            deals_db.record_send(conn, channel="ntfy",
+                                                 deal_id=deal_id,
+                                                 provider_ref="ntfy")
+                            targets.append("ntfy")
+                            print(f"  ntfy: enviado al móvil (deal #{deal_id})")
+                        else:
+                            print("  ntfy no configurado (NTFY_TOPIC) — "
+                                  "sin push")
+                if ("tg_private" in config.publish_channels
+                        and guarded["telegram"] is not None and tg_chat):
                     if "tg_private" in sent_channels:
                         targets.append("tg_private")
                     else:
@@ -377,7 +434,8 @@ def main() -> int:
                         targets.append("tg_private")
                         print(f"  telegram: publicado deal #{deal_id} "
                               f"(message_id {sent.message_id})")
-                if guarded["resend"] is not None:
+                if ("email" in config.publish_channels
+                        and guarded["resend"] is not None):
                     subject = (f"Vuelazo: {origin}→{dest} por "
                                f"{price} {currency}")
                     web_url = (os.environ.get("WEB_URL", "").strip()
@@ -484,22 +542,32 @@ def main() -> int:
                 return EXIT_OK
 
             # ---- 1. discover ----
-            if guarded["aviasales"] is None:
+            if guarded[SRC_CACHED] is None:
                 print("TRAVELPAYOUTS_TOKEN missing — cannot discover. Stop.")
                 ledger.finalize_run(run_id, "degraded")
                 return EXIT_DEGRADED
             obs: list[deals_db.Observation] = []
             for origin in config.origins:
                 obs.extend(dealpipe.sweep_origin(
-                    guarded["aviasales"], origin=origin, months=months,
-                    currency=config.currency))
+                    guarded[SRC_CACHED], origin=origin, months=months,
+                    currency=config.currency,
+                    sortings=config.sweep_sortings,
+                    limits=config.sweep_limits))
             if wl_routes:
                 wl_obs = dealpipe.watchlist_refresh(
-                    guarded["aviasales"], routes=wl_routes,
+                    guarded[SRC_CACHED], routes=wl_routes,
                     currency=config.currency)
                 print(f"watchlist: {len(wl_obs)} observations from "
                       f"{len(wl_routes)} route refreshes")
                 obs.extend(wl_obs)
+            # Long-haul reach is THE product metric — surface it every run.
+            by_class: dict[str, set] = {}
+            for o in obs:
+                by_class.setdefault(
+                    classify_route(o.dest, config), set()).add((o.origin, o.dest))
+            reach = {k: len(v) for k, v in sorted(by_class.items())}
+            print(f"reach by class: {reach}")
+            summary["steps"]["reach"] = reach
             deals_db.insert_observations(conn, obs)
             for origin, dest in sorted({(o.origin, o.dest) for o in obs}):
                 deals_db.touch_watchlist(
@@ -545,18 +613,21 @@ def main() -> int:
                 summary.setdefault("deals", []).append(deal_id)
 
                 # 3. verify (no alert without live verification)
-                if guarded["serpapi"] is None:
+                if guarded[SRC_GOOGLE] is None:
                     print("SERPAPI_KEY missing — cannot verify. Stop.")
                     deals_db.update_deal(conn, deal_id, status="expired")
                     status = "degraded"
                     break
-                verify = dealpipe.verify_candidate(guarded["serpapi"], cand,
+                verify = dealpipe.verify_candidate(guarded[SRC_GOOGLE], cand,
                                                    config)
                 confidence = dealpipe.deal_confidence(
                     cached_produced=True, live_verified=verify.ok)
                 refs = {"cached_price": cand.price,
                         "live_price": verify.live_price,
-                        "source": "serpapi", "note": verify.note,
+                        "source": SRC_GOOGLE, "note": verify.note,
+                        # Which airport the price was actually proven at
+                        # (NYC nominates, JFK proves).
+                        "verified_airport": verify.airport,
                         "checked_at": _now_iso()}
                 if not verify.ok:
                     deals_db.update_deal(
@@ -571,6 +642,26 @@ def main() -> int:
                     cand, verify, config))
                 deals_db.update_deal(conn, deal_id,
                                      **{"class": cand.deal_class})
+
+                # Route-specific floor: always MEASURED, enforced only
+                # when detector.insights_floor is on (a D2 semantic
+                # choice that belongs to Carlos).
+                floor_ok, floor_note = dealpipe.insights_floor_check(
+                    cand, verify, config)
+                refs["insights_floor"] = {"passed": floor_ok,
+                                          "note": floor_note,
+                                          "enforced": config.insights_floor}
+                if config.insights_floor and floor_ok is False:
+                    deals_db.update_deal(
+                        conn, deal_id, status="rejected",
+                        verification_refs=json.dumps(refs),
+                        confidence=json.dumps(confidence.as_dict()))
+                    deals_db.record_rejection(conn, deal_id,
+                                              reason="thin_saving",
+                                              note=floor_note)
+                    print(f"verify: {cand.origin}->{cand.dest} rejected by "
+                          f"the route floor ({floor_note})")
+                    continue
                 if cand.deal_class == "mistake" and len(
                         [f for f in confidence.families
                          if f in ("google", "ota_metasearch")]) < 2:

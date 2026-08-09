@@ -18,6 +18,13 @@ _GOLDEN_POOL_SEEDS = (
     ("aviasales", "rate_only", None, None, 0, None, None),
     ("googleflights", "per_run", None, None, 0, 25, 30),
     ("searchapi", "monthly", 100, None, 4, 28, None),
+    # Vuelazo fare rails — the SAME adapters as the tracker's, on their
+    # own pools (2026-08-08 project separation). This is the whole point:
+    # a Vuelazo sweep spends from serpapi_vz, never from the tracker's
+    # free 250.
+    ("serpapi_vz", "monthly", 50, None, 5, 7, None),
+    ("searchapi_vz", "monthly", 10000, None, 200, 28, None),
+    ("aviasales_vz", "rate_only", None, None, 0, None, None),
     # Vuelazo M0 service rails — self-imposed budgets (no provider counter).
     ("anthropic", "monthly", 200, None, 10, 20, None),
     ("telegram", "rate_only", None, None, 0, None, None),
@@ -35,6 +42,13 @@ _GOLDEN_METERED = {
                   "latest_prices": 1, "one_way_month_prices": 1,
                   "anywhere_prices": 1},
     "skyscanner": {"point_query": 2, "search_airport": 1},
+    # Vuelazo's own ids meter identically to their backends — same calls,
+    # different pot.
+    "serpapi_vz": {"point_query": 1, "booking_options": 1},
+    "searchapi_vz": {"point_query": 1, "calendar": 1},
+    "aviasales_vz": {"cheap_prices": 1, "prices_for_dates": 1,
+                     "latest_prices": 1, "one_way_month_prices": 1,
+                     "anywhere_prices": 1},
     "anthropic": {"draft": 1},
     "telegram": {"send_message": 1, "create_invite_link": 1,
                  "remove_member": 2},
@@ -92,10 +106,16 @@ def test_managed_env_vars_and_credential_load(tmp_path):
     import os
 
     assert sources.managed_env_vars() == [
-        "RAPIDAPI_KEY", "SERPAPI_KEY", "TRAVELPAYOUTS_TOKEN", "SEARCHAPI_KEY"]
+        "RAPIDAPI_KEY", "SERPAPI_KEY", "TRAVELPAYOUTS_TOKEN", "SEARCHAPI_KEY",
+        # Vuelazo's own keys — /ops manages them like any other API key.
+        "SERPAPI_KEY_VZ", "SEARCHAPI_KEY_VZ", "TRAVELPAYOUTS_TOKEN_VZ"]
     assert "SERPAPI_KEY" not in sources.managed_env_vars()[1:1]  # sanity
     assert sources.sources_for_env_var("RAPIDAPI_KEY") == [
         "kiwi", "flights_sky", "skyscanner"]
+    # One key per project: the tracker's var never resolves to a Vuelazo
+    # source and vice versa.
+    assert sources.sources_for_env_var("SERPAPI_KEY") == ["serpapi"]
+    assert sources.sources_for_env_var("SERPAPI_KEY_VZ") == ["serpapi_vz"]
 
     with connect(tmp_path / "t.db") as conn:
         ensure_schema(conn)

@@ -26,53 +26,81 @@ def make_clients(
     (CLI, batch runner, UI all construct clients here). M1 runs the
     guard in shadow mode (record, never refuse).
     """
+    import os
+
+    from .sources import backend_of, resolve_env_var
+
     out: dict[str, object | None] = {
         "searchapi": None, "skyscanner": None,
         "aviasales": None, "kiwi": None,
         "googleflights": None, "serpapi": None,
     }
+    out.update({s: None for s in sources})
     warnings: list[str] = []
     if dry_run:
         return out, warnings
 
-    def _try(source: str, label: str, build) -> None:
-        if source not in sources:
-            return
-        try:
-            out[source] = build()
-        except RuntimeError as exc:
-            warnings.append(f"{label} disabled: {exc}")
+    # The KEY a source authenticates with comes from the registry, not
+    # from the adapter's default. That is what lets serpapi_vz (Vuelazo)
+    # and serpapi (the NBO tracker) be the same adapter against
+    # different accounts — and, when Vuelazo has no key of its own, what
+    # makes the borrowing visible instead of silent.
+    def _key(source: str) -> dict:
+        var, shared = resolve_env_var(source, os.environ)
+        if shared:
+            warnings.append(
+                f"{source}: no dedicated key — using {var} (shared with the "
+                f"other project; the ledger caps this source at its own "
+                f"pool, but the PROVIDER allowance is one pot)")
+        return {"var": var} if var else {}
 
-    def _build_searchapi():
+    def _build_searchapi(kw):
         from .searchapi_io import SearchApiClient
-        return SearchApiClient.from_env()
+        return SearchApiClient.from_env(**kw)
 
-    def _build_skyscanner():
+    def _build_skyscanner(kw):
         from .skyscanner_rapidapi import SkyScrapperClient
-        return SkyScrapperClient.from_env(db_conn=conn)
+        return SkyScrapperClient.from_env(db_conn=conn, **kw)
 
-    def _build_aviasales():
+    def _build_aviasales(kw):
         from .aviasales_api import AviasalesClient
-        return AviasalesClient.from_env()
+        return AviasalesClient.from_env(**kw)
 
-    def _build_kiwi():
+    def _build_kiwi(kw):
         from .kiwi_rapidapi import KiwiClient
-        return KiwiClient.from_env(db_conn=conn)
+        return KiwiClient.from_env(db_conn=conn, **kw)
 
-    def _build_googleflights():
+    def _build_googleflights(kw):
         from .googleflights_direct import GoogleFlightsClient
         return GoogleFlightsClient.from_env()
 
-    def _build_serpapi():
+    def _build_serpapi(kw):
         from .serpapi_io import SerpApiClient
-        return SerpApiClient.from_env()
+        return SerpApiClient.from_env(**kw)
 
-    _try("searchapi", "SearchAPI", _build_searchapi)
-    _try("skyscanner", "Sky Scrapper", _build_skyscanner)
-    _try("aviasales", "Aviasales", _build_aviasales)
-    _try("kiwi", "Kiwi", _build_kiwi)
-    _try("googleflights", "Google Flights (direct)", _build_googleflights)
-    _try("serpapi", "SerpAPI", _build_serpapi)
+    BUILDERS = {
+        "searchapi": ("SearchAPI", _build_searchapi),
+        "skyscanner": ("Sky Scrapper", _build_skyscanner),
+        "aviasales": ("Aviasales", _build_aviasales),
+        "kiwi": ("Kiwi", _build_kiwi),
+        "googleflights": ("Google Flights (direct)", _build_googleflights),
+        "serpapi": ("SerpAPI", _build_serpapi),
+    }
+    # Construction order follows BUILDERS, not the caller's list, so it
+    # stays deterministic however run_batch/run_deals order their sources.
+    order = list(BUILDERS)
+    for source in sorted(sources,
+                         key=lambda s: (order.index(backend_of(s))
+                                        if backend_of(s) in order else 99, s)):
+        entry = BUILDERS.get(backend_of(source))
+        if entry is None:
+            warnings.append(f"{source}: no client builder — skipped")
+            continue
+        label, build = entry
+        try:
+            out[source] = build(_key(source))
+        except RuntimeError as exc:
+            warnings.append(f"{label} ({source}) disabled: {exc}")
 
     if ledger is not None:
         out = guard_clients(out, ledger=ledger, run_id=run_id,

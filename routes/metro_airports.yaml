@@ -1,0 +1,42 @@
+# Aviasales METRO codes -> the airport to verify against on Google.
+#
+# Why this file exists (measured 2026-08-09, live):
+#   Aviasales returns city/metro codes (NYC, CHI, WAS, LON, TYO, ...)
+#   for exactly the long-haul destinations the product exists to sell.
+#   Google Flights via SerpAPI does not accept them:
+#       MAD->NYC  =>  HTTP 200 "Google Flights hasn't returned any
+#                     results for this query."   (hard error)
+#       MAD->JFK  =>  5 best_flights, typical range 370-520 EUR.
+#   So every metro-coded candidate died at verification and NONE could
+#   ever publish. The sweep found MAD->NYC 427; verification threw it
+#   away for a reason that had nothing to do with the fare.
+#
+# The airport chosen is the metro's PRIMARY long-haul gateway from
+# Spain. Known limitation: the cached metro price is the cheapest across
+# ALL the city's airports, so a fare that was really EWR/LGA verifies
+# against JFK and can miss the tolerance. That costs us a deal
+# occasionally; it never publishes a wrong price, which is the trade
+# that matters (non-negotiable #2). The airport actually verified is
+# recorded in verification_refs.verified_airport and named in the alert.
+
+NYC: JFK      # New York — JFK over EWR/LGA (most Spain nonstops)
+CHI: ORD
+WAS: IAD      # the transatlantic gateway of the three
+YTO: YYZ
+YMQ: YUL
+BUE: EZE      # AEP is domestic/regional
+RIO: GIG
+SAO: GRU
+TYO: HND      # HND and NRT both work; HND has more IB/JL from MAD
+OSA: KIX
+SEL: ICN
+BJS: PEK
+SHA: PVG      # PVG is the international one, SHA is domestic
+JKT: CGK
+LON: LHR
+PAR: CDG
+ROM: FCO
+MIL: MXP
+STO: ARN
+BUH: OTP
+MOW: SVO      # excluded class — kept for completeness only

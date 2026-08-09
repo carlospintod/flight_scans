@@ -229,7 +229,8 @@ def main() -> int:
     from lib import route_store
     from lib.clients import guard_clients, make_clients
     from lib.planner import Caps, build_run_plan, cost_vector
-    from lib.quota import POOL_SEEDS, QuotaExceeded, QuotaLedger
+    from lib.quota import (POOL_SEEDS, SCOPE_TRACKER, QuotaExceeded,
+                           QuotaLedger)
     from lib.runner import execute_search
 
     started_at = _now_iso()
@@ -384,7 +385,7 @@ def main() -> int:
                      "ACTIVE" if sweep_day else "dormant",
                      " (forced)" if args.force_sweep else "")
 
-        run_id = ledger.begin_run(trigger=trigger)
+        run_id = ledger.begin_run(trigger=trigger, scope=SCOPE_TRACKER)
         if run_id is None:
             LOG.warning("another run holds the lease — exiting cleanly")
             return EXIT_OK

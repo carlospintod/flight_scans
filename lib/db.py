@@ -201,12 +201,18 @@ CREATE INDEX IF NOT EXISTS idx_anchor_source ON pool_anchors (source, anchor_id)
 
 -- One row per batch run: the lease + envelope. scan_runs stays as the
 -- per-search execution heartbeat; this is the run-level wrapper.
+--
+-- `scope` names the PROJECT holding the lease ('flight_scans' | 'vuelazo').
+-- The lease is single-run PER SCOPE, not globally: the two projects share
+-- this database but run on their own crons, and a nightly Vuelazo sweep
+-- must never make the Nairobi tracker skip its scan (or vice versa).
 CREATE TABLE IF NOT EXISTS ledger_runs (
     run_id           TEXT PRIMARY KEY,
     started_at       TEXT NOT NULL,
     lease_expires_at TEXT NOT NULL,
     finished_at      TEXT,
     trigger          TEXT NOT NULL,
+    scope            TEXT NOT NULL DEFAULT 'flight_scans',
     status           TEXT NOT NULL,      -- 'running'|'ok'|'degraded'|'failed'|'abandoned'
     planned_searches INTEGER NOT NULL DEFAULT 0,
     skipped_searches INTEGER NOT NULL DEFAULT 0,
@@ -314,6 +320,9 @@ _MIGRATIONS: tuple[tuple[str, str, str], ...] = (
      "ALTER TABLE scan_runs ADD COLUMN reserved_json TEXT"),
     ("point_queries", "seller",
      "ALTER TABLE point_queries ADD COLUMN seller TEXT"),
+    ("ledger_runs", "scope",
+     "ALTER TABLE ledger_runs ADD COLUMN scope TEXT NOT NULL "
+     "DEFAULT 'flight_scans'"),
 )
 
 
