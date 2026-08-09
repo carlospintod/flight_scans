@@ -24,6 +24,7 @@ _GOLDEN_POOL_SEEDS = (
     # free 250.
     ("serpapi_vz", "monthly", 50, None, 5, 7, None),
     ("searchapi_vz", "monthly", 10000, None, 200, 28, None),
+    ("googleflights_vz", "per_run", None, None, 0, 25, 30),
     ("aviasales_vz", "rate_only", None, None, 0, None, None),
     # Vuelazo M0 service rails — self-imposed budgets (no provider counter).
     ("anthropic", "monthly", 200, None, 10, 20, None),
@@ -46,6 +47,7 @@ _GOLDEN_METERED = {
     # different pot.
     "serpapi_vz": {"point_query": 1, "booking_options": 1},
     "searchapi_vz": {"point_query": 1, "calendar": 1},
+    "googleflights_vz": {"point_query": 1},
     "aviasales_vz": {"cheap_prices": 1, "prices_for_dates": 1,
                      "latest_prices": 1, "one_way_month_prices": 1,
                      "anywhere_prices": 1},

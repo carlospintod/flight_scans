@@ -46,8 +46,9 @@ SEARCH_ID = "vuelazo-deals"
 # against Vuelazo's own budget, so a deal sweep can never drain the
 # tracker's free tier. See lib/sources.py for the pool semantics.
 SRC_CACHED = "aviasales_vz"     # discovery (Travelpayouts cached)
-SRC_GOOGLE = "serpapi_vz"       # verification (live Google Flights)
-FARE_SOURCES = [SRC_CACHED, SRC_GOOGLE]
+SRC_GOOGLE = "serpapi_vz"       # insights + second opinion (paid, 50/mo slice)
+SRC_SCRAPER = "googleflights_vz"  # verification (free Playwright scraper)
+FARE_SOURCES = [SRC_CACHED, SRC_GOOGLE, SRC_SCRAPER]
 REJECT_REASONS = ("too_common", "bad_dates", "ulcc_junk", "thin_saving", "other")
 
 
@@ -337,9 +338,14 @@ def main() -> int:
                 lines.append(CostLine(
                     SRC_CACHED, sweep_calls + wl_calls,
                     "primary", "anywhere sweep + watchlist refresh"))
+                if raw.get(SRC_SCRAPER):
+                    lines.append(CostLine(SRC_SCRAPER, n_cand, "primary",
+                                          "live verification (free)"))
                 if raw.get(SRC_GOOGLE):
+                    # Reserved for every candidate (predicted = upper
+                    # bound) though only scraper-survivors spend one.
                     lines.append(CostLine(SRC_GOOGLE, n_cand, "primary",
-                                          "live verification"))
+                                          "insights + second opinion"))
                 if drafter:
                     lines.append(CostLine("anthropic", n_cand, "primary",
                                           "draft"))
@@ -382,6 +388,7 @@ def main() -> int:
             guarded = guard_clients(
                 {SRC_CACHED: raw.get(SRC_CACHED),
                  SRC_GOOGLE: raw.get(SRC_GOOGLE),
+                 SRC_SCRAPER: raw.get(SRC_SCRAPER),
                  "anthropic": drafter, "telegram": telegram, "resend": resend},
                 ledger=ledger, run_id=run_id, search_id=SEARCH_ID,
                 shadow=False)
@@ -612,19 +619,34 @@ def main() -> int:
                     **{"class": cand.deal_class})
                 summary.setdefault("deals", []).append(deal_id)
 
-                # 3. verify (no alert without live verification)
-                if guarded[SRC_GOOGLE] is None:
-                    print("SERPAPI_KEY missing — cannot verify. Stop.")
+                # 3. verify (no alert without live verification).
+                # Two stages since 2026-08-09: the FREE scraper proves
+                # the fare is real; serpapi (the paid 50/mo slice) runs
+                # only on survivors, adding the typical range the
+                # enforced floor needs plus a third price opinion.
+                # Scraper down (captcha/CI) -> serpapi alone, as before.
+                if guarded[SRC_GOOGLE] is None and guarded[SRC_SCRAPER] is None:
+                    print("no verification rail (SERPAPI_KEY missing and "
+                          "no local browser) — cannot verify. Stop.")
                     deals_db.update_deal(conn, deal_id, status="expired")
                     status = "degraded"
                     break
-                verify = dealpipe.verify_candidate(guarded[SRC_GOOGLE], cand,
+                stage1_src = (SRC_SCRAPER if guarded[SRC_SCRAPER] is not None
+                              else SRC_GOOGLE)
+                verify = dealpipe.verify_candidate(guarded[stage1_src], cand,
                                                    config)
+                stage2 = (verify.ok and stage1_src == SRC_SCRAPER
+                          and guarded[SRC_GOOGLE] is not None)
+                if stage2:
+                    verify = dealpipe.second_opinion(
+                        guarded[SRC_GOOGLE], cand, verify, config)
                 confidence = dealpipe.deal_confidence(
                     cached_produced=True, live_verified=verify.ok)
                 refs = {"cached_price": cand.price,
                         "live_price": verify.live_price,
-                        "source": SRC_GOOGLE, "note": verify.note,
+                        "source": (f"{stage1_src}+{SRC_GOOGLE}" if stage2
+                                   else stage1_src),
+                        "note": verify.note,
                         # Which airport the price was actually proven at
                         # (NYC nominates, JFK proves).
                         "verified_airport": verify.airport,
@@ -686,7 +708,8 @@ def main() -> int:
                     depart_date=cand.depart_date,
                     return_date=cand.return_date,
                     price=int(verify.live_price), currency=cand.currency,
-                    source="serpapi", source_family="google",
+                    source=SRC_GOOGLE if stage2 else stage1_src,
+                    source_family="google",
                     found_at=None, is_verified=True)])
                 baseline_median, baseline_line = dealpipe.baseline_context(
                     cand, verify.insights)

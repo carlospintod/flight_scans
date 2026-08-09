@@ -17,7 +17,7 @@ here is charged before it happens.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
 from urllib.parse import quote
@@ -209,6 +209,50 @@ def verification_airport(dest: str, config: DealConfig) -> str:
     """The code to send to Google for a destination — the metro's
     gateway airport when `dest` is a city code, else `dest` itself."""
     return config.metro_airports.get(dest.upper(), dest.upper())
+
+
+def second_opinion(serpapi, cand: Candidate, first: VerifyResult,
+                   config: DealConfig) -> VerifyResult:
+    """The PAID read on a candidate the free scraper already confirmed.
+
+    Two jobs, neither of which the scraper can do:
+      * price_insights — the route's own typical range, which the
+        (now enforced) floor needs;
+      * a third opinion on the price. Cached nominated, the scraper
+        confirmed; if SerpAPI's read of the same Google corpus diverges
+        beyond live_tolerance_pct, one of them is looking at a ghost
+        (stale mirror, currency glitch, vanished fare) and the deal must
+        NOT publish — "fuentes en desacuerdo" is a verification failure,
+        not a rounding note.
+
+    The published price is SerpAPI's: it is the read that carries the
+    receipt (insights + carrier) into the alert. If SerpAPI errors or
+    returns no options, the free verification stands but the deal
+    carries no typical range — the floor becomes unknowable (None) and
+    that is recorded, not hidden.
+    """
+    second = verify_candidate(serpapi, cand, config)
+    if second.live_price is None:
+        return replace(
+            first,
+            note=first.note + f"; sin insights (serpapi: {second.note})")
+    if first.live_price:
+        div = (abs(second.live_price - first.live_price)
+               / first.live_price * 100.0)
+        if div > config.live_tolerance_pct:
+            return VerifyResult(
+                False, second.live_price, second.carriers, second.insights,
+                f"fuentes en desacuerdo: scraper {first.live_price} vs "
+                f"serpapi {second.live_price} ({div:.0f}% > "
+                f"{config.live_tolerance_pct:.0f}%)",
+                airport=second.airport)
+    if not second.ok:
+        # A usable price that failed its own tolerance check (live moved
+        # above cached) — a real verification failure, keep it.
+        return second
+    return replace(second,
+                   note=f"live-confirmed x2 (scraper {first.live_price}, "
+                        f"serpapi {second.live_price})")
 
 
 def insights_floor_check(cand: Candidate, verify: VerifyResult,

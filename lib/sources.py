@@ -172,6 +172,19 @@ REGISTRY: tuple[SourceSpec, ...] = (
              "SEARCHAPI_KEY on purpose — those are 100 LIFETIME credits "
              "reserved for the tracker's rectangle sweeps."),
     SourceSpec(
+        "googleflights_vz", family=FAMILY_GOOGLE, roles=("verification",),
+        env_var=None, backend="googleflights",
+        metered={"point_query": 1},
+        pool=("per_run", None, None, 0, 25, 30),
+        failure_mode="scraper", enabled=True,
+        note="Vuelazo's FREE verification rail (2026-08-09): the same "
+             "fast-flights/Playwright scraper the tracker uses, on its "
+             "own per-run pool. Proves a fare is real without spending "
+             "serpapi_vz credits; serpapi_vz then runs ONLY on survivors "
+             "for the typical-range floor + a second price read. "
+             "Best-effort (captcha-prone from CI) — when it fails, "
+             "verification falls back to serpapi_vz alone."),
+    SourceSpec(
         "aviasales_vz", family=FAMILY_CACHED, roles=("discovery", "corroboration"),
         env_var="TRAVELPAYOUTS_TOKEN_VZ", backend="aviasales",
         env_var_fallback="TRAVELPAYOUTS_TOKEN",

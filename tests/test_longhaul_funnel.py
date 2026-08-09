@@ -271,3 +271,96 @@ def test_publish_channels_are_config_driven():
     """Telegram is postponed; ntfy carries the alerts meanwhile."""
     assert "ntfy" in CONFIG.publish_channels
     assert "email" in CONFIG.publish_channels
+
+
+# -- The enforced floor + the two-stage verify (2026-08-09) -------------
+
+def _cand(**kw):
+    from lib.dealgate import Candidate
+    base = dict(origin="BCN", dest="KUT", depart_date="2027-01-31",
+                return_date="2027-02-07", price=126, currency="EUR",
+                route_class="medium", xsection_median=398, xsection_p25=180,
+                pct_below=68.8, abs_saving=278, deal_class="standard",
+                score=125.6, found_at=None)
+    base.update(kw)
+    return Candidate(**base)
+
+
+def test_the_floor_is_enforced_now():
+    """Carlos's call after the KUT alert: enforcement is ON."""
+    assert CONFIG.insights_floor is True
+
+
+def test_kut_would_be_rejected_today():
+    """The alert that decided it, with its real numbers: BCN->KUT 120
+    live-confirmed, 'saving' EUR 278 vs a Gulf-heavy class median — but
+    Google's typical low for the route itself is 130. Real saving: 10.
+    The class median published it; the enforced floor rejects it."""
+    verify = dealpipe.VerifyResult(True, 120, "Wizz Air",
+                                   {"typical_low": 130, "typical_high": 210},
+                                   "live-confirmed")
+    passed, note = dealpipe.insights_floor_check(_cand(), verify, CONFIG)
+    assert passed is False
+    assert "80" in note  # the medium-class floor it failed
+
+
+def _fake(price, insights=None, fail=False):
+    from types import SimpleNamespace
+
+    class _Client:
+        calls = 0
+
+        def point_query(self, **kw):
+            type(self).calls += 1
+            if fail:
+                raise RuntimeError("captcha wall")
+            raw = {"price_insights": insights} if insights else {}
+            return SimpleNamespace(
+                best_flights=(SimpleNamespace(price=price, carriers="X"),),
+                raw=raw)
+
+    return _Client()
+
+
+def test_second_opinion_agreement_carries_the_insights():
+    first = dealpipe.verify_candidate(_fake(120), _cand(), CONFIG)
+    assert first.ok and first.insights is None  # the scraper has no insights
+    serp = _fake(122, insights={"typical_price_range": [130, 210]})
+    final = dealpipe.second_opinion(serp, _cand(), first, CONFIG)
+    assert final.ok is True
+    assert final.live_price == 122          # the read with the receipt
+    assert final.insights["typical_low"] == 130
+    assert "x2" in final.note
+
+
+def test_two_google_reads_disagreeing_is_a_verification_failure():
+    """Cached said 126, the scraper saw 120, serpapi sees 190: someone
+    is looking at a ghost fare. Publishing either number would be a
+    guess — 'fuentes en desacuerdo' must kill the deal."""
+    first = dealpipe.verify_candidate(_fake(120), _cand(), CONFIG)
+    final = dealpipe.second_opinion(_fake(190), _cand(), first, CONFIG)
+    assert final.ok is False
+    assert "desacuerdo" in final.note
+
+
+def test_serpapi_failure_keeps_the_free_verification_without_insights():
+    """SerpAPI down must not kill a scraper-confirmed deal — but the
+    floor becomes unknowable and the note says so out loud."""
+    first = dealpipe.verify_candidate(_fake(120), _cand(), CONFIG)
+    final = dealpipe.second_opinion(_fake(0, fail=True), _cand(), first,
+                                    CONFIG)
+    assert final.ok is True
+    assert final.live_price == 120
+    assert final.insights is None
+    assert "sin insights" in final.note
+    passed, _ = dealpipe.insights_floor_check(_cand(), final, CONFIG)
+    assert passed is None  # recorded as unknowable, never a silent pass
+
+
+def test_run_deals_verifies_free_first():
+    """The wiring: the scraper is stage 1, serpapi only on survivors."""
+    import pathlib
+    deals = (pathlib.Path(__file__).resolve().parents[1]
+             / "run_deals.py").read_text(encoding="utf-8")
+    assert 'SRC_SCRAPER = "googleflights_vz"' in deals
+    assert "second_opinion" in deals
