@@ -253,11 +253,23 @@ def main() -> int:
                 LOG.warning("%s", w)
                 summary["warnings"].append(w)
 
-            def _try_service(name, build):
+            # A rail the CONFIG switches on but that cannot be built is a
+            # silent outage, not a quiet day. Measured 2026-08-10: the
+            # Explore rail was enabled in vuelazo.yaml, its key was
+            # missing from the Actions secrets, and every scheduled run
+            # skipped discovery's paid half without a word — for a full
+            # day. Anything landing in `dead_rails` gets pushed at the
+            # end of the run (never-silent principle, same as the
+            # pool-short page).
+            dead_rails: list[str] = []
+
+            def _try_service(name, build, *, required: bool = False):
                 try:
                     return build(), None
                 except RuntimeError as exc:
                     summary["warnings"].append(f"{name}: {exc}")
+                    if required:
+                        dead_rails.append(f"{name}: {exc}")
                     return None, str(exc)
 
             from lib.drafting import AnthropicDraftClient
@@ -267,9 +279,11 @@ def main() -> int:
             drafter, drafter_err = _try_service(
                 "anthropic", lambda: AnthropicDraftClient.from_env(
                     model=config.draft_model,
-                    max_tokens=config.draft_max_tokens))
+                    max_tokens=config.draft_max_tokens),
+                required=True)      # no drafting, no publishable deal
             telegram, telegram_err = _try_service(
-                "telegram", TelegramClient.from_env)
+                "telegram", TelegramClient.from_env,
+                required="tg_private" in config.publish_channels)
             # Members are admitted into the PRIVATE channel (M2); the
             # test channel is the pre-launch fallback.
             tg_chat: str | None = os.environ.get(
@@ -281,7 +295,9 @@ def main() -> int:
                     if telegram is not None:
                         telegram, telegram_err = None, str(exc)
                         summary["warnings"].append(f"telegram: {exc}")
-            resend, resend_err = _try_service("resend", ResendClient.from_env)
+            resend, resend_err = _try_service(
+                "resend", ResendClient.from_env,
+                required="email" in config.publish_channels)
 
             _ensure_fare_anchor(ledger, SRC_GOOGLE, raw.get(SRC_GOOGLE))
             _ensure_service_anchor(ledger, "anthropic")
@@ -329,7 +345,8 @@ def main() -> int:
                     explore_raw, explore_err = _try_service(
                         "explore",
                         lambda: ExploreClient.from_env(
-                            provider=config.explore_provider))
+                            provider=config.explore_provider),
+                        required=True)   # config says ON: never skip quietly
                     if explore_raw is None:
                         explore_windows = []
 
@@ -881,6 +898,22 @@ def main() -> int:
                             f"{top[1]}->{top[2]} {top[3]} {top[4]} — "
                             f"aprueba en /ops")
                 summary["steps"]["queued"] = [q[0] for q in queued_deals]
+
+            # A rail the config switches ON that could not be built ran
+            # this whole cycle silently. Say so, out loud, every time.
+            if dead_rails:
+                status = "degraded"
+                summary["dead_rails"] = dead_rails
+                detail = "; ".join(dead_rails)
+                LOG.error("RAILS DOWN (config says ON, key/env missing): %s",
+                          detail)
+                print(f"\n⚠ rails caídos: {detail}")
+                if args.trigger != "local":
+                    from lib.pushes import push
+                    push("Vuelazo: rail caído",
+                         f"Configurado pero no disponible — {detail}. "
+                         f"Revisa los secrets del workflow.",
+                         priority="high", tags="warning")
 
         except QuotaExceeded as exc:
             LOG.error("QUOTA GUARD TRIPPED: %s — planner/executor "
