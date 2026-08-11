@@ -641,6 +641,8 @@ def main() -> int:
             # unlike the cache it nominates candidates that can actually
             # be confirmed. Degrades per window, never aborts discovery.
             n_explore = 0
+            explore_failed = 0
+            explore_last_error = ""
             explore_persisted: list[deals_db.Observation] = []
             if explore_windows and guarded.get("explore") is not None:
                 from lib.explore_api import ExploreError, to_observations
@@ -652,6 +654,8 @@ def main() -> int:
                     except (ExploreError, QuotaExceeded) as exc:
                         LOG.warning("explore %s/%s/%s failed: %s",
                                     eo, area, emonth, exc)
+                        explore_failed += 1
+                        explore_last_error = f"{area}/{emonth}: {exc}"
                         continue
                     # Persist per window, not at the end of discovery.
                     # Explore is the ONLY metered discovery call: the
@@ -673,6 +677,18 @@ def main() -> int:
                 print(f"explore: {n_explore} observations from "
                       f"{len(explore_windows)} window(s) "
                       f"({', '.join(f'{o}/{a}/{m}' for o, a, m in explore_windows)})")
+                # A rail that BUILDS but returns nothing all run is the
+                # failure the dead_rails check cannot see. Measured
+                # 2026-08-11: a wrong area kgmid errored 8/8 calls
+                # across two runs, burned the credits, and the runs
+                # still reported 'ok'. Empty windows are legitimate
+                # (asia/October really is empty from MAD) — but EVERY
+                # window empty means the rail, not the market.
+                if n_explore == 0 and explore_failed == len(explore_windows):
+                    dead_rails.append(
+                        f"explore: {len(explore_windows)}/"
+                        f"{len(explore_windows)} calls failed "
+                        f"({explore_last_error})")
                 summary["steps"]["explore"] = {
                     "windows": [list(w) for w in explore_windows],
                     "observations": n_explore}

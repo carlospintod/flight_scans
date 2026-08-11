@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass
 from datetime import date
 
@@ -51,8 +52,19 @@ AREAS: dict[str, str] = {
     "south_america": "/m/06n3y",
     "asia": "/m/0j0k",
     "africa": "/m/0dg3n1",
-    "oceania": "/m/05h0n",
+    # Australia, not the Oceania landmass id: /m/05h0n returns "Empty
+    # results" for every month tested, while /m/0chghy returns SYD, MEL,
+    # BNE, PER — and Australia is where the sellable Oceania fares are.
+    # Every id here is probed live before it ships (test_explore.py).
+    "oceania": "/m/0chghy",
 }
+
+# SerpAPI reports "no destinations for this window" as an ERROR payload,
+# not an empty 200. Measured: asia/October is empty from MAD while
+# asia/November and asia/December both return 30+ destinations — so an
+# empty window is ordinary data, not a fault. Treating it as an error
+# made a normal result look identical to a broken area id.
+_EMPTY_RE = re.compile(r"empty results", re.I)
 
 PROVIDERS = {
     "serpapi": ("https://serpapi.com/search", "SERPAPI_KEY_VZ"),
@@ -131,7 +143,16 @@ class ExploreClient:
         except ValueError as exc:
             raise ExploreError("non-JSON response") from exc
         if not r.ok or "error" in data:
-            raise ExploreError(str(data.get("error", r.text[:200])))
+            msg = str(data.get("error", r.text[:200]))
+            if _EMPTY_RE.search(msg):
+                # Ordinary "nothing here this month", not a fault. The
+                # credit is still spent and still recorded; the caller
+                # gets an empty list instead of an exception.
+                LOG.info("explore %s/%s %s: no destinations this window",
+                         origin, params.get("arrival_area_id", "-"),
+                         params["month"])
+                return []
+            raise ExploreError(msg)
         return parse_explore(data, origin=origin, currency=currency)
 
 

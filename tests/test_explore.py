@@ -142,6 +142,59 @@ def test_both_vendors_are_wired_for_the_same_engine():
     assert CONFIG.explore_provider in explore_api.PROVIDERS
 
 
+def test_an_empty_window_is_data_not_an_error():
+    """SerpAPI reports "no destinations this window" as an ERROR payload.
+    Measured: asia/October is empty from MAD while asia/November returns
+    31 priced destinations — so the window is empty, not the rail. This
+    conflation made 8/8 calls look like failures on 2026-08-11."""
+    import requests
+
+    class _Resp:
+        ok = False
+        text = ""
+
+        @staticmethod
+        def json():
+            return {"error": 'Empty results for departure_id: "MAD" and '
+                             'arrival_area_id: "/m/0j0k".'}
+
+    client = explore_api.ExploreClient("k", provider="serpapi")
+    client._session = type("S", (), {"get": lambda *a, **k: _Resp()})()
+    assert client.explore(origin="MAD", month="2026-10", area="asia") == []
+
+
+def test_a_genuine_error_still_raises():
+    class _Resp:
+        ok = False
+        text = ""
+
+        @staticmethod
+        def json():
+            return {"error": "Invalid API key"}
+
+    client = explore_api.ExploreClient("k", provider="serpapi")
+    client._session = type("S", (), {"get": lambda *a, **k: _Resp()})()
+    with pytest.raises(explore_api.ExploreError, match="Invalid API key"):
+        client.explore(origin="MAD", month="2026-10", area="asia")
+
+
+def test_the_oceania_id_is_the_probed_one():
+    """/m/05h0n (the Oceania landmass) returns Empty results for every
+    month tested; /m/0chghy (Australia) returns SYD/MEL/BNE/PER. Area
+    ids are probed live before they ship."""
+    assert explore_api.AREAS["oceania"] == "/m/0chghy"
+    assert "/m/05h0n" not in explore_api.AREAS.values()
+
+
+def test_an_all_failed_rotation_is_reported_as_a_dead_rail():
+    """The failure dead_rails could not see: the client builds, every
+    call fails, the run reports ok. Cost 8 credits and a day."""
+    src = (Path(__file__).resolve().parents[1] / "run_deals.py").read_text(
+        encoding="utf-8")
+    assert "explore_failed == len(explore_windows)" in src
+    assert "explore_failed += 1" in src
+
+
 def test_an_unknown_provider_or_area_is_refused_loudly():
     with pytest.raises(explore_api.ExploreError, match="provider"):
         explore_api.ExploreClient("k", provider="bing")
