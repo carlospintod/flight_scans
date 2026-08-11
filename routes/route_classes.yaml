@@ -30,7 +30,10 @@ excluded:
 intra_eu:
   # Spanish domestic (mainland + Baleares + Canarias) — Aviasales sweeps
   # return these from any Spanish origin
-  [PMI, IBZ, MAH, AGP, SVQ, XRY, GRX, ALC, VLC, MAD, BCN, BIO, EAS, SDR,
+  [
+  # Classified from the live 2026-08-10 Explore + sweep
+   ESU, OZZ, TTU, FAE, LIL, ORL, GMZ,
+  PMI, IBZ, MAH, AGP, SVQ, XRY, GRX, ALC, VLC, MAD, BCN, BIO, EAS, SDR,
    SCQ, LCG, VGO, OVD, LEN, VLL, ZAZ, PNA, RJL, MLN,
    TFN, TFS, LPA, ACE, FUE, SPC, TCI,
   # Metro/city codes (Aviasales uses these alongside airport codes)
@@ -75,7 +78,10 @@ intra_eu:
 
 medium:
   # Middle East / Gulf / Caucasus / Central Asia fringe
-  [TLV, AMM, BEY, CAI, HRG, SSH, RUH, JED, MED, DXB, AUH, SHJ, DOH, BAH,
+  [
+  # Classified from the live 2026-08-10 Explore + sweep
+   JRO, KMS, LBV, SSG, VXE, OGZ, MCX, KEJ,
+  TLV, AMM, BEY, CAI, HRG, SSH, RUH, JED, MED, DXB, AUH, SHJ, DOH, BAH,
    KWI, MCT, IKA, EVN, TBS, GYD, ALA, TAS,
   # West / East / Central Africa
    DSS, DKR, BJL, ABJ, ACC, LOS, ABV, LFW, COO, DLA, NSI, BKO, OUA, NIM,
@@ -90,7 +96,10 @@ medium:
 
 long:
   # Metro/city codes
-  [NYC, WAS, CHI, HOU, RIO, SAO, BUE, TYO, OSA, SEL, BJS,
+  [
+  # Classified from the live 2026-08-10 Explore + sweep
+   NOS, BAQ, BHZ, CBB, SAP, USH, ELP, LGB, NAS, GND, SLU, CRK, JAI, JKT, HRB, KHG, TSN, YNJ,
+  NYC, WAS, CHI, HOU, RIO, SAO, BUE, TYO, OSA, SEL, BJS,
   # North America
    JFK, EWR, BOS, IAD, DCA, PHL, ATL, MIA, FLL, MCO, TPA, ORD, DTW, MSP,
    DFW, IAH, AUS, DEN, PHX, LAS, LAX, SFO, SAN, SEA, PDX, YYZ, YUL, YVR, YYC,
