@@ -101,6 +101,13 @@ guardrails:               # non-negotiable #3 — day one
   route_cooldown_days: 7
   cooldown_break_pct: 10  # a further -10% re-opens a cooled-down route
   dedup_band_pct: 5       # same route within +/-5% of last deal price = dup
+  # When verification proves a cached price was fiction (live above
+  # cached + tolerance), don't re-nominate that EXACT itinerary for this
+  # long. Measured 2026-08-10..12: 19 of 30 verifications died this way
+  # and six routes were re-nominated up to 6x, each burning a daily-cap
+  # slot and a paid verification to reach a conclusion we already had.
+  # 24h re-checks daily (the market can move) while killing the loop.
+  disproved_cooldown_hours: 24
 
 verification:
   max_candidates_per_run: 5   # per run; the daily cap (15) still rules the day

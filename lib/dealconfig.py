@@ -54,6 +54,7 @@ class DealConfig:
     route_cooldown_days: int
     cooldown_break_pct: float
     dedup_band_pct: float
+    disproved_cooldown_hours: int
     max_candidates_per_run: int
     live_tolerance_pct: float
     aspiration_weights: dict[str, float]
@@ -109,6 +110,8 @@ def load_deal_config(path: Path = DEFAULT_CONFIG) -> DealConfig:
             route_cooldown_days=int(guard["route_cooldown_days"]),
             cooldown_break_pct=float(guard["cooldown_break_pct"]),
             dedup_band_pct=float(guard["dedup_band_pct"]),
+            disproved_cooldown_hours=int(
+                guard.get("disproved_cooldown_hours", 24)),
             max_candidates_per_run=int(verify["max_candidates_per_run"]),
             live_tolerance_pct=float(verify["live_tolerance_pct"]),
             aspiration_weights={k: float(v)

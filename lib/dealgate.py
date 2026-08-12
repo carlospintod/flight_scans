@@ -34,7 +34,8 @@ from datetime import datetime, timedelta, timezone
 LOG = logging.getLogger(__name__)
 
 from .dealconfig import EXCLUDED_CLASS, UNCLASSIFIED, DealConfig
-from .deals_db import Observation, deals_created_today, last_deal_for_route
+from .deals_db import (Observation, active_disproved, deals_created_today,
+                       last_deal_for_route)
 
 # A class cross-section needs a few routes for a median to mean anything.
 MIN_CLASS_SIZE = 4
@@ -102,6 +103,23 @@ def gate_candidates(conn, obs: list[Observation], config: DealConfig,
     today_prefix = now.strftime("%Y-%m-%d")
 
     best = cheapest_per_route(obs)
+
+    # Itineraries the live market already disproved (D2 guardrail,
+    # 2026-08-12). The cache keeps serving a price verification has
+    # shown to be fiction; without this the same six routes are
+    # re-nominated 3x a day forever, each costing a daily-cap slot and a
+    # paid verification. Dropped BEFORE the cross-section so a phantom
+    # price cannot skew its own class median either.
+    stale = active_disproved(conn)
+    if stale:
+        before = len(best)
+        best = [o for o in best
+                if (o.origin, o.dest, o.depart_date, o.return_date or "")
+                not in stale]
+        if before != len(best):
+            LOG.info("gate: %d itinerary(ies) skipped — disproved live "
+                     "within the last %dh", before - len(best),
+                     config.disproved_cooldown_hours)
 
     # Unknown / deliberately-excluded destinations leave the funnel here.
     # They form no cross-section and become no candidate; the caller logs

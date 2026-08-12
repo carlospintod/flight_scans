@@ -788,6 +788,16 @@ def main() -> int:
                         conn, deal_id, status="expired",
                         verification_refs=json.dumps(refs),
                         confidence=json.dumps(confidence.as_dict()))
+                    # The cache said one thing, the live market another.
+                    # It will still say it on the next run three hours
+                    # from now, so stop asking for a day.
+                    if verify.live_price is not None:
+                        deals_db.record_disproved(
+                            conn, origin=cand.origin, dest=cand.dest,
+                            depart_date=cand.depart_date,
+                            return_date=cand.return_date,
+                            cached=cand.price, live=verify.live_price,
+                            hours=config.disproved_cooldown_hours)
                     print(f"verify: {cand.origin}->{cand.dest} died quietly "
                           f"({verify.note})")
                     continue

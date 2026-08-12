@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 DEALS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS routes_watchlist (
@@ -90,6 +90,30 @@ CREATE TABLE IF NOT EXISTS rejections (
     note     TEXT,
     ts       TEXT NOT NULL
 );
+
+-- Itineraries the LIVE market has already disproved. When verification
+-- finds the cached price was fiction (live above cached + tolerance),
+-- the cache will still be serving that same fiction on the next run —
+-- three times a day, every day. Measured 2026-08-10..12: 19 of 30
+-- verifications died this way, and six routes were re-nominated up to
+-- 6x each, burning a daily-cap slot and a paid verification every time.
+--
+-- Scoped to (route + exact dates) and short-lived on purpose: a route
+-- whose November fare was fiction may well have a real January one, and
+-- a 24h window still re-checks daily in case the market moves.
+CREATE TABLE IF NOT EXISTS disproved (
+    origin      TEXT NOT NULL,
+    dest        TEXT NOT NULL,
+    depart_date TEXT NOT NULL,
+    return_date TEXT NOT NULL DEFAULT '',   -- '' = one-way (NULLs break PKs)
+    cached      INTEGER NOT NULL,
+    live        INTEGER,
+    until_ts    TEXT NOT NULL,
+    ts          TEXT NOT NULL,
+    PRIMARY KEY (origin, dest, depart_date, return_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_disproved_until ON disproved (until_ts);
 
 CREATE TABLE IF NOT EXISTS send_log (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -232,6 +256,43 @@ def record_rejection(conn, deal_id: int, *, reason: str,
         "INSERT INTO rejections (deal_id, reason, note, ts) VALUES (?, ?, ?, ?)",
         (deal_id, reason, note, _now_iso()),
     )
+
+
+def record_disproved(conn, *, origin: str, dest: str, depart_date: str,
+                     return_date: str | None, cached: int, live: int | None,
+                     hours: int) -> None:
+    """Mark one itinerary as disproved by the live market for `hours`.
+
+    Upsert, not insert: a route re-checked after its window expires and
+    disproved again must extend, not collide on the primary key."""
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    until = (now + timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        """
+        INSERT INTO disproved
+            (origin, dest, depart_date, return_date, cached, live, until_ts, ts)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (origin, dest, depart_date, return_date) DO UPDATE SET
+            cached = excluded.cached, live = excluded.live,
+            until_ts = excluded.until_ts, ts = excluded.ts
+        """,
+        (origin.upper(), dest.upper(), depart_date, return_date or "",
+         int(cached), int(live) if live is not None else None,
+         until, now.strftime("%Y-%m-%dT%H:%M:%SZ")),
+    )
+
+
+def active_disproved(conn) -> set[tuple[str, str, str, str]]:
+    """The itineraries still inside their disproved window. Loaded once
+    per gate pass — the gate compares thousands of observations and must
+    not issue a query per row."""
+    rows = conn.execute(
+        "SELECT origin, dest, depart_date, return_date FROM disproved "
+        "WHERE until_ts > ?",
+        (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),),
+    ).fetchall()
+    return {(r["origin"], r["dest"], r["depart_date"], r["return_date"] or "")
+            for r in rows}
 
 
 def record_send(conn, *, channel: str, deal_id: int | None,
