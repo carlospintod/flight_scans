@@ -24,6 +24,18 @@
 name: deals
 
 on:
+  # PAUSED 2026-08-13 until SearchAPI Developer is purchased.
+  #
+  # Measured (docs/notes/viability-2026-08-13.md): the cached discovery
+  # layer these runs depend on is 76h stale at the median, missing half
+  # the long-haul routes Google sees, and wrong by +40% median when it
+  # does have data — so 71% of every verification euro was being spent
+  # disproving cache fiction. Running the cron on that costs money to
+  # learn nothing new.
+  #
+  # workflow_dispatch below still works for manual runs. The Nairobi
+  # tracker (scan.yml) is untouched. To resume, delete this comment and
+  # the `if: false` guard, restoring the schedule block.
   schedule:
     # 3x/day; odd minute dodges queue spikes. 06:41 (not 05:41) still
     # keeps the morning run clear of scan.yml (05:23 Mon/Wed/Sat, up to
@@ -48,6 +60,9 @@ permissions:
 
 jobs:
   deals:
+    # PAUSED: scheduled runs are skipped; manual dispatch still runs.
+    # Remove this line to resume (see the note under `on:` above).
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
