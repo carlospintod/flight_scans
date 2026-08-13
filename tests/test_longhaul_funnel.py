@@ -286,9 +286,22 @@ def _cand(**kw):
     return Candidate(**base)
 
 
-def test_the_floor_is_enforced_now():
-    """Carlos's call after the KUT alert: enforcement is ON."""
-    assert CONFIG.insights_floor is True
+def test_the_unreachable_floor_was_retired_for_the_history_gate():
+    """The typical-range floor was enforced 2026-08-09 after the KUT
+    alert and retired 2026-08-13 when it proved UNREACHABLE: it required
+    (typical_low - live) >= class floor, and on every long-haul route
+    sampled that demanded a price below the itinerary's own 60-day
+    minimum —
+
+        MAD->JFK  typical_low 350, floor 150 -> needs <=200, 60d min 326
+        BCN->JFK  typical_low 360, floor 150 -> needs <=210, 60d min 269
+        MAD->BKK  typical_low 540, floor 150 -> needs <=390, 60d min 540
+
+    which is why zero deals ever passed. The route's own price history
+    replaces it (lib/pricehistory.py)."""
+    assert CONFIG.insights_floor is False
+    assert CONFIG.history_gate is True
+    assert set(CONFIG.history_min_pct_below) == {"intra_eu", "medium", "long"}
 
 
 def test_kut_would_be_rejected_today():

@@ -807,9 +807,30 @@ def main() -> int:
                 deals_db.update_deal(conn, deal_id,
                                      **{"class": cand.deal_class})
 
-                # Route-specific floor: always MEASURED, enforced only
-                # when detector.insights_floor is on (a D2 semantic
-                # choice that belongs to Carlos).
+                # THE gate (2026-08-13): the live price against this
+                # itinerary's OWN 60-day history, which every
+                # verification already returns. Recorded whether or not
+                # it is enforced, so its effect stays measurable.
+                refs["history"] = verify.history
+                hv = verify.history or {}
+                if config.history_gate and hv.get("level") not in (None, "unknown"):
+                    if not hv.get("is_deal"):
+                        deals_db.update_deal(
+                            conn, deal_id, status="rejected",
+                            verification_refs=json.dumps(refs),
+                            confidence=json.dumps(confidence.as_dict()))
+                        deals_db.record_rejection(
+                            conn, deal_id, reason="too_common",
+                            note=hv.get("note", ""))
+                        print(f"verify: {cand.origin}->{cand.dest} rejected — "
+                              f"{hv.get('note', '')}")
+                        continue
+                    print(f"  histórico: {hv.get('note', '')}")
+
+                # Legacy typical-range floor. OFF by default since it
+                # proved unreachable (it demanded prices below the
+                # itinerary's own 60-day minimum); kept measured so the
+                # comparison with the history gate stays visible.
                 floor_ok, floor_note = dealpipe.insights_floor_check(
                     cand, verify, config)
                 refs["insights_floor"] = {"passed": floor_ok,

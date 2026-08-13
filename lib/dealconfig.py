@@ -45,6 +45,8 @@ class DealConfig:
     baseline_window_days: int
     mistake_pct_of_typical: float
     insights_floor: bool
+    history_gate: bool
+    history_min_pct_below: dict[str, float]
     explore_enabled: bool
     explore_provider: str
     explore_calls_per_day: int
@@ -100,6 +102,10 @@ def load_deal_config(path: Path = DEFAULT_CONFIG) -> DealConfig:
             baseline_window_days=int(det.get("baseline_window_days", 60)),
             mistake_pct_of_typical=float(det["mistake_pct_of_typical"]),
             insights_floor=bool(det.get("insights_floor", False)),
+            history_gate=bool(det.get("history_gate", True)),
+            history_min_pct_below={
+                k: float(v) for k, v in
+                (det.get("history_min_pct_below_median") or {}).items()},
             explore_enabled=bool(explore.get("enabled", False)),
             explore_provider=str(explore.get("provider", "serpapi")),
             explore_calls_per_day=int(explore.get("calls_per_day", 0)),

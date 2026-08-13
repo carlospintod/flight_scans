@@ -140,6 +140,9 @@ class VerifyResult:
     # for metro codes (NYC -> JFK): the alert must name the airport the
     # price was proven at, not the city Aviasales nominated.
     airport: str | None = None
+    # The verdict from the itinerary's OWN 60-day price history — the
+    # comparator the product's claim rests on (lib/pricehistory.py).
+    history: dict | None = None
 
 
 def parse_price_insights(raw: dict) -> dict | None:
@@ -190,6 +193,9 @@ def verify_candidate(serpapi, cand: Candidate,
     best = min(options, key=lambda o: o.price)
     ceiling = cand.price * (1 + config.live_tolerance_pct / 100.0)
     insights = parse_price_insights(resp.raw)
+    from .pricehistory import assess as _assess
+    history = _assess(best.price, resp.raw, route_class=cand.route_class,
+                      min_pct_below=config.history_min_pct_below).as_dict()
     if best.price > ceiling:
         note = (f"live {best.price} exceeds cached {cand.price} "
                 f"+{config.live_tolerance_pct:.0f}% tolerance")
@@ -200,9 +206,9 @@ def verify_candidate(serpapi, cand: Candidate,
             note += (f" (verified at {dest}; cached price was for the "
                      f"{cand.dest} metro area)")
         return VerifyResult(False, best.price, best.carriers, insights, note,
-                            airport=dest)
+                            airport=dest, history=history)
     return VerifyResult(True, best.price, best.carriers, insights,
-                        "live-confirmed", airport=dest)
+                        "live-confirmed", airport=dest, history=history)
 
 
 def verification_airport(dest: str, config: DealConfig) -> str:

@@ -94,7 +94,25 @@ detector:
   # them): the floor is unknowable, the deal may still publish, and
   # verification_refs.insights_floor records passed=null — so the size
   # of that loophole stays measurable.
-  insights_floor: true
+  insights_floor: false
+  # THE comparator (2026-08-13). Every verification already returns 61
+  # daily prices for the searched itinerary; this measures the live
+  # price against THAT, not against unrelated routes.
+  #
+  # It replaces insights_floor, which was unreachable: on every
+  # long-haul route sampled, (typical_low - floor) demanded a price
+  # below the trip's own 60-day MINIMUM. MAD->JFK needed <=200 when the
+  # 60-day low was 326; BCN->JFK needed <=210 when the low was 269.
+  # That is why nothing ever passed.
+  #
+  # A deal is a RECORD (below anything the trip has cost in the window)
+  # or a bottom-decile price ALSO this far below the route's own median.
+  # Percentages, not euros: medians here span 90 EUR to 900 EUR.
+  history_gate: true
+  history_min_pct_below_median:
+    intra_eu: 25
+    medium: 25
+    long: 20
 
 guardrails:               # non-negotiable #3 — day one
   daily_candidate_cap: 15
