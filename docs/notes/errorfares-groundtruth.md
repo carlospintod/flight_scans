@@ -7,19 +7,50 @@ events, of which **99 are true mistake fares from a Spanish airport**.
 
 Raw dataset: [`data/errorfares_spain.csv`](data/errorfares_spain.csv).
 
-## The number
+## The number — CORRECTED after verification
 
-**2021–2026, from MAD/BCN/VLC/ALC: 15 error fares → 2.5 per year.**
+> **A first pass gave 2.5/year. Verification destroyed that figure.**
+> Of 16 cases sent for independent second-source checking, **1 distinct
+> event survived**. The collected 99 are leads, not events.
 
-Carlos's target was "at least 2–3 CRAZY error fares a year, or it isn't
-worth the money". The fares exist at almost exactly that rate. The
-target is not fantasy — but note carefully what this number is and is
-not:
+| verdict | n |
+|---|---|
+| other outlets covered the same fare as a **SALE**, not an error | 8 |
+| **origin was not Spain** — MAD/BCN was the open-jaw *return*, real origin Prague/Dublin | 8 |
+| single-sourced, no corroboration found either way | 3 |
+| **confirmed** (MAD→Santiago, Jun 2022, verified twice) | 2 |
 
-> It is the rate at which Spain-origin error fares **occur and get
-> published by services that already find them**. Our own catch rate
-> would be some fraction of it, set by cadence. It is a ceiling, not a
-> forecast.
+Survival rate on the checked sample: **2/21 verdicts, 1 distinct
+event.** Extrapolated across the 99 collected leads that is roughly
+**0.5 genuine Spain-origin error fares per year**, not 2.5 — an order of
+magnitude below the "2–3 crazy error fares a year" bar Carlos set for
+the project being worth the money.
+
+Being fair to the data: "no corroboration found" is not disproof —
+error fares often get exactly one write-up. But the other two failure
+modes are real refutations, and both are systematic.
+
+### Bias 1 — "ERROR FARE" is partly a marketing label
+
+Eight cases were covered by independent outlets as ordinary sales.
+Fly4free headlined the same Peru business-class fare *"CRAZY HOT!!
+Business Class flights from Europe to Peru from only €487"*; Travel-Dealz
+covered the July 2026 Iberia open-jaw without treating it as a mistake.
+Only Secret Flying labelled them errors. **Competitor mistake-fare
+counts are therefore inflated, and so was our estimate.**
+
+### Bias 2 — open-jaw fares are not Spain-origin fares
+
+Eight cases had Madrid or Barcelona in the *return* leg. The Secret
+Flying post for one reads `DEPART: Prague, Czech Republic` /
+`RETURN: Madrid/Barcelona, Spain`. The MAD→New York business €705 was
+a **Dublin** departure.
+
+This one matters operationally, not just statistically: a
+Prague→USA→Madrid open jaw is invisible to a system that searches
+MAD→anywhere. A meaningful slice of "Spanish" error fares are European
+fares that merely *end* in Spain, and **no amount of API budget makes
+our current search shape find them.**
 
 ## The origin choice is validated
 
@@ -105,10 +136,11 @@ delta will separate the hypotheses cleanly.
 
 ## What it means for the decision
 
-The opportunity is real but thin: **~2.5 catchable events a year across
-the four origins, 70% of them to the Americas, a third in premium
-cabins.** At €40/month for SearchAPI that is roughly €190 per error
-fare found — if we catch all of them, which we will not.
+The opportunity is thinner than the first pass suggested: **~0.5
+verifiable events a year**, not 2.5. At €40/month that is ~€960 per
+error fare found, and only if we catch every one — which we will not,
+given they last hours and a meaningful share are open-jaws our search
+shape cannot see.
 
 That does not make the business unviable, but it does relocate where the
 value sits. A membership cannot be sold on 2.5 error fares a year; it is
