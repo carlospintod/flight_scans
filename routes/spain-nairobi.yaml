@@ -6,8 +6,8 @@ route:
   destinations:
   - NBO
 search_window:
-  earliest_departure: '2026-09-12'
-  latest_return: '2027-01-15'
+  earliest_departure: '2026-12-27'
+  latest_return: '2027-03-31'
 stay_preferences:
   min_days: 60
   max_days: 90

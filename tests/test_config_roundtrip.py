@@ -85,6 +85,6 @@ def test_route_to_yaml_dict_shape():
     src = load_route(REPO / "routes" / "spain-nairobi.yaml")
     d = route_to_yaml_dict(src)
     assert d["route"]["name"] == "spain-nairobi"
-    assert d["search_window"]["earliest_departure"] == "2026-09-12"
+    assert d["search_window"]["earliest_departure"] == "2026-12-27"
     assert d["stay_preferences"]["max_days"] == 90
     assert "followup" in d  # spain-nairobi has followup thresholds

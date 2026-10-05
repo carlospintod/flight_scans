@@ -31,8 +31,8 @@ def test_loads_first_run_yaml():
     assert cfg.alerts.baseline_window_days == 30
     assert cfg.alerts.min_observations == 4
     # The REAL trip window: mid-Sep departures, returns through mid-Jan.
-    assert cfg.search_window.earliest_departure == date(2026, 9, 12)
-    assert cfg.search_window.latest_return == date(2027, 1, 15)
+    assert cfg.search_window.earliest_departure == date(2026, 12, 27)
+    assert cfg.search_window.latest_return == date(2027, 3, 31)
 
 
 def test_legacy_oversized_window_keys_no_longer_rejected(tmp_path):
