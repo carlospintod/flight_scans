@@ -1,0 +1,55 @@
+# Owner edits without logging in: makes the committed routes/<route>.yaml
+# the live config in Turso, and optionally pauses one-way searches to a
+# destination. Manual only (Actions tab -> apply-route -> Run workflow).
+#
+# Secrets: TURSO_DATABASE_URL, TURSO_AUTH_TOKEN (shared with scan.yml).
+
+name: apply-route
+
+on:
+  workflow_dispatch:
+    inputs:
+      route:
+        description: "Route id (routes/<id>.yaml)"
+        default: "spain-nairobi"
+        required: true
+      pause_one_way_to:
+        description: "Pause active one-way searches to this airport (blank = none)"
+        default: "NBO"
+        required: false
+      dry_run:
+        description: "Only print what would change"
+        type: boolean
+        default: false
+
+concurrency:
+  group: scan          # never write config mid-scan
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Apply route
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          ROUTE: ${{ inputs.route }}
+          PAUSE_TO: ${{ inputs.pause_one_way_to }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=(--route "$ROUTE")
+          [ -n "$PAUSE_TO" ] && args+=(--pause-one-way-to "$PAUSE_TO")
+          [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
+          python scripts/apply_route.py "${args[@]}"
