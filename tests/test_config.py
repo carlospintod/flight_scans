@@ -16,7 +16,7 @@ def test_loads_first_run_yaml():
     assert cfg.destinations == ("NBO",)
     assert cfg.currency == "EUR"
     assert cfg.stay.min_days == 30
-    assert cfg.stay.max_days == 90
+    assert cfg.stay.max_days == 60
     # Window-size keys are legacy; the real-trip YAML omits them and the
     # loader falls back to the harmless defaults.
     assert cfg.sweep.cadence_days == 3

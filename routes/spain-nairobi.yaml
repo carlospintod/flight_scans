@@ -10,7 +10,7 @@ search_window:
   latest_return: '2027-03-31'
 stay_preferences:
   min_days: 30
-  max_days: 90
+  max_days: 60
 currency: EUR
 sweep:
   cadence_days: 3
