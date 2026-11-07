@@ -77,6 +77,7 @@ def predict_upper_bounds(
     latest_return: date,
     min_stay_days: int,
     trip_type: str = "round_trip",
+    latest_departure: date | None = None,
     kiwi_band_days: int = 21,
     gf_cap: int = 25,
     serpapi_discovery_cap: int = SERPAPI_DISCOVERY_CAP,
@@ -99,6 +100,8 @@ def predict_upper_bounds(
     # One-way departures span the whole window (no return leg to fit).
     latest_dep = latest_return if one_way else (
         latest_return - timedelta(days=min_stay_days))
+    if latest_departure is not None and latest_departure < latest_dep:
+        latest_dep = latest_departure
     window_days = max(0, (latest_dep - earliest_departure).days + 1)
     bands_per_pair = -(-window_days // kiwi_band_days) if window_days else 0
     pairs = n_origins * n_destinations
@@ -236,8 +239,7 @@ def _discovery_grid(route: RouteConfig, *, today: date,
     min_stay = route.stay.min_days
     max_stay = route.stay.max_days
     earliest = max(sw.earliest_departure, today)
-    latest_dep = sw.latest_return if one_way else (
-        sw.latest_return - _td(days=min_stay))
+    latest_dep = sw.last_departure(0 if one_way else min_stay)
     pairs = [(o, d) for o in route.origins for d in route.destinations]
     if not pairs or max_points <= 0 or latest_dep < earliest:
         return []
@@ -411,7 +413,7 @@ def build_run_plan(
         sw = route.search_window
         band_days = 21
         earliest = max(sw.earliest_departure, today)
-        latest_dep = sw.latest_return - timedelta(days=route.stay.min_days)
+        latest_dep = sw.last_departure(route.stay.min_days)
         for origin in route.origins:
             for destination in route.destinations:
                 start = earliest
@@ -467,7 +469,7 @@ def build_run_plan(
             sw = route.search_window
             m = max(sw.earliest_departure, today)
             m = date(m.year, m.month, 1)
-            while m <= sw.latest_return:
+            while m <= sw.last_departure(0):
                 aviasales_months.append(m.strftime("%Y-%m"))
                 m = (date(m.year + 1, 1, 1) if m.month == 12
                      else date(m.year, m.month + 1, 1))

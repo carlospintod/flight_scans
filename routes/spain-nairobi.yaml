@@ -6,11 +6,12 @@ route:
   destinations:
   - NBO
 search_window:
-  earliest_departure: '2026-12-27'
-  latest_return: '2027-03-31'
+  earliest_departure: '2027-01-15'
+  latest_return: '2027-05-30'
+  latest_departure: '2027-03-01'
 stay_preferences:
-  min_days: 30
-  max_days: 60
+  min_days: 60
+  max_days: 90
 currency: EUR
 sweep:
   cadence_days: 3

@@ -22,6 +22,8 @@ export const routeConfigSchema = z
     search_window: z.object({
       earliest_departure: isoDate,
       latest_return: isoDate,
+      // Optional departure cap (lib/config SearchWindow.latest_departure).
+      latest_departure: isoDate.nullish(),
     }),
     stay_preferences: z.object({
       min_days: z.number().int().positive(),
@@ -50,6 +52,13 @@ export const routeConfigSchema = z
   .refine(
     (c) => c.search_window.latest_return > c.search_window.earliest_departure,
     { message: "latest_return must be after earliest_departure" },
+  )
+  .refine(
+    (c) =>
+      !c.search_window.latest_departure ||
+      (c.search_window.latest_departure >= c.search_window.earliest_departure &&
+        c.search_window.latest_departure <= c.search_window.latest_return),
+    { message: "latest departure must be between earliest departure and latest return" },
   )
   .refine((c) => c.stay_preferences.max_days >= c.stay_preferences.min_days, {
     message: "max stay must be >= min stay",

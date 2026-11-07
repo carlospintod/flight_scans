@@ -15,8 +15,8 @@ def test_loads_first_run_yaml():
     assert cfg.origins == ("MAD", "BCN")
     assert cfg.destinations == ("NBO",)
     assert cfg.currency == "EUR"
-    assert cfg.stay.min_days == 30
-    assert cfg.stay.max_days == 60
+    assert cfg.stay.min_days == 60
+    assert cfg.stay.max_days == 90
     # Window-size keys are legacy; the real-trip YAML omits them and the
     # loader falls back to the harmless defaults.
     assert cfg.sweep.cadence_days == 3
@@ -30,9 +30,12 @@ def test_loads_first_run_yaml():
     assert cfg.alerts.drop_threshold_pct == 15
     assert cfg.alerts.baseline_window_days == 30
     assert cfg.alerts.min_observations == 4
-    # The REAL trip window: mid-Sep departures, returns through mid-Jan.
-    assert cfg.search_window.earliest_departure == date(2026, 12, 27)
-    assert cfg.search_window.latest_return == date(2027, 3, 31)
+    # The REAL trip window: depart 15 Jan - 1 Mar 2027, 60-90 day stay
+    # (latest_return = 1 Mar + 90d).
+    assert cfg.search_window.earliest_departure == date(2027, 1, 15)
+    assert cfg.search_window.latest_departure == date(2027, 3, 1)
+    assert cfg.search_window.latest_return == date(2027, 5, 30)
+    assert cfg.search_window.last_departure(cfg.stay.min_days) == date(2027, 3, 1)
 
 
 def test_legacy_oversized_window_keys_no_longer_rejected(tmp_path):

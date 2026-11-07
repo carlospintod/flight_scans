@@ -255,6 +255,57 @@
     "serpapi": 7,
     "aviasales": 5
    }
+  },
+  {
+   "input": {
+    "nOrigins": 2,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2027-01-26",
+    "minStayDays": 60,
+    "tripType": "round_trip",
+    "latestDeparture": "2026-10-27"
+   },
+   "expected": {
+    "kiwi": 6,
+    "googleflights": 25,
+    "serpapi": 7,
+    "aviasales": 2
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 1,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2026-12-11",
+    "minStayDays": 14,
+    "tripType": "round_trip",
+    "latestDeparture": "2026-12-01"
+   },
+   "expected": {
+    "kiwi": 4,
+    "googleflights": 25,
+    "serpapi": 7,
+    "aviasales": 1
+   }
+  },
+  {
+   "input": {
+    "nOrigins": 1,
+    "nDestinations": 1,
+    "earliestDeparture": "2026-09-12",
+    "latestReturn": "2027-01-10",
+    "minStayDays": 0,
+    "tripType": "one_way",
+    "latestDeparture": "2026-11-01"
+   },
+   "expected": {
+    "kiwi": 3,
+    "googleflights": 25,
+    "serpapi": 7,
+    "aviasales": 3
+   }
   }
  ]
 }

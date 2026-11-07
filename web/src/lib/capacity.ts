@@ -59,6 +59,7 @@ export async function capacityView(): Promise<CapacityView> {
         nDestinations: cfg.route.destinations.length,
         earliestDeparture: cfg.search_window.earliest_departure,
         latestReturn: cfg.search_window.latest_return,
+        latestDeparture: cfg.search_window.latest_departure ?? null,
         minStayDays: cfg.stay_preferences?.min_days ?? 1,
         tripType: cfg.trip_type === "one_way" ? "one_way" : "round_trip",
       }).serpapi;

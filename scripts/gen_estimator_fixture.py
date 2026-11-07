@@ -42,21 +42,33 @@ def main() -> int:
         # pin the TS month arithmetic.
         (1, 1, 10, 0, "one_way"), (1, 1, 120, 0, "one_way"),
     ]
-    for n_o, n_d, span, min_stay, trip in grid:
+    # Optional latest_departure cap (days after base): binding, slack
+    # (cap later than latest_return - min_stay) and one-way month cut.
+    capped = [
+        (2, 1, 136, 60, "round_trip", 45), (1, 1, 90, 14, "round_trip", 80),
+        (1, 1, 120, 0, "one_way", 50),
+    ]
+    rows = [g + (None,) for g in grid] + capped
+    for n_o, n_d, span, min_stay, trip, cap in rows:
         earliest = base
         latest_return = base + timedelta(days=span)
+        latest_departure = None if cap is None else base + timedelta(days=cap)
+        inp = {
+            "nOrigins": n_o, "nDestinations": n_d,
+            "earliestDeparture": earliest.isoformat(),
+            "latestReturn": latest_return.isoformat(),
+            "minStayDays": min_stay,
+            "tripType": trip,
+        }
+        if latest_departure is not None:
+            inp["latestDeparture"] = latest_departure.isoformat()
         cases.append({
-            "input": {
-                "nOrigins": n_o, "nDestinations": n_d,
-                "earliestDeparture": earliest.isoformat(),
-                "latestReturn": latest_return.isoformat(),
-                "minStayDays": min_stay,
-                "tripType": trip,
-            },
+            "input": inp,
             "expected": predict_upper_bounds(
                 n_origins=n_o, n_destinations=n_d,
                 earliest_departure=earliest, latest_return=latest_return,
                 min_stay_days=min_stay, trip_type=trip,
+                latest_departure=latest_departure,
             ),
         })
     print(json.dumps({"cases": cases}, indent=1))

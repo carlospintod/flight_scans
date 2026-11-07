@@ -12,6 +12,7 @@ export interface PredictInput {
   latestReturn: string;
   minStayDays: number;
   tripType?: "round_trip" | "one_way";
+  latestDeparture?: string | null; // optional departure cap, YYYY-MM-DD
 }
 
 export interface UpperBounds {
@@ -33,9 +34,13 @@ export function predictUpperBounds(p: PredictInput): UpperBounds {
   const oneWay = p.tripType === "one_way";
   const earliest = Date.parse(p.earliestDeparture + "T00:00:00Z");
   const latestReturn = Date.parse(p.latestReturn + "T00:00:00Z");
-  const latestDep = oneWay
+  let latestDep = oneWay
     ? latestReturn
     : latestReturn - p.minStayDays * 86_400_000;
+  if (p.latestDeparture) {
+    const cap = Date.parse(p.latestDeparture + "T00:00:00Z");
+    if (cap < latestDep) latestDep = cap;
+  }
   const windowDays = Math.max(
     0, Math.round((latestDep - earliest) / 86_400_000) + 1);
   const bandsPerPair =

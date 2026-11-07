@@ -161,9 +161,9 @@ def evaluate(
     sw = route.search_window
     one_way = route.is_one_way
     # One-way: latest departure is the window end itself (no return leg
-    # to fit); round-trip: latest_return - min_stay.
-    latest_dep_allowed = (sw.latest_return if one_way
-                          else sw.latest_return - timedelta(days=min_stay))
+    # to fit); round-trip: latest_return - min_stay. Both capped by
+    # latest_departure when set.
+    latest_dep_allowed = sw.last_departure(0 if one_way else min_stay)
 
     new_alerts: list[AlertRow] = []
     fired_keys: set[tuple] = set()  # itinerary+source fired in THIS pass

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +25,19 @@ class ConfigError(ValueError):
 class SearchWindow:
     earliest_departure: date
     latest_return: date
+    # Optional hard cap on the departure date. Without it the last
+    # departure is implied by latest_return - min_stay, which can't say
+    # "depart by 1 Mar, stay up to 90 days". None = no cap (configs that
+    # omit it serialize byte-identically to before).
+    latest_departure: date | None = None
+
+    def last_departure(self, min_stay: int) -> date:
+        """Latest departure that still fits `min_stay` days before
+        latest_return, capped by latest_departure. One-way passes 0."""
+        d = self.latest_return - timedelta(days=min_stay)
+        if self.latest_departure is not None and self.latest_departure < d:
+            d = self.latest_departure
+        return d
 
 
 @dataclass(frozen=True)
@@ -163,6 +176,14 @@ def _from_dict(raw: dict[str, Any]) -> RouteConfig:
     latest = _require_date(sw_raw, "latest_return", path="search_window.latest_return")
     if latest <= earliest:
         raise ConfigError("search_window.latest_return must be after earliest_departure")
+    latest_dep_cap = None
+    if sw_raw.get("latest_departure") not in (None, ""):
+        latest_dep_cap = _require_date(sw_raw, "latest_departure",
+                                       path="search_window.latest_departure")
+        if latest_dep_cap < earliest:
+            raise ConfigError("search_window.latest_departure must be on or after earliest_departure")
+        if latest_dep_cap > latest:
+            raise ConfigError("search_window.latest_departure must be on or before latest_return")
 
     if trip_type == "one_way":
         # One-way has no stay dimension; the field is synthesized as (0,0)
@@ -222,7 +243,8 @@ def _from_dict(raw: dict[str, Any]) -> RouteConfig:
         name=name,
         origins=origins,
         destinations=destinations,
-        search_window=SearchWindow(earliest_departure=earliest, latest_return=latest),
+        search_window=SearchWindow(earliest_departure=earliest, latest_return=latest,
+                                   latest_departure=latest_dep_cap),
         stay=StayPreferences(min_days=min_days, max_days=max_days),
         currency=currency,
         sweep=SweepParams(
@@ -297,6 +319,10 @@ def route_to_yaml_dict(route: RouteConfig) -> dict[str, Any]:
     # — no config ping-pong (red-team B2).
     if route.is_one_way:
         out["trip_type"] = "one_way"
+    # Emitted only when set, for the same byte-identity reason.
+    if route.search_window.latest_departure is not None:
+        out["search_window"]["latest_departure"] = (
+            route.search_window.latest_departure.isoformat())
     if followup:
         out["followup"] = followup
     return out

@@ -128,8 +128,9 @@ def plan_windows(
             f"{skipped} days before today excluded (can't book the past)"
         )
     horizon = today + timedelta(days=GOOGLE_HORIZON_DAYS)
-    # A departure needs at least min_stay days before latest_return.
-    latest_dep = sw.latest_return - timedelta(days=min_stay)
+    # A departure needs at least min_stay days before latest_return
+    # (and must respect the optional latest_departure cap).
+    latest_dep = sw.last_departure(min_stay)
     if latest_dep > horizon:
         dropped_days = (latest_dep - horizon).days
         latest_dep = horizon

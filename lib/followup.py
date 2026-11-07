@@ -87,9 +87,10 @@ def select_candidates(conn, route: RouteConfig, *, today: date | None = None) ->
     watch_below = route.followup.watch_below_price
     drop_above = route.followup.drop_above_price
     price_mode = watch_below is not None and drop_above is not None
-    # Latest feasible departure = latest_return - min_stay. Anything later
-    # can't complete even the shortest acceptable trip inside the window.
-    latest_dep = sw.latest_return - timedelta(days=min_stay)
+    # Latest feasible departure = latest_return - min_stay (capped by
+    # latest_departure). Anything later can't complete even the shortest
+    # acceptable trip inside the window, or is past the owner's cap.
+    latest_dep = sw.last_departure(min_stay)
 
     # Price mode only needs each itinerary's all-time minimum, which we
     # can fetch for EVERY itinerary in one GROUP BY — instead of one

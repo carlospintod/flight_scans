@@ -74,6 +74,20 @@ export function ConfigEditor({ initial }: { initial: RouteConfigJson }) {
           />
         </div>
         <div>
+          <label className={label}>latest departure (optional)</label>
+          <input
+            type="date"
+            className={input}
+            value={cfg.search_window.latest_departure ?? ""}
+            onChange={(e) =>
+              patch((d) => {
+                if (e.target.value) d.search_window.latest_departure = e.target.value;
+                else delete d.search_window.latest_departure;
+              })
+            }
+          />
+        </div>
+        <div>
           <label className={label}>min stay (days)</label>
           <input
             type="number"
