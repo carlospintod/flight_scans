@@ -30,9 +30,9 @@ def test_loads_first_run_yaml():
     assert cfg.alerts.drop_threshold_pct == 15
     assert cfg.alerts.baseline_window_days == 30
     assert cfg.alerts.min_observations == 4
-    # The REAL trip window: depart 15 Jan - 1 Mar 2027, 60-90 day stay
+    # The REAL trip window: depart 27 Dec 2026 - 1 Mar 2027, 60-90 day stay
     # (latest_return = 1 Mar + 90d).
-    assert cfg.search_window.earliest_departure == date(2027, 1, 15)
+    assert cfg.search_window.earliest_departure == date(2026, 12, 27)
     assert cfg.search_window.latest_departure == date(2027, 3, 1)
     assert cfg.search_window.latest_return == date(2027, 5, 30)
     assert cfg.search_window.last_departure(cfg.stay.min_days) == date(2027, 3, 1)
