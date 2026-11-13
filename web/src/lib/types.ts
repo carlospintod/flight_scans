@@ -47,7 +47,7 @@ export interface ScanRun {
 
 export interface SourceHealthCard {
   source: string;
-  verdict: string; // live|degraded|quota_low|dark|payment_walled|auth_failed|idle|unknown
+  verdict: string; // live|degraded|quota_low|dark|payment_walled|auth_failed|idle|unknown|disabled
   detail: string;
   attempts: number;
   ok: number;

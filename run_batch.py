@@ -601,7 +601,12 @@ def main() -> int:
         # outage must not re-alarm every scan). This is the layer whose
         # absence let Kiwi 402 for days unnoticed (2026-07-11).
         try:
-            current_health = health.assess_sources(conn, ledger=ledger)
+            # opted_in=available: a registry-disabled source (kiwi, retired
+            # 2026-07-13) is judged only when this run actually built a
+            # client for it. Otherwise its months-old 402 floor reads as a
+            # permanent alarm on /ops (2026-11-13).
+            current_health = health.assess_sources(conn, ledger=ledger,
+                                                   opted_in=available)
             summary["source_health"] = {
                 s: {"verdict": h.verdict, "detail": h.detail,
                     "attempts": h.attempts, "ok": h.ok, "stored": h.stored,

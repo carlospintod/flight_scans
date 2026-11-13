@@ -11,6 +11,15 @@ per-source stored counts in `scan_runs.summary_json`) and classifies
 each source. `run_batch` folds the result into the batch summary; the
 notifier turns state TRANSITIONS into pushes; `/ops` renders it.
 
+Context (2026-11-13): the opposite failure. Kiwi was retired 2026-07-13
+(registry `enabled=False`, dropped from every --sources default), but its
+pool row and its last anchor — the July 402 floor — stay in the ledger
+(`seed_pools` only ever inserts). Rule 1 kept reading that floor as a live
+payment wall, so /ops showed a permanent red alarm for a source nothing
+calls, which teaches the operator to ignore the alarm tile. A source the
+registry disables is now `disabled` — never an alarm — unless this run
+opted it in or it was really called in the lookback window.
+
 Pure reads. No writes, no new schema.
 """
 
@@ -18,9 +27,11 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from .quota import QuotaLedger
+from .sources import spec as _registry_spec
 
 LOG = logging.getLogger(__name__)
 
@@ -35,6 +46,7 @@ VERDICTS = (
     "idle",            # enabled, simply not exercised recently (not alarming)
     "live",            # recent success with data
     "unknown",         # no pool, no recent activity
+    "disabled",        # off in lib/sources.py and not called (never an alarm)
 )
 _SEVERITY = {v: i for i, v in enumerate(VERDICTS)}
 # Verdicts that warrant a push when a source ENTERS them.
@@ -95,11 +107,28 @@ def _stored_by_source(conn, run_ids: list[str]) -> dict[str, int]:
     return out
 
 
+def _registry_enabled(source: str) -> bool:
+    """True when lib/sources.py lists `source` as enabled. A source the
+    registry no longer lists at all counts as disabled too: its pool row
+    is a leftover, because `seed_pools` never deletes."""
+    s = _registry_spec(source)
+    return s is not None and s.enabled
+
+
 def assess_sources(conn, *, lookback_runs: int = 5,
-                   ledger: QuotaLedger | None = None
+                   ledger: QuotaLedger | None = None,
+                   opted_in: Iterable[str] = ()
                    ) -> dict[str, SourceHealth]:
-    """Classify every configured/recently-active source. Pure reads."""
+    """Classify every configured/recently-active source. Pure reads.
+
+    `opted_in`: the sources this run built clients for (run_batch passes
+    its available --sources). A source the registry disables reads
+    `disabled` unless it is opted in here or was really called in the
+    lookback window. If either holds, it is judged like any other source,
+    so a deliberate opt-in (kiwi's documented way back) that hits the
+    402 wall still pages."""
     ledger = ledger or QuotaLedger(conn)
+    opted = set(opted_in)
     run_ids = _recent_run_ids(conn, lookback_runs)
     stored_by_source = _stored_by_source(conn, run_ids)
 
@@ -145,7 +174,8 @@ def assess_sources(conn, *, lookback_runs: int = 5,
         verdict, detail = _classify(
             origin=origin, mix=mix, attempts=attempts, ok=ok, empty=empty,
             fails=fails, stored=stored, avail=avail,
-            per_search_cap=per_search_cap)
+            per_search_cap=per_search_cap,
+            disabled=not _registry_enabled(source) and source not in opted)
 
         out[source] = SourceHealth(
             source=source, verdict=verdict, attempts=attempts, ok=ok,
@@ -155,7 +185,18 @@ def assess_sources(conn, *, lookback_runs: int = 5,
 
 
 def _classify(*, origin, mix, attempts, ok, empty, fails, stored, avail,
-              per_search_cap) -> tuple[str, str]:
+              per_search_cap, disabled=False) -> tuple[str, str]:
+    # 0. Disabled in the registry and not called this window: its pool
+    #    row and last anchor are leftovers, so rules 1 and 4 would report
+    #    a months-old 402 floor or a drained pool as a current outage
+    #    (kiwi, 2026-11-13). This rule must run first. Real calls in the
+    #    window fall through to the normal rules. An ENABLED source is
+    #    never exempt for being uncalled: the planner deliberately stops
+    #    calling a floored pool, so "not called" is exactly what a real
+    #    payment wall looks like (2026-07-11).
+    if disabled and attempts == 0:
+        return "disabled", ("disabled in lib/sources.py and not called "
+                            "recently — old failures are not an alarm")
     # 1. A payment/subscription wall is the most urgent — a human must
     #    fix billing. Signalled by the 402 floor OR a raw 402 this window.
     if origin == "quota_402_floor" or mix.get("402"):
