@@ -138,7 +138,8 @@ export function StatusTiles({
         ? alarms.map((h) => `${sourceLabel(h.source)} (${h.verdict.replace(/_/g, " ")})`).join(", ")
         : warns.length
           ? `none down · ${warns.length} degraded or low: ${warns.map((h) => sourceLabel(h.source)).join(", ")}`
-          : `all ${health.length} answering`;
+          // Not "all N answering": idle and disabled sources make no calls.
+          : "none down or low";
 
   // 4. The scarcest recently-checked budget.
   const recent = quotas
