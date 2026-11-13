@@ -84,7 +84,8 @@ export function LandingHero() {
           </div>
         </div>
         <span className="aside--s aside reveal mt-2 block">
-          one scan, replayed. the radar below is my own hunt, live.
+          one scan from 17 Jul 2026, replayed. the radar below is my own
+          hunt, live.
           invite-only to run your own.
         </span>
       </div>

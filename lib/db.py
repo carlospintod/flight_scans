@@ -789,12 +789,44 @@ def calendar_history_for_itinerary(
 
 
 def recent_alerts(
-    conn: sqlite3.Connection, route_id: str, *, limit: int = 20
+    conn: sqlite3.Connection,
+    route_id: str,
+    *,
+    limit: int = 20,
+    earliest_departure: str | None = None,
+    latest_departure: str | None = None,
+    latest_return: str | None = None,
+    min_stay: int | None = None,
+    max_stay: int | None = None,
 ) -> list[sqlite3.Row]:
-    return list(conn.execute(
-        "SELECT * FROM alerts WHERE route_id = ? ORDER BY fired_at DESC LIMIT ?",
-        (route_id, limit),
-    ))
+    """Newest alerts for a route, optionally clamped to a search window.
+
+    The window kwargs (YYYY-MM-DD dates, stay in days) let a results page
+    show only alerts for trips the CURRENT window still covers: after the
+    window moves, alerts for the old dates would otherwise contradict the
+    headline price. Stay is derived from the dates (the alerts table has
+    no stay column); one-way alerts (return_date = '') never match a stay
+    bound. The web mirror is web/src/lib/queries.ts getRecentAlerts.
+    """
+    sql = "SELECT * FROM alerts WHERE route_id = ?"
+    params: list = [route_id]
+    if earliest_departure is not None:
+        sql += " AND departure_date >= ?"
+        params.append(earliest_departure)
+    if latest_departure is not None:
+        sql += " AND departure_date <= ?"
+        params.append(latest_departure)
+    if latest_return is not None:
+        sql += " AND return_date <= ?"
+        params.append(latest_return)
+    if min_stay is not None and max_stay is not None:
+        sql += (" AND return_date != ''"
+                " AND CAST(julianday(return_date) - julianday(departure_date)"
+                " AS INTEGER) BETWEEN ? AND ?")
+        params.extend([min_stay, max_stay])
+    sql += " ORDER BY fired_at DESC, price ASC LIMIT ?"
+    params.append(limit)
+    return list(conn.execute(sql, params))
 
 
 def cheapest_recent_itineraries(

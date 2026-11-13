@@ -6,6 +6,9 @@ export interface RouteWindow {
   destinations: string[];
   earliestDeparture: string; // YYYY-MM-DD
   latestReturn: string;      // for one-way this is the latest DEPARTURE
+  /** Optional departure cap (search_window.latest_departure); null = none.
+   *  Use lastDeparture() in lib/window.ts rather than reading this raw. */
+  latestDeparture: string | null;
   minStay: number;
   maxStay: number;
   currency: string;

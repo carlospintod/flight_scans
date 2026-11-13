@@ -9,6 +9,10 @@ import {
 } from "@/lib/format";
 import type { Itinerary } from "@/lib/types";
 
+/** Said on any row older than STALE_DAYS: dimming alone didn't tell a
+ *  reader WHY the row looked different. */
+const STALE_TAG = "may be gone";
+
 /** Cheapest itinerary per departure day (the collapse mirrors
  *  ui/_common.top_alternatives). Table on >=sm, card rows below. */
 export function AlternativesTable({ rows }: { rows: Itinerary[] }) {
@@ -81,6 +85,9 @@ export function AlternativesTable({ rows }: { rows: Itinerary[] }) {
                   }`}
                 >
                   {seenLabel(r.snapshotAt).replace("seen ", "")}
+                  {isStale(r.snapshotAt) && (
+                    <span className="block text-[11px]">{STALE_TAG}</span>
+                  )}
                 </td>
                 <td className="py-2">
                   <a
@@ -129,6 +136,7 @@ export function AlternativesTable({ rows }: { rows: Itinerary[] }) {
             <div className="mt-1.5 flex items-center justify-between text-[11px]">
               <span className={isStale(r.snapshotAt) ? "text-amber" : "text-hint"}>
                 {seenLabel(r.snapshotAt)}
+                {isStale(r.snapshotAt) && ` · ${STALE_TAG}`}
               </span>
               <a
                 href={verifyUrl(r)}

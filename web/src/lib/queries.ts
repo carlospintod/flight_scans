@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { lastDeparture } from "./window";
 import type {
   Alert,
   CarrierCount,
@@ -25,7 +26,7 @@ const DEFAULT_ROUTE = "spain-nairobi";
  *  3x/week cadence the board is normally 0–2 days old; this only bites
  *  when scanning has genuinely lapsed, which the stale badge already
  *  flags. */
-const FRESH_WINDOW_DAYS = 21;
+export const FRESH_WINDOW_DAYS = 21;
 
 function freshCutoff(): string {
   return new Date(Date.now() - FRESH_WINDOW_DAYS * 86_400_000)
@@ -33,12 +34,15 @@ function freshCutoff(): string {
     .replace(/\.\d{3}Z$/, "Z");
 }
 
-/** Display ceiling for the "cheapest" views (table, heatmap, curve,
- *  carrier mix). Fares above this are irrelevant to the sub-€500 mission
- *  and skew the heatmap colour scale / bury the signal, so they're hidden
- *  from discovery. History and the per-itinerary drill-down keep every
- *  price. Trusted integer constant — inlined into SQL (no user input). */
-const MAX_DISPLAY_PRICE = 600;
+/** Display ceiling for the "cheapest" views (table, curve, carrier mix).
+ *  Fares above this are irrelevant to the sub-€500 mission and bury the
+ *  signal, so those views hide them. The heatmap is the exception: it
+ *  draws every priced pair (hiding them made the grid look empty) and
+ *  clamps its COLOUR scale at this ceiling instead, painting pricier
+ *  cells one neutral colour. History and the per-itinerary drill-down
+ *  keep every price. Trusted integer constant — inlined into SQL (no
+ *  user input). */
+export const MAX_DISPLAY_PRICE = 600;
 
 /** Effective route config — routes.config_json (canonical shape written
  *  by lib/config.RouteConfig.to_json). Mirrors route_store precedence:
@@ -61,6 +65,7 @@ export async function getRouteWindow(
     destinations: cfg.route.destinations,
     earliestDeparture: cfg.search_window.earliest_departure,
     latestReturn: cfg.search_window.latest_return,
+    latestDeparture: cfg.search_window.latest_departure ?? null,
     minStay: cfg.stay_preferences?.min_days ?? 0,
     maxStay: cfg.stay_preferences?.max_days ?? 0,
     currency: cfg.currency,
@@ -228,18 +233,33 @@ export async function getTopAlternatives(
   return out;
 }
 
-/** Mirrors lib/db.recent_alerts (ORDER BY fired_at DESC LIMIT ?). */
+/** Mirrors lib/db.recent_alerts with the window clamp: only alerts for
+ *  trips the CURRENT window still covers (departure range, back by
+ *  latestReturn, stay within bounds; one-way: departure range only).
+ *  Alerts for an older window would contradict the headline price. The
+ *  clamp is in SQL so LIMIT applies after it. */
 export async function getRecentAlerts(
-  routeId: string = DEFAULT_ROUTE,
+  w: RouteWindow,
   limit = 12,
 ): Promise<Alert[]> {
+  const oneWay = w.tripType === "one_way";
+  const stayClause = oneWay
+    ? ""
+    : `AND return_date <= ? AND return_date != ''
+       AND CAST(julianday(return_date) - julianday(departure_date)
+                AS INTEGER) BETWEEN ? AND ?`;
   const rs = await db().execute({
     sql: `SELECT fired_at, alert_type, source, origin, destination,
                  departure_date, return_date, price, currency,
                  baseline_median, drop_pct
-          FROM alerts WHERE route_id = ?
+          FROM alerts
+          WHERE route_id = ? AND departure_date >= ? AND departure_date <= ?
+            ${stayClause}
           ORDER BY fired_at DESC, price ASC LIMIT ?`,
-    args: [routeId, limit],
+    args: oneWay
+      ? [w.routeId, w.earliestDeparture, lastDeparture(w), limit]
+      : [w.routeId, w.earliestDeparture, lastDeparture(w), w.latestReturn,
+         w.minStay, w.maxStay, limit],
   });
   return rs.rows.map((r) => ({
     firedAt: String(r["fired_at"]),
@@ -272,7 +292,10 @@ export async function getAlertCount(
 }
 
 /** Mirrors ui/_common.latest_grid_for_heatmap: cheapest most-recent price
- *  per (departure_date, stay_days) for one origin, window-clamped. */
+ *  per (departure_date, stay_days) for one origin, window-clamped. Like
+ *  the Python original it has NO price ceiling — the grid shows every
+ *  priced pair (it doubles as the coverage count) and the Heatmap
+ *  component clamps the colour scale at MAX_DISPLAY_PRICE. */
 export async function getHeatmapGrid(
   w: RouteWindow,
   origin: string,
@@ -299,7 +322,6 @@ export async function getHeatmapGrid(
         AND cs.departure_date >= ?
         AND cs.return_date <= ?
         AND cs.snapshot_at >= ?
-        AND cs.price <= ${MAX_DISPLAY_PRICE}
       GROUP BY cs.departure_date, cs.stay_days
       ORDER BY cs.departure_date ASC, cs.stay_days ASC`,
     args: [

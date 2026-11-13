@@ -6,7 +6,7 @@ import { useState } from "react";
 export default function LoginPage() {
   const router = useRouter();
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ text: string; lockedOut: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.FormEvent) {
@@ -24,15 +24,22 @@ export default function LoginPage() {
       router.refresh();
     } else {
       const body = await r.json().catch(() => ({}));
-      setError(body.error ?? `login failed (${r.status})`);
+      // 429 = the per-IP limit (10 tries / 15 min, /api/login): retrying
+      // now cannot work, so say so instead of "wrong password" again.
+      setError({
+        text: body.error ?? `login failed (${r.status})`,
+        lockedOut: r.status === 429,
+      });
     }
   }
 
   return (
     <div className="mx-auto max-w-sm pt-16">
-      <h1 className="mb-6 font-mono text-lg text-text-bright">
-        OPERATOR LOGIN
-      </h1>
+      <h1 className="font-mono text-lg text-text-bright">OPERATOR LOGIN</h1>
+      <p className="mb-6 mt-2 font-mono text-[11px] leading-4 text-hint">
+        The password is APP_PASSWORD in the Vercel project&apos;s
+        environment variables.
+      </p>
       <form onSubmit={submit} className="space-y-4">
         <input
           type="password"
@@ -50,7 +57,13 @@ export default function LoginPage() {
           {busy ? "..." : "ENTER"}
         </button>
         {error && (
-          <p className="font-mono text-[12px] text-red">{error}</p>
+          <p
+            className={`font-mono text-[12px] ${
+              error.lockedOut ? "text-amber" : "text-red"
+            }`}
+          >
+            {error.text}
+          </p>
         )}
       </form>
     </div>

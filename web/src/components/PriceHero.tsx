@@ -12,15 +12,24 @@ import type { Itinerary, RouteWindow } from "@/lib/types";
 export function PriceHero({
   best,
   window: w,
+  pricedCount,
+  ceiling,
 }: {
   best: Itinerary | null;
   window: RouteWindow;
+  /** Date pairs priced in the window at ANY price (the grid's count). */
+  pricedCount: number;
+  /** The cheapest views' display ceiling (MAX_DISPLAY_PRICE). */
+  ceiling: number;
 }) {
   if (!best) {
+    // "Nothing collected" would contradict a grid full of grey cells:
+    // say whether prices exist but are all above the ceiling.
     return (
       <div className="rounded-card border border-border bg-bg2 p-6 font-mono text-sm text-text-mid">
-        No prices collected inside the current window yet. The next scan
-        fills this in.
+        {pricedCount > 0
+          ? `No fare at or under ${ceiling} ${w.currency} yet. The grid below shows every price found so far.`
+          : "No prices collected inside the current window yet. The next scan fills this in."}
       </div>
     );
   }
@@ -46,6 +55,9 @@ export function PriceHero({
           {stale && " · re-check before booking"}
         </span>
       </div>
+      <p className="mb-3 font-sans text-[13px] text-text-mid">
+        The lowest price seen for any date pair in this search.
+      </p>
       <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
         <span className="font-mono text-5xl font-semibold text-good [text-shadow:0_0_18px_rgb(166_227_161/0.45)]">
           {best.price}

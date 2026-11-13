@@ -17,14 +17,23 @@ export function CarrierBar({ carriers }: { carriers: CarrierCount[] }) {
   const rows = [...carriers].reverse(); // largest on top
   const option: EChartsOption = {
     animation: false,
-    grid: { left: 8, right: 40, top: 8, bottom: 24, containLabel: true },
+    grid: { left: 8, right: 40, top: 8, bottom: 30, containLabel: true },
     tooltip: {
       backgroundColor: t.bg2,
       borderColor: t.borderBright,
       textStyle: { color: t.text, fontFamily: t.mono, fontSize: 12 },
+      formatter: (params) => {
+        const p = params as unknown as { name: string; value: number };
+        return `<b>${p.name}</b><br/>cheapest on ${p.value} price check${p.value === 1 ? "" : "s"}`;
+      },
     },
     xAxis: {
       type: "value",
+      name: "times cheapest",
+      nameLocation: "middle",
+      nameGap: 26,
+      nameTextStyle: { color: t.hint, fontFamily: t.mono, fontSize: 10 },
+      minInterval: 1, // counts: never "2.5 times"
       axisLabel: { color: t.hint, fontFamily: t.mono, fontSize: 10 },
       splitLine: { lineStyle: { color: t.border } },
     },

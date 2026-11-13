@@ -7,11 +7,23 @@ const TYPE_BADGE: Record<string, string> = {
   drop: "border-cyan99 text-cyan99",
 };
 
+/** What the alert's reference price IS depends on its type (lib/alerts.py):
+ *  new_low compares against the trip's previous all-time low, drop
+ *  against its trailing median. Saying "usual" for both would misstate
+ *  every new_low row. */
+function comparison(a: Alert): string {
+  const pct = Math.round(a.dropPct);
+  return a.alertType === "new_low"
+    ? `${pct}% under its previous low of ${a.baselineMedian}`
+    : `${pct}% under its usual ${a.baselineMedian}`;
+}
+
 export function AlertsFeed({ alerts }: { alerts: Alert[] }) {
   if (alerts.length === 0) {
     return (
       <p className="font-mono text-sm text-text-mid">
-        No alerts yet — they fire when a price drops below its history.
+        No alerts for trips in this window yet — they fire when a price
+        drops below its history.
       </p>
     );
   }
@@ -34,12 +46,11 @@ export function AlertsFeed({ alerts }: { alerts: Alert[] }) {
               {a.price} {a.currency}
             </span>
             <span className="text-text">
-              {a.origin}→{a.destination} {fmtDate(a.departureDate)}–
-              {fmtDate(a.returnDate)}
+              {a.origin}→{a.destination} {fmtDate(a.departureDate)}
+              {a.returnDate && `–${fmtDate(a.returnDate)}`}
             </span>
-            <span className="text-hint">
-              was {a.baselineMedian} · {a.firedAt.slice(0, 10)}
-            </span>
+            <span className="text-text-mid">{comparison(a)}</span>
+            <span className="text-hint">{fmtDate(a.firedAt.slice(0, 10))}</span>
           </Link>
         </li>
       ))}
