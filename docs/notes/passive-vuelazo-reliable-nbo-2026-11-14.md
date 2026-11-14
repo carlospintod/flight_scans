@@ -78,7 +78,34 @@ call.
   read only, but ran its `CREATE TABLE IF NOT EXISTS`. It is empty and the first real
   run would create it anyway. The test now blanks `TURSO_*` and stubs `load_dotenv`.
 
-**A6. Weekly Monday push: drafted, NOT shipped.** See "Waiting on Carlos" below.
+**A6. Weekly Monday push: shipped 2026-11-14** (Carlos: "ship the weekly push as
+drafted", so the draft's answers stand: stay groups 30–44 / 45–74 / 75–90 days,
+"enough history" means 4+ Explore observations, and a quiet week still sends).
+- `lib/weekly_status.py` builds it and `scripts/weekly_status.py` sends it (or prints
+  it with `--dry-run`). `.github/workflows/weekly-status.yml` runs it Mondays at
+  07:07 UTC (08:07 Madrid in winter, 09:07 in summer), with a failure push and
+  keepalive. The push is low priority, tag `calendar`.
+- It covers the last full Monday–Sunday week in UTC, so a late GitHub start reports
+  the same week. Read only: the owner route is parsed from its DB row directly,
+  because `route_store`'s self-heal can write.
+- The "Window" line resolves the rolling window as of the **last scan**, which is
+  what the radar shows and what "(as of the last scan)" promises. The first dry run
+  resolved it for today and printed 16 Mar while the radar showed 9 Mar.
+- "Cheapest by stay" counts Google-family prices only: the verified rows plus the
+  SerpApi calendar cells. Aviasales quotes are left out. "Best verified" counts only
+  googleflights and serpapi.
+- Dry run on Turso for the week of 9–15 Nov (`--now 2026-11-16T07:07Z`):
+
+  > Weekly status: 9–15 Nov
+  > Vuelazo collector: 1 of 7 days ran, 113 fares stored.
+  > Baselines: 2 of 352 routes have 4+ observations.
+  > Nairobi: 5 of 5 scans ok; calendar sweep 20 of 20 strips.
+  > Best verified: 557 € MAD 28 Jan → 20 Apr (−17 € vs last week).
+  > Cheapest by stay: ~1 month 594 € (44 d) · ~2 months 589 € (51 d) · ~3 months 557 € (82 d).
+  > Window: departures 27 Dec – 9 Mar (as of the last scan).
+
+  The collector only started on 14 Nov, which is why it shows 1 of 7. The first real
+  push is Monday 16 Nov.
 
 ## Workstream B — Nairobi
 
@@ -216,7 +243,7 @@ and sent nothing.
    short until 6 Dec. **Carlos, 2026-11-14: let the sweep shrink** (the default
    `_serpapi_sweep_allowance` behaviour, no code change). Regular scans keep their
    headroom. The watchdog's pool push is expected until renewal.
-3. **A6 weekly push.** Does he want it, and is this wording right? Draft (owner push,
+3. ~~A6 weekly push~~ shipped as drafted (see A6 above). The original draft (owner push,
    English like the other ops pushes; sent Monday ~08:00 Madrid):
 
    > **Weekly status: 9–15 Nov**

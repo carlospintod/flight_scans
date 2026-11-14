@@ -1,0 +1,89 @@
+# Weekly Monday status push (plan 2026-11-14, A6; wording approved by
+# Carlos on 2026-11-14). One low-priority message covering the previous
+# Monday-Sunday week, sent even when the week was quiet: if it stops
+# arriving, something stopped. Reads the database only; no metered calls.
+#
+# Secrets: TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, NTFY_TOPIC.
+
+name: weekly-status
+
+on:
+  schedule:
+    # 07:07 UTC Monday = 08:07 Madrid in winter, 09:07 in summer. GitHub
+    # may start it later; the week covered is fixed (last Mon-Sun) either way.
+    - cron: "7 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the push without sending it"
+        default: "false"
+        required: false
+
+concurrency:
+  group: weekly-status
+  cancel-in-progress: false
+
+permissions:
+  actions: write     # keepalive re-enables this workflow
+  contents: read
+
+jobs:
+  weekly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build and send
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          python scripts/weekly_status.py \
+            ${{ inputs.dry_run == 'true' && '--dry-run' || '' }} \
+            --json-summary weekly.json
+
+      - name: Job summary
+        if: always()
+        run: |
+          echo '## Weekly status' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f weekly.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          s = json.load(open("weekly.json", encoding="utf-8"))
+          print(f"**{s['title']}**" + (" (dry run)" if s["dry_run"] else ""))
+          print()
+          for line in s["body"].splitlines():
+              print(f"- {line}")
+          print(f"\nsent: {s['sent']}")
+          PY
+          else
+            echo "- no summary produced" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Notify failure (ntfy.sh)
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          if [ -n "$NTFY_TOPIC" ]; then
+            curl -fsS -X POST "https://ntfy.sh/$NTFY_TOPIC" \
+              -H "Title: Weekly status workflow FAILED" \
+              -H "Priority: high" -H "Tags: rotating_light" \
+              -d "Run ${{ github.run_id }} could not build the weekly status — check Actions." || true
+          fi
+
+      - name: Keepalive
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/weekly-status.yml/enable"
