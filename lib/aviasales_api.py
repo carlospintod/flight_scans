@@ -41,6 +41,8 @@ from typing import Any
 
 import requests
 
+from .credentials import redact_network_error
+
 LOG = logging.getLogger(__name__)
 
 BASE_URL = "https://api.travelpayouts.com"
@@ -342,7 +344,9 @@ class AviasalesClient:
                 url, params=params, headers=headers, timeout=self._timeout_s,
             )
         except requests.RequestException as exc:
-            raise AviasalesError(0, f"network error: {exc}") from exc
+            # str(exc) holds the full URL, and /v3 sends the token as a
+            # query param (CLAUDE.md #6).
+            raise AviasalesError(0, redact_network_error(exc, self._token)) from None
         self._capture_quota(r)
         try:
             payload = r.json()

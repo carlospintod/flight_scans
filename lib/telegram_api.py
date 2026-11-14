@@ -22,6 +22,8 @@ from typing import Any
 
 import requests
 
+from .credentials import redact_network_error
+
 LOG = logging.getLogger(__name__)
 
 BASE_URL = "https://api.telegram.org"
@@ -71,7 +73,9 @@ class TelegramClient:
         try:
             r = self._session.post(url, json=body, timeout=self._timeout_s)
         except requests.RequestException as exc:
-            raise TelegramError(0, f"network error: {exc}") from exc
+            # str(exc) holds the URL, and the bot token is in its path:
+            # anyone holding it can post as the bot (CLAUDE.md #6).
+            raise TelegramError(0, redact_network_error(exc, self._token)) from None
         try:
             payload = r.json()
         except ValueError:

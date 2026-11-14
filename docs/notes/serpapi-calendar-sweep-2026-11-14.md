@@ -162,6 +162,17 @@ The free plan did not bill the "no results" call, so a full sweep costs 61–62.
   (`ACCOUNT_SAFE_FIELDS`, `tests/test_quota_secrets.py`), and with Carlos's OK
   `scripts/scrub_quota_secrets.py --apply` cut the 55 old rows to it. Afterwards
   no live table held a key, email or account id.
+- **Secrets in network-error messages.** requests puts the request URL into
+  its exception text, so a refused connection carried SerpApi's `api_key` into
+  logs, `ledger_runs.summary_json` and the "rail caído" push (CI masks secrets
+  in its own log only). Aviasales' `token` param, the Telegram bot token (in the
+  URL path) and the ntfy topic rode the same way. **Fixed 2026-11-14:**
+  `serpapi_io`, `explore_api`, `aviasales_api`, `telegram_api` and `pushes` wrap
+  these errors with `lib/credentials.redact_network_error` (raised `from None`,
+  so no traceback prints the original), and `scripts/notify_ntfy.py` cuts the
+  topic inline; `tests/test_error_redaction.py`. Still open:
+  `scripts/setup_telegram_webhook.py` has no try/except, so a network failure
+  there prints the bot token in a traceback to the terminal that ran it.
 
 ## Real run
 

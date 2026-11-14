@@ -11,7 +11,9 @@ handled here: when Google doesn't rank a "best" group, SerpAPI returns
 only `other_flights` — parsed with the same code path.
 
 Request params differ slightly from SearchAPI: `type=1` (round trip)
-instead of `flight_type=round_trip`, and auth is `api_key` only.
+instead of `flight_type=round_trip`, and auth is `api_key` only. That
+is a query param, and requests puts the URL into its error messages, so
+every network error is wrapped with lib/credentials.redact_network_error.
 
 `calendar()` (2026-11-14) is the full-window rail: the
 google_flights_calendar engine prices EVERY departure day of a range for
@@ -30,6 +32,7 @@ from typing import Any
 
 import requests
 
+from .credentials import redact_network_error
 from .searchapi_io import (
     CalendarEntry,
     CalendarResponse,
@@ -165,7 +168,9 @@ class SerpApiClient:
             r = self._session.get(BASE_URL, params=params,
                                   timeout=self._timeout_s)
         except requests.RequestException as exc:
-            raise SerpApiError(0, f"network error: {exc}") from exc
+            # str(exc) holds the full URL, api_key included (CLAUDE.md #6).
+            # Same at every network call in this module.
+            raise SerpApiError(0, redact_network_error(exc, self._api_key)) from None
         try:
             data = r.json()
         except ValueError as exc:
@@ -210,7 +215,7 @@ class SerpApiClient:
             r = self._session.get(BASE_URL, params=params,
                                   timeout=self._timeout_s)
         except requests.RequestException as exc:
-            raise SerpApiError(0, f"network error: {exc}") from exc
+            raise SerpApiError(0, redact_network_error(exc, self._api_key)) from None
         try:
             data = r.json()
         except ValueError as exc:
@@ -271,7 +276,7 @@ class SerpApiClient:
             r = self._session.get(BASE_URL, params=params,
                                   timeout=CALENDAR_TIMEOUT_S)
         except requests.RequestException as exc:
-            raise SerpApiError(0, f"network error: {exc}") from exc
+            raise SerpApiError(0, redact_network_error(exc, self._api_key)) from None
         try:
             data = r.json()
         except ValueError as exc:
@@ -303,7 +308,7 @@ class SerpApiClient:
                                   params={"api_key": self._api_key},
                                   timeout=15)
         except requests.RequestException as exc:
-            raise SerpApiError(0, f"network error: {exc}") from exc
+            raise SerpApiError(0, redact_network_error(exc, self._api_key)) from None
         if not r.ok:
             raise SerpApiError(r.status_code,
                                f"/account returned {r.status_code}: {r.text[:200]}")

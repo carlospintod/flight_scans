@@ -40,6 +40,7 @@ from datetime import date
 
 import requests
 
+from .credentials import redact_network_error
 from .deals_db import Observation
 
 LOG = logging.getLogger(__name__)
@@ -137,7 +138,9 @@ class ExploreClient:
             r = self._session.get(self._url, params=params,
                                   timeout=self._timeout_s)
         except requests.RequestException as exc:
-            raise ExploreError(f"network error: {exc}") from exc
+            # str(exc) holds the full URL, and both vendors take the key
+            # as the api_key query param (CLAUDE.md #6).
+            raise ExploreError(redact_network_error(exc, self._key)) from None
         try:
             data = r.json()
         except ValueError as exc:

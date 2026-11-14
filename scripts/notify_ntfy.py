@@ -138,7 +138,10 @@ def _push(topic: str, *, title: str, body: str, priority: str, tags: str) -> Non
         )
         print(f"ntfy push: HTTP {r.status_code}")
     except requests.RequestException as exc:
-        print(f"ntfy push failed (non-fatal): {exc}")
+        # The topic is a password and sits in the URL that str(exc) holds.
+        # Inline, not lib/credentials: this script stays a dumb pusher.
+        detail = str(exc).replace(topic, "REDACTED")
+        print(f"ntfy push failed (non-fatal): {type(exc).__name__}: {detail}")
 
 
 if __name__ == "__main__":

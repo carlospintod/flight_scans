@@ -12,6 +12,8 @@ import os
 
 import requests
 
+from .credentials import redact_network_error
+
 LOG = logging.getLogger(__name__)
 
 
@@ -27,7 +29,8 @@ def push(title: str, body: str, *, priority: str = "default",
             timeout=15)
         return True
     except Exception as exc:  # noqa: BLE001 — a push hiccup never breaks a run
-        LOG.warning("ntfy push failed: %s", exc)
+        # The topic is a password and sits in the URL that str(exc) holds.
+        LOG.warning("ntfy push failed: %s", redact_network_error(exc, topic))
         return False
 
 
