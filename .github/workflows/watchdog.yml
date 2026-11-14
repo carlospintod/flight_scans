@@ -1,0 +1,94 @@
+# Dead-man watchdog (plan 2026-11-14, A5) — covers both projects.
+#
+# Every other alarm fires from inside a run. This one reads only the
+# database and pushes to the phone when a job has silently stopped:
+#   - no Vuelazo Explore row stored in 48 h (deals.yml, daily)
+#   - no successful Nairobi scan in 4 days (scan.yml, Mon/Wed/Sat)
+#   - a Nairobi calendar strip whose last two sweeps both errored
+#   - a SerpApi pool that runs out before its renewal at the current rate
+# It pushes on the transition into a bad state and repeats every 3 days
+# while the state lasts, never daily. No metered calls.
+#
+# Secrets: TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, NTFY_TOPIC.
+
+name: watchdog
+
+on:
+  schedule:
+    # 19:37 UTC daily: away from deals.yml (03:41) and scan.yml (05:23,
+    # which GitHub starts 7-9 h late, i.e. around 12:00-14:30).
+    - cron: "37 19 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the pushes without sending them or saving state"
+        default: "false"
+        required: false
+
+concurrency:
+  group: watchdog
+  cancel-in-progress: false
+
+permissions:
+  actions: write     # keepalive re-enables this workflow
+  contents: read
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          python scripts/watchdog.py \
+            ${{ inputs.dry_run == 'true' && '--dry-run' || '' }} \
+            --json-summary watchdog.json
+
+      - name: Job summary
+        if: always()
+        run: |
+          echo '## Watchdog' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f watchdog.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          s = json.load(open("watchdog.json", encoding="utf-8"))
+          for f in s["findings"]:
+              print(f"- {'❌' if f['bad'] else '✅'} **{f['check']}**: {f['detail']}")
+          print(f"- pushes: {len(s['pushes'])} planned, {s['sent']} sent"
+                + (" (dry run)" if s["dry_run"] else ""))
+          PY
+          else
+            echo "- no summary produced" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Notify failure (ntfy.sh)
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          if [ -n "$NTFY_TOPIC" ]; then
+            curl -fsS -X POST "https://ntfy.sh/$NTFY_TOPIC" \
+              -H "Title: Watchdog workflow FAILED" \
+              -H "Priority: high" -H "Tags: rotating_light" \
+              -d "Run ${{ github.run_id }} could not check the jobs — check Actions." || true
+          fi
+
+      - name: Keepalive
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/watchdog.yml/enable"
