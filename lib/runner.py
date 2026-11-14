@@ -91,6 +91,32 @@ def execute_search(*, conn, route, plan, clients, caps,
                        error=str(exc))
             LOG.error("searchapi sweep failed (%s): %s", route.name, exc)
 
+    # --- SerpApi calendar sweep (every date pair in the window) ---
+    # One google_flights_calendar call per due stay-length strip: Google's
+    # price for every departure day at that trip length. Cells land as
+    # `serpapi_calendar` rows (nominations: select_candidates feeds the
+    # cheapest to the free scraper, which verifies them). Spends from the
+    # search's serpapi reservation, which the planner sized to include
+    # exactly these strips; unreached strips stay due for the next run.
+    if plan.serpapi_sweep and clients.get("serpapi") is not None:
+        from .sweep import run_strip_sweep
+        strips = list(plan.serpapi_sweep)
+        try:
+            sres = run_strip_sweep(conn=conn, client=clients["serpapi"],
+                                   route=route, strips=strips)
+            out.record("serpapi_calendar", attempted=sres.calls,
+                       stored=sres.cells_stored,
+                       error=(f"{sres.errors} of {sres.calls} strips failed"
+                              if sres.errors else None))
+            if sres.errors or sres.stopped_early:
+                out.degraded = True
+        except Exception as exc:  # noqa: BLE001 — incl. QuotaExceeded
+            out.degraded = True
+            out.record("serpapi_calendar", attempted=len(strips),
+                       error=str(exc))
+            LOG.error("serpapi calendar sweep failed (%s): %s",
+                      route.name, exc)
+
     # --- SerpApi live discovery grid (the reliable finding layer) ---
     # Kiwi is retired and gf scraping is captcha-walled from CI
     # (2026-07-14), so SerpApi — managed Google Flights that never gets

@@ -198,10 +198,29 @@ class QuotaLedger:
             expected_reset = prev_month.replace(day=min(day, 28))
         return (state.baseline_at or "") < expected_reset.isoformat()
 
-    def capture_anchors_from_snapshots(self, since_iso: str) -> int:
+    def snapshot_watermark(self) -> int:
+        """The newest quota_snapshots row id: the cutoff to hand
+        capture_anchors_from_snapshots, taken once the run-start account
+        probes are recorded."""
+        row = self._conn.execute(
+            "SELECT COALESCE(MAX(rowid), 0) AS id FROM quota_snapshots"
+        ).fetchone()
+        return int(row["id"]) if row is not None else 0
+
+    def capture_anchors_from_snapshots(self, after_snapshot: int) -> int:
         """After a run: promote fresh provider observations (written by
         the clients into quota_snapshots during the run) into anchors.
-        Only strictly newer observations become anchors."""
+
+        Only snapshots written AFTER `after_snapshot` (a
+        snapshot_watermark()) qualify. The cutoff is a row id, not a
+        timestamp: timestamps here are truncated to the second, and a
+        run-start probe snapshot written in the same second as a
+        timestamp cutoff slipped past it. Re-promoting that run-START
+        balance at close-out pins it after the run's spend and puts every
+        credit the run spent back on the books (2026-11-14: the first
+        calendar sweep's 68 serpapi credits; CI had re-promoted
+        searchapi's start balance at almost every close-out, harmless
+        only while those runs spent no searchapi credits)."""
         n = 0
         for source in [s[0] for s in POOL_SEEDS]:
             # Defense-in-depth: a pool floored for Payment Required must
@@ -214,10 +233,10 @@ class QuotaLedger:
             snap = self._conn.execute(
                 """
                 SELECT checked_at, remaining, limit_total FROM quota_snapshots
-                WHERE source = ? AND remaining IS NOT NULL AND checked_at >= ?
-                ORDER BY checked_at DESC LIMIT 1
+                WHERE source = ? AND remaining IS NOT NULL AND rowid > ?
+                ORDER BY rowid DESC LIMIT 1
                 """,
-                (source, since_iso),
+                (source, after_snapshot),
             ).fetchone()
             if snap is None:
                 continue

@@ -328,6 +328,32 @@ def test_cached_source_never_displaces_live_current_price(tmp_path: Path):
     assert not any(d == "2026-09-10" for d, _ in keys)  # zombie can't resurrect
 
 
+def test_calendar_cell_never_displaces_live_current_price(tmp_path: Path):
+    """Calendar-sweep cells are leads, like aviasales quotes. A verified
+    620 with a fresher 714 grid cell on top stays a candidate: the grid
+    was off by -131 to +71 EUR against same-day point queries in the
+    first sweep (2026-11-14), so the verified price is the one the
+    drop_above filter judges. A grid-only itinerary still nominates."""
+    from lib.serpapi_io import CALENDAR_SOURCE_ID
+
+    db = tmp_path / "t.db"
+    live = _row(datetime(2026, 5, 10), "2026-09-05", "2026-11-08", 64, 620)
+    grid_high = _row(datetime(2026, 5, 15), "2026-09-05", "2026-11-08", 64, 714)
+    grid_only = _row(datetime(2026, 5, 15), "2026-09-12", "2026-11-15", 64, 594)
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, _route())
+        insert_calendar_rows(conn, [
+            CalendarRow(**{**live.__dict__, "source": "googleflights"}),
+            CalendarRow(**{**grid_high.__dict__, "source": CALENDAR_SOURCE_ID}),
+            CalendarRow(**{**grid_only.__dict__, "source": CALENDAR_SOURCE_ID}),
+        ])
+        candidates = select_candidates(conn, _route(watch=650, drop=700),
+                                       today=date(2026, 5, 16))
+    keys = {(c["departure_date"], c["snapshot_price"]) for c in candidates}
+    assert keys == {("2026-09-05", 620), ("2026-09-12", 594)}
+
+
 def test_cached_only_itinerary_still_nominates(tmp_path: Path):
     """Aviasales' discovery value survives: an itinerary ONLY it has
     seen still becomes a candidate."""
@@ -569,6 +595,52 @@ def test_ota_enrichment_stores_cheaper_seller(tmp_path: Path):
             "SELECT price FROM calendar_snapshots WHERE source='serpapi'"
         ).fetchone()
         assert cal["price"] == 512          # feeds cheapest-now + alerts
+
+
+def test_ota_enrichment_skips_calendar_sweep_cells(tmp_path: Path):
+    """2026-11-14: the first sweep's 594 grid cell was the cheapest row of
+    the scan, and the OTA check spent its call on it. A grid cell is a
+    lead, not a fare: the check enriches the verified 621 instead."""
+    from lib.scanops import enrich_ota_sellers
+    from lib.searchapi_io import FlightOption, PointResponse
+    from lib.serpapi_io import CALENDAR_SOURCE_ID, SellerOption
+
+    asked = []
+
+    class FakeSerp:
+        source_id = "serpapi"
+
+        def point_query(self, **kw):
+            asked.append((kw["outbound"].isoformat(), kw["return_"].isoformat()))
+            return PointResponse(
+                raw={"best_flights": [{"booking_token": "t", "price": 621}]},
+                best_flights=(FlightOption(price=621, total_minutes=800,
+                                           stops=1, carriers="Etihad"),))
+
+        def booking_options(self, **kw):
+            return [SellerOption("Gotogate", 600, "EUR", False)]
+
+    def row(source, dep, ret, price):
+        return CalendarRow(
+            snapshot_at="2026-07-14T10:00:00Z", route_id="t", source=source,
+            origin="MAD", destination="NBO", departure_date=dep,
+            return_date=ret, stay_days=63, price=price, currency="EUR",
+            is_lowest_price=False)
+
+    db = tmp_path / "t.db"
+    route = _route(min_stay=60, max_stay=90)
+    with connect(db) as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        insert_calendar_rows(conn, [
+            row("googleflights", "2026-09-15", "2026-11-17", 621),
+            row(CALENDAR_SOURCE_ID, "2026-09-20", "2026-11-22", 594),
+            row("aviasales", "2026-09-25", "2026-11-27", 510),
+        ])
+        stored = enrich_ota_sellers(conn, FakeSerp(), route,
+                                    since="2026-07-14T00:00:00Z")
+    assert asked == [("2026-09-15", "2026-11-17")]
+    assert stored == 1                       # Gotogate 600 beats the 621
 
 
 def test_ota_enrichment_no_improvement_stores_nothing(tmp_path: Path):

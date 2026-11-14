@@ -34,7 +34,8 @@ _GOLDEN_POOL_SEEDS = (
 _GOLDEN_METERED = {
     "kiwi": {"range_search": 1, "round_trip_search": 1, "one_way_search": 1,
              "one_way_range_search": 1},
-    "serpapi": {"point_query": 1, "booking_options": 1},
+    # calendar added 2026-11-14: the full-window strip sweep.
+    "serpapi": {"point_query": 1, "booking_options": 1, "calendar": 1},
     "flights_sky": {"search_roundtrip": 1, "search_one_way": 1,
                     "flight_details": 1, "price_calendar": 1},
     "searchapi": {"point_query": 1, "calendar": 1},
@@ -46,7 +47,7 @@ _GOLDEN_METERED = {
     # Vuelazo's own ids meter identically to their backends — same calls,
     # different pot.
     "serpapi_vz": {"point_query": 1, "booking_options": 1,
-                   "explore": 1},
+                   "explore": 1, "calendar": 1},
     "searchapi_vz": {"point_query": 1, "calendar": 1, "explore": 1},
     "googleflights_vz": {"point_query": 1},
     "aviasales_vz": {"cheap_prices": 1, "prices_for_dates": 1,

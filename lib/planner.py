@@ -23,7 +23,14 @@ from datetime import date, timedelta
 
 from .config import RouteConfig
 from .followup import select_candidates
-from .sweep import SweepWindow, plan_windows
+from .sweep import (
+    SERPAPI_SWEEP_REFRESH_DAYS,
+    CalendarStrip,
+    SweepWindow,
+    due_strips,
+    plan_strips,
+    plan_windows,
+)
 
 # Default per-run cap on Kiwi (300/mo tier; keep one run modest).
 DEFAULT_KIWI_CAP = 20
@@ -144,6 +151,14 @@ def cost_vector(plan: "RunPlan", *, caps: "Caps") -> CostVector:
         "aviasales": "cached sweep (unmetered, rate-paced)",
         "skyscanner": "curve + lookups",
     }
+    # The calendar sweep shares the ONE serpapi line (same pool, same
+    # search): settle() attributes a source's whole spend to each primary
+    # line up to its size, so two primary serpapi lines would double-count
+    # used_units. The note carries the breakdown instead.
+    strips = len(getattr(plan, "serpapi_sweep", ()) or ())
+    if strips:
+        notes["serpapi"] = (f"calendar sweep ({strips} strips) + live "
+                            "discovery grid + OTA seller check")
     for source, units in plan.calls_by_source.items():
         if units:
             lines.append(CostLine(source=source, units=units, kind="primary",
@@ -163,6 +178,10 @@ class Caps:
     # 13 scheduled runs x 7 ~= 91 leaves ample margin for manual
     # dispatches and multi-search batches.
     serpapi: int | None = 7
+    # SerpApi calendar sweep: max stay-length strips (1 call each) this
+    # run. 0 = OFF, the default for every caller except run_batch, which
+    # sets it for the owner search from what the pool can spare.
+    serpapi_sweep: int = 0
 
 
 @dataclass(frozen=True)
@@ -203,6 +222,9 @@ class RunPlan:
     # runner feeds these straight into run_followup with the serpapi
     # client). Same shape as followup_candidates.
     serpapi_discovery: tuple[dict, ...] = ()
+    # SerpApi calendar sweep: the due stay-length strips this run prices
+    # (1 call each; lib/sweep.run_strip_sweep executes exactly these).
+    serpapi_sweep: tuple[CalendarStrip, ...] = ()
 
 
 # Golden-ratio conjugate: phase steps by frac(ordinal * PHI) are
@@ -406,6 +428,30 @@ def build_run_plan(
         serpapi_discovery = _discovery_grid(
             route, today=today, max_points=SERPAPI_DISCOVERY_CAP)
 
+    # ---- SerpApi calendar sweep (every date pair, 1 call per stay) ----
+    # Off unless the caller grants strips (caps.serpapi_sweep > 0). Only
+    # DUE strips are planned — never priced, or last priced
+    # SERPAPI_SWEEP_REFRESH_DAYS ago — so a cut-short sweep resumes and a
+    # moved window starts over by itself. Round trip only: the engine
+    # prices one trip LENGTH per call.
+    serpapi_sweep: list[CalendarStrip] = []
+    if ("serpapi" in src and caps.serpapi_sweep > 0
+            and not route.is_one_way):
+        strips = plan_strips(route, today=today)
+        due = due_strips(conn, route, strips, today=today)
+        serpapi_sweep = due[: caps.serpapi_sweep]
+        fresh = len(strips) - len(due)
+        if serpapi_sweep:
+            pairs = sum(s.departures for s in serpapi_sweep)
+            notes.append(
+                f"calendar sweep: {len(serpapi_sweep)} of {len(due)} due "
+                f"strips this run (~{pairs} date pairs); {fresh} of "
+                f"{len(strips)} strips priced in the last "
+                f"{SERPAPI_SWEEP_REFRESH_DAYS} days")
+        elif strips:
+            notes.append(f"calendar sweep: all {len(strips)} strips priced "
+                         f"in the last {SERPAPI_SWEEP_REFRESH_DAYS} days")
+
     # ---- Kiwi discovery bands (range-search, 1 call per band) ----
     kiwi_bands: list[KiwiBand] = []
     if "kiwi" in src:
@@ -510,6 +556,7 @@ def build_run_plan(
         "serpapi": (
             len(serpapi_discovery)
             + (SERPAPI_OTA_RESERVE if "serpapi" in src else 0)
+            + len(serpapi_sweep)          # 1 credit per calendar strip
         ),
         "aviasales": len(aviasales_pairs) * (
             len(aviasales_months) if route.is_one_way else 1
@@ -538,6 +585,7 @@ def build_run_plan(
         kiwi_bands=tuple(kiwi_bands),
         aviasales_months=tuple(aviasales_months),
         serpapi_discovery=tuple(serpapi_discovery),
+        serpapi_sweep=tuple(serpapi_sweep),
     )
 
 

@@ -11,6 +11,7 @@ PREDICTED = GUARANTEED UPPER BOUND, skip-and-notify.
 Usage:
     python run_batch.py [--sources ...] [--cap 25] [--trigger cron]
                         [--json-summary out.json] [--wall-budget-s 2700]
+                        [--calendar-sweep-max N]
 
 Exit codes: 0 = ran (skips are normal operation); 1 = fatal (DB/lease
 bootstrap); 2 = degraded (a search errored unexpectedly).
@@ -23,6 +24,7 @@ import json
 import logging
 import os
 import sys
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -55,6 +57,20 @@ EST_SEARCH_OVERHEAD_S = 45
 # spent in the cooldown window. Cooldown (not a parity gate) so a forced
 # validation sweep automatically pushes the next cron sweep out.
 SWEEP_COOLDOWN_DAYS = 12
+
+# SerpApi calendar sweep (2026-11-14): prices every date pair of the owner
+# search's window, one call per stay-length strip, re-pricing each strip
+# every lib.sweep.SERPAPI_SWEEP_REFRESH_DAYS days. It only spends what the
+# free pool can SPARE: this scan's own serpapi line plus HEADROOM_SCANS
+# future scans of every active search stay untouched. When the pool is
+# short the sweep shrinks or waits — and resumes after the monthly reset —
+# instead of starving the regular scans.
+SERPAPI_SWEEP_HEADROOM_SCANS = 6     # ~two weeks of Mon/Wed/Sat scans
+SERPAPI_SWEEP_MAX_STRIPS = 80        # a full NBO window is 62 strips
+# First real sweep (2026-11-14), 62 strips: mean 9.7 s, p90 15.1 s,
+# max 21.5 s. 15 s (about the p90) keeps this estimate generous, as the
+# A8 skip rule above requires.
+EST_STRIP_S = 15
 
 
 def _now_iso() -> str:
@@ -187,12 +203,31 @@ def _sweep_recently(conn, *, days: int = SWEEP_COOLDOWN_DAYS) -> bool:
     return (row["n"] or 0) > 0
 
 
+def _serpapi_sweep_allowance(pool_states, *, per_scan: int,
+                             active_searches: int) -> int:
+    """How many calendar strips (1 credit each) the serpapi pool can spare
+    this run: effective availability minus this search's own scan line
+    (upper bound `per_scan`) minus SERPAPI_SWEEP_HEADROOM_SCANS future
+    scans of every active search. 0 when the pool is unknown or short."""
+    st = pool_states.get("serpapi")
+    avail = getattr(st, "effective_available", None) if st else None
+    if avail is None:
+        return 0
+    headroom = SERPAPI_SWEEP_HEADROOM_SCANS * active_searches * per_scan
+    return max(0, min(SERPAPI_SWEEP_MAX_STRIPS, avail - per_scan - headroom))
+
+
 def _estimate_seconds(plan) -> int:
     # One-way aviasales sweeps run per (pair, month); months is () for
     # round-trip, so the multiplier collapses to 1.
+    from lib.sweep import STRIP_SWEEP_WALL_BUDGET_S
     av_calls = len(plan.aviasales_pairs) * (len(plan.aviasales_months) or 1)
+    # The calendar sweep stops itself at its own wall budget.
+    strip_s = min(len(plan.serpapi_sweep) * EST_STRIP_S,
+                  STRIP_SWEEP_WALL_BUDGET_S)
     return (EST_SEARCH_OVERHEAD_S
             + len(plan.sweep_windows) * EST_SWEEP_WINDOW_S
+            + strip_s
             + len(plan.kiwi_bands) * EST_KIWI_BAND_S
             + len(plan.followup_candidates) * EST_GF_CANDIDATE_S
             + av_calls * EST_AVIASALES_PAIR_S)
@@ -217,6 +252,10 @@ def main() -> int:
                     help="run the SearchAPI rectangle sweep this run, "
                          "bypassing the Saturday+cooldown cadence gate "
                          "(still ledger-metered)")
+    ap.add_argument("--calendar-sweep-max", type=int, default=None,
+                    help="cap the SerpApi calendar sweep at N strips this "
+                         "run (0 = off). Default: as many due strips as "
+                         "the serpapi pool can spare (ledger-metered)")
     ap.add_argument("--wall-budget-s", type=int,
                     default=int(os.environ.get("BATCH_WALL_BUDGET_S", 2700)))
     args = ap.parse_args()
@@ -371,8 +410,11 @@ def main() -> int:
         # events, resurrecting every credit the run just spent (found in
         # the 2026-07-17 review; fatal for searchapi's LIFETIME pool,
         # quietly wrong for serpapi since M7). Only snapshots written
-        # after this instant (i.e. genuine mid-run call headers) qualify.
-        anchors_probed_at = _now_iso()
+        # after this point (i.e. genuine mid-run call headers) qualify.
+        # A row id, not _now_iso(): a probe written in the same second as
+        # a timestamp cutoff slipped past it (2026-11-14, see
+        # QuotaLedger.capture_anchors_from_snapshots).
+        anchors_probed_after = ledger.snapshot_watermark()
 
         # Rectangle-sweep cadence: Saturdays with a cooldown (or forced).
         # The sweep burns lifetime credits, so most runs exclude searchapi
@@ -417,6 +459,7 @@ def main() -> int:
         degraded = False
         skipped = 0
         sweep_taken = False   # at most one rectangle sweep per run
+        calendar_taken = False  # at most one SerpApi calendar sweep per run
 
         for row in rows:
             sid = row["search_id"]
@@ -464,10 +507,32 @@ def main() -> int:
             search_sources = available
             if not allow_sweep:
                 search_sources = [s for s in available if s != "searchapi"]
+            # SerpApi calendar sweep: owner search only (the free pool is
+            # the owner's), one per run, sized from what the pool can
+            # spare. The planner then plans only the strips that are due,
+            # so most runs between refreshes plan none and spend nothing.
+            search_caps = caps
+            if (row["priority"] == "owner" and not calendar_taken
+                    and args.calendar_sweep_max != 0
+                    and "serpapi" in search_sources):
+                allowance = _serpapi_sweep_allowance(
+                    pool_states, per_scan=caps.serpapi or 0,
+                    active_searches=len(rows))
+                if args.calendar_sweep_max is not None:
+                    allowance = min(allowance, args.calendar_sweep_max)
+                if allowance > 0:
+                    search_caps = replace(caps, serpapi_sweep=allowance)
+                else:
+                    st = pool_states.get("serpapi")
+                    LOG.info("calendar sweep: no spare serpapi budget this "
+                             "run (%s available, keeping %d scans of "
+                             "headroom)",
+                             getattr(st, "effective_available", None),
+                             SERPAPI_SWEEP_HEADROOM_SCANS)
             plan = build_run_plan(conn, route, sources=search_sources,
-                                  caps=caps, today=date.today(),
+                                  caps=search_caps, today=date.today(),
                                   pool_states=pool_states)
-            cost = cost_vector(plan, caps=caps)
+            cost = cost_vector(plan, caps=search_caps)
             if allow_sweep and plan.sweep_windows:
                 if _sweep_affordable(cost, pool_states):
                     sweep_taken = True
@@ -483,10 +548,20 @@ def main() -> int:
                     search_sources = [s for s in available
                                       if s != "searchapi"]
                     plan = build_run_plan(conn, route,
-                                          sources=search_sources, caps=caps,
+                                          sources=search_sources,
+                                          caps=search_caps,
                                           today=date.today(),
                                           pool_states=pool_states)
-                    cost = cost_vector(plan, caps=caps)
+                    cost = cost_vector(plan, caps=search_caps)
+            if plan.serpapi_sweep:
+                calendar_taken = True
+                LOG.info("calendar sweep for %s: %d strips (~%d date pairs, "
+                         "%d serpapi credits)", label, len(plan.serpapi_sweep),
+                         sum(s.departures for s in plan.serpapi_sweep),
+                         len(plan.serpapi_sweep))
+            for note in plan.notes:
+                if note.startswith("calendar sweep"):
+                    LOG.info("%s: %s", label, note)
 
             est = _estimate_seconds(plan)
             if elapsed + est > args.wall_budget_s:
@@ -558,10 +633,10 @@ def main() -> int:
         # -- close out ------------------------------------------------------
         status = "degraded" if degraded else "ok"
         try:
-            # anchors_probed_at (NOT started_at): excludes the run-start
-            # account-probe snapshots, whose re-promotion here would
-            # resurrect this run's spend (2026-07-17 review, critical).
-            ledger.capture_anchors_from_snapshots(anchors_probed_at)
+            # anchors_probed_after: excludes the run-start account-probe
+            # snapshots, whose re-promotion here would resurrect this
+            # run's spend (2026-07-17 review, critical; 2026-11-14).
+            ledger.capture_anchors_from_snapshots(anchors_probed_after)
         except Exception as exc:  # noqa: BLE001
             LOG.warning("anchor capture failed: %s", exc)
         conn.execute(

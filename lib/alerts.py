@@ -27,8 +27,18 @@ from .db import (
     insert_alert_rows,
     latest_calendar_snapshot_per_itinerary,
 )
+from .serpapi_io import CALENDAR_SOURCE_ID
 
 LOG = logging.getLogger(__name__)
+
+# Row labels that NOMINATE but never alert on their own (2026-11-14).
+# Calendar-sweep cells are Google's date-grid price for ~4,000 pairs at
+# once, re-priced every two weeks: comparing one sweep with the next would
+# fire a new_low for every pair that slipped 1% under the watch bar — the
+# 403-alerts-in-one-pass flood of 2026-07-05, at sweep scale. Their
+# cheapest pairs reach the free scraper through select_candidates, and
+# the scraper's verified rows alert exactly as before.
+NOMINATION_ONLY_SOURCES = frozenset({CALENDAR_SOURCE_ID})
 
 # A new all-time low must beat the previous minimum by at least this much
 # to be worth a notification. Without it, a 567 -> 566 render twitch is
@@ -168,6 +178,8 @@ def evaluate(
     new_alerts: list[AlertRow] = []
     fired_keys: set[tuple] = set()  # itinerary+source fired in THIS pass
     for row in latest:
+        if row["source"] in NOMINATION_ONLY_SOURCES:
+            continue
         if not one_way and (row["stay_days"] < min_stay
                             or row["stay_days"] > max_stay):
             continue

@@ -97,6 +97,8 @@ def main() -> int:
         ledger.seed_pools()
         for seed in POOL_SEEDS:
             ledger.seed_anchor_from_snapshots(seed[0])
+        # Close-out promotes only quota snapshots written after this point.
+        snapshots_before_run = ledger.snapshot_watermark()
         ledger_run_id = ledger.begin_shadow_run(trigger=trigger)
 
         caps = Caps(googleflights=args.cap, kiwi=20,
@@ -149,7 +151,7 @@ def main() -> int:
         # during this run into pool anchors, and put the recorded spend
         # next to the plan in the summary — the M1 drift report.
         try:
-            ledger.capture_anchors_from_snapshots(started_at)
+            ledger.capture_anchors_from_snapshots(snapshots_before_run)
             ledger.finalize_run(ledger_run_id, status)
             shadow_spend = {
                 f"{sid or '?'}:{src}": units

@@ -597,6 +597,54 @@ def test_every_aviasales_price_method_is_metered():
     assert not missing, f"unmetered AviasalesClient price methods: {missing}"
 
 
+def test_every_serpapi_search_method_is_metered():
+    """Same guard for the SerpAPI adapter (2026-11-14, calendar sweep).
+    Every public method that spends a search must be in METERED for EVERY
+    source built on the adapter (serpapi AND serpapi_vz) — otherwise
+    GuardedClient passes it through uncharged. check_quota hits the free
+    /account endpoint and is the one deliberate exception."""
+    from lib.serpapi_io import SerpApiClient
+    from lib.sources import REGISTRY, backend_of
+    free = {"check_quota", "from_env"}
+    spending = {name for name, attr in vars(SerpApiClient).items()
+                if not name.startswith("_") and callable(attr)
+                and name not in free}
+    assert {"point_query", "booking_options", "calendar"} <= spending
+    for s in REGISTRY:
+        if backend_of(s.id) == "serpapi":
+            missing = spending - set(METERED[s.id])
+            assert not missing, f"unmetered SerpApiClient methods on {s.id}: {missing}"
+
+
+def test_guarded_serpapi_calendar_charges_one_unit_before_the_call(conn):
+    """The calendar strip is charged BEFORE the HTTP call (fail closed)
+    and an empty strip is labelled 'empty', not 'ok'."""
+    from lib.searchapi_io import CalendarResponse
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    seen_events: list[int] = []
+
+    class _Cal:
+        source_id = "serpapi"
+
+        def calendar(self, **kw):
+            # The spend row must already exist when the call runs.
+            seen_events.append(conn.execute(
+                "SELECT COUNT(*) FROM spend_events").fetchone()[0])
+            return CalendarResponse(raw={}, entries=())
+
+    guarded = GuardedClient(_Cal(), ledger=ledger, source="serpapi",
+                            run_id="r", search_id="s", shadow=False,
+                            budget_units=1)
+    guarded.calendar(origin="MAD", destination="NBO", stay_days=60)
+    assert seen_events == [1]
+    ev = conn.execute("SELECT source, op, units, result FROM spend_events"
+                      ).fetchone()
+    assert tuple(ev) == ("serpapi", "calendar", 1, "empty")
+    with pytest.raises(QuotaExceeded):
+        guarded.calendar(origin="MAD", destination="NBO", stay_days=61)
+
+
 def test_402_payment_required_floors_pool(conn):
     """A 402 Payment Required (subscription/plan wall) floors the pool —
     RapidAPI keeps decrementing + reporting the quota header on a 402, so
@@ -649,7 +697,7 @@ def test_capture_anchors_does_not_unfloor_payment_walled_pool(conn):
     # A lying 402 header snapshot lands during the run...
     record_quota(conn, source="kiwi", remaining=285, limit_total=300,
                  raw_json="{}")
-    promoted = ledger.capture_anchors_from_snapshots("2000-01-01T00:00:00Z")
+    promoted = ledger.capture_anchors_from_snapshots(0)
     # ...and must NOT resurrect the floored pool.
     assert ledger.pool_state("kiwi").provider_view == 0
     assert ledger.pool_state("kiwi").baseline_origin == "quota_402_floor"
@@ -689,22 +737,29 @@ def test_closeout_capture_never_resurrects_run_spend(conn):
     re-promote the run-START account-probe snapshot — its remaining
     predates the run's spend, and record_anchor pins the watermark at the
     CURRENT max spend event, which would resurrect every credit the run
-    just spent. run_batch passes a cutoff taken AFTER the probes; this
-    pins the ledger behavior for that sequence."""
-    import time
+    just spent.
+
+    2026-11-14: the July fix cut off by timestamp, and timestamps are
+    truncated to the second. In the first calendar sweep the /account
+    snapshot and the cutoff landed in the SAME second (00:54:47Z), the
+    snapshot passed `checked_at >= cutoff`, and the close-out put the
+    sweep's 68 credits back. The cutoff is now a snapshot row id, so the
+    same-second case below is the one pinned."""
     from lib.db import record_quota
     from lib.quota import QuotaLedger
     ledger = QuotaLedger(conn)
     ledger.seed_pools()
-    started_at = "2026-07-18T05:23:00Z"
-    # Run start: /me probe records a snapshot + an account_api anchor.
+    before_probes = ledger.snapshot_watermark()
+    # Run start: /me probe records a snapshot + an account_api anchor,
+    # stamped in the same second the cutoff is taken.
     record_quota(conn, source="searchapi", remaining=100, limit_total=100,
                  raw_json="{}")
     conn.execute("UPDATE quota_snapshots SET checked_at = ? "
                  "WHERE source = 'searchapi'", ("2026-07-18T05:23:01Z",))
     ledger.record_anchor("searchapi", remaining=100, limit_total=100,
                          origin="account_api")
-    anchors_probed_at = "2026-07-18T05:23:02Z"
+    probed = ledger.snapshot_watermark()
+    assert probed > before_probes
     run = ledger.begin_run(trigger="cron")
     # The sweep spends 28 lifetime credits.
     for _ in range(28):
@@ -712,17 +767,35 @@ def test_closeout_capture_never_resurrects_run_spend(conn):
                                  source="searchapi", units=1, op="calendar")
         ledger.mark(ev, "ok")
     before = ledger.pool_state("searchapi").effective_available
-    # Close-out with the CORRECT cutoff: the stale start snapshot is
-    # excluded, nothing is promoted, spend stays on the books.
-    ledger.capture_anchors_from_snapshots(anchors_probed_at)
+    # Close-out with the watermark taken after the probes: the start
+    # snapshot is excluded, nothing is promoted, spend stays on the books.
+    assert ledger.capture_anchors_from_snapshots(probed) == 0
     after = ledger.pool_state("searchapi").effective_available
     assert after == before, (
         f"close-out capture resurrected spend: {before} -> {after}")
-    # And the buggy old call (started_at) WOULD have resurrected it —
-    # the regression this test guards against.
-    ledger.capture_anchors_from_snapshots(started_at)
+    # A cutoff from BEFORE the probes WOULD resurrect it — the hazard
+    # shape this test guards against.
+    ledger.capture_anchors_from_snapshots(before_probes)
     resurrected = ledger.pool_state("searchapi").effective_available
-    assert resurrected == before + 28    # documents the hazard shape
+    assert resurrected == before + 28
+
+
+def test_closeout_capture_still_promotes_a_mid_run_observation(conn):
+    """The cutoff only excludes the run-start probes: a provider reading
+    written during the run (a call's quota header) still re-anchors."""
+    from lib.db import record_quota
+    from lib.quota import QuotaLedger
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    record_quota(conn, source="serpapi", remaining=228, limit_total=250,
+                 raw_json="{}")
+    ledger.record_anchor("serpapi", remaining=228, limit_total=250,
+                         origin="account_api")
+    probed = ledger.snapshot_watermark()
+    record_quota(conn, source="serpapi", remaining=161, limit_total=250,
+                 raw_json="{}")
+    assert ledger.capture_anchors_from_snapshots(probed) == 1
+    assert ledger.pool_state("serpapi").provider_view == 161
 
 
 def test_sweep_affordability_guard():

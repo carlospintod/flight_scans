@@ -26,13 +26,22 @@ from __future__ import annotations
 
 import logging
 import math
+import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Iterable, Iterator
+from typing import Callable, Iterable, Iterator
 
 from .config import RouteConfig
-from .db import CalendarRow, CurveRow, insert_calendar_rows, insert_curve_rows
+from .db import (
+    CalendarRow,
+    CurveRow,
+    calendar_sweep_log,
+    insert_calendar_rows,
+    insert_calendar_sweep,
+    insert_curve_rows,
+)
 from .searchapi_io import CalendarEntry, SearchApiClient, SearchApiError, SOURCE_ID as SEARCHAPI_SOURCE
+from .serpapi_io import CALENDAR_SOURCE_ID as SERPAPI_CALENDAR_SOURCE, SerpApiError
 from .skyscanner_rapidapi import (
     SkyScrapperClient,
     SkyScrapperError,
@@ -488,6 +497,294 @@ def _entries_to_rows(
             currency=route.currency,
             is_lowest_price=e.is_lowest_price,
         )
+
+
+# ---------------------------------------------------------------------------
+# SerpApi calendar STRIP sweep (2026-11-14)
+# ---------------------------------------------------------------------------
+#
+# Geometry. SerpApi's google_flights_calendar engine takes one trip length
+# (`round_trip_days`) and a departure range, and prices every departure
+# day of the range. So the (departure x stay) rectangle is priced one
+# STAY LENGTH at a time: a "strip" = (origin, destination, stay, departure
+# range). The NBO window (65 departure days x stays 60-90) is 31 strips
+# per origin; 62 calls price all 4,030 date pairs — vs 5 pairs per scan
+# from the point-query grid.
+#
+# State. Each call is logged in calendar_sweeps (what was asked, how it
+# landed). A strip is DUE when no ok/empty call in the last
+# SERPAPI_SWEEP_REFRESH_DAYS covers its whole departure range. That one
+# rule gives resume-after-partial-sweep, no re-buying of empty strips,
+# and "a moved window is unswept" for free.
+
+# Re-price each strip every two weeks. The old full sweeps (Jul-Aug)
+# moved little in 15 days (price correlation 0.90-0.98, median change
+# 4-7 EUR, the minimum <= 2 EUR), and 2 sweeps/month (~124 searches)
+# plus the regular scans (~91) fit the free 250 minus its 25 margin.
+SERPAPI_SWEEP_REFRESH_DAYS = 14
+
+# Departure days per call. Probed 2026-11-14: one MAD->NBO call with a
+# 65-day range (27 Dec - 1 Mar) and a 90-day stay returned all 65 days,
+# 1 credit, 4.6 s. Longer ranges are unproven, so wider windows are
+# chunked at the proven size rather than risk a silently truncated strip.
+SERPAPI_CALENDAR_MAX_DEPARTURE_DAYS = 65
+
+# Wall-clock budget for one sweep pass. The first real sweep (2026-11-14)
+# averaged 9.7 s per call (2.8-21.5 s): 62 strips in 10 minutes. 15 min
+# leaves the rest of the batch (scraper verification) inside the CI job
+# even on a slow day. Strips not reached stay due for the next run.
+STRIP_SWEEP_WALL_BUDGET_S = 900
+
+# Stop after this many failures in a row: a dead key or a provider outage
+# should cost a handful of charged calls, not the whole reservation.
+STRIP_SWEEP_MAX_CONSECUTIVE_ERRORS = 3
+
+
+@dataclass(frozen=True)
+class CalendarStrip:
+    """One google_flights_calendar call: every departure day in
+    [dep_start, dep_end], each returning `stay_days` later."""
+    origin: str
+    destination: str
+    stay_days: int
+    dep_start: date
+    dep_end: date
+
+    @property
+    def departures(self) -> int:
+        return (self.dep_end - self.dep_start).days + 1
+
+
+@dataclass
+class StripSweepResult:
+    planned: int
+    calls: int = 0
+    cells_stored: int = 0
+    empty: int = 0
+    errors: int = 0
+    stopped_early: str | None = None    # why the pass ended before the plan
+
+
+def plan_strips(
+    route: RouteConfig, *, today: date,
+    max_departure_days: int = SERPAPI_CALENDAR_MAX_DEPARTURE_DAYS,
+) -> list[CalendarStrip]:
+    """Every strip that covers the search window, before freshness.
+
+    Per stay s, departures run from max(earliest_departure, today) to the
+    last day whose s-day trip still ends by latest_return (and respects
+    latest_departure), clamped so both legs sit inside Google's booking
+    horizon. Ranges longer than `max_departure_days` are chunked."""
+    sw = route.search_window
+    horizon = today + timedelta(days=GOOGLE_HORIZON_DAYS)
+    lo = max(sw.earliest_departure, today)
+    out: list[CalendarStrip] = []
+    for origin in route.origins:
+        for destination in route.destinations:
+            for stay in range(max(1, route.stay.min_days),
+                              route.stay.max_days + 1):
+                hi = min(sw.last_departure(stay),
+                         horizon - timedelta(days=stay))
+                start = lo
+                while start <= hi:
+                    end = min(start + timedelta(days=max_departure_days - 1),
+                              hi)
+                    out.append(CalendarStrip(origin, destination, stay,
+                                             start, end))
+                    start = end + timedelta(days=1)
+    return out
+
+
+def _radical_inverse(i: int) -> float:
+    """Base-2 van der Corput: 0, .5, .25, .75, ... — orders stay lengths
+    so any PREFIX of the order is spread across the whole stay range."""
+    inv, f = 0.0, 0.5
+    while i:
+        inv += f * (i & 1)
+        i >>= 1
+        f *= 0.5
+    return inv
+
+
+def _covered(intervals: list[tuple[date, date]], lo: date, hi: date) -> bool:
+    """True when the union of [a, b] day intervals contains [lo, hi]."""
+    reach = lo - timedelta(days=1)
+    for a, b in sorted(intervals):
+        if a > reach + timedelta(days=1):
+            break
+        reach = max(reach, b)
+        if reach >= hi:
+            return True
+    return reach >= hi
+
+
+def due_strips(
+    conn, route: RouteConfig, strips: list[CalendarStrip], *, today: date,
+    refresh_days: int = SERPAPI_SWEEP_REFRESH_DAYS,
+    source: str = SERPAPI_CALENDAR_SOURCE,
+) -> list[CalendarStrip]:
+    """The strips that need pricing, in the order to price them.
+
+    A strip is FRESH when calls logged less than `refresh_days` days ago
+    cover its whole departure range. An `ok` call counts; an error never
+    does. An `empty` call counts only when the call before it for the
+    same origin, destination and stay was empty too: Google's "no
+    results" is retried once before it is believed. In the first real
+    sweep (2026-11-14) one strip of 62 came back empty while the strips
+    on either side of it returned all 65 days.
+
+    Order: never-swept strips first (an empty not yet confirmed counts as
+    never swept), then the stalest; ties are spread across stay lengths
+    (van der Corput) and alternate origins, so a sweep that is cut short
+    by budget or wall clock still samples the whole window. One DB query
+    for all strips."""
+    cutoff = (today - timedelta(days=refresh_days)).isoformat()
+    fresh: dict[tuple, list[tuple[date, date]]] = {}
+    last: dict[tuple, str] = {}
+    previous: dict[tuple, str] = {}       # status of the key's last call
+    for r in calendar_sweep_log(conn, route.name, source=source):
+        key = (r["origin"], r["destination"], int(r["stay_days"]))
+        status, before = r["status"], previous.get(key)
+        previous[key] = status
+        if not (status == "ok" or (status == "empty" and before == "empty")):
+            continue
+        try:
+            a, b = date.fromisoformat(r["dep_start"]), date.fromisoformat(r["dep_end"])
+        except (TypeError, ValueError):
+            continue
+        last[key] = max(last.get(key, ""), r["swept_at"])
+        # Fresh = swept on a day AFTER the cutoff day: with a 14-day
+        # refresh, a strip swept on a Saturday is due again two Saturdays
+        # later, on the same scan slot.
+        if str(r["swept_at"])[:10] > cutoff:
+            fresh.setdefault(key, []).append((a, b))
+    origins = {o: i for i, o in enumerate(route.origins)}
+    dests = {d: i for i, d in enumerate(route.destinations)}
+    due = [s for s in strips
+           if not _covered(fresh.get((s.origin, s.destination, s.stay_days), []),
+                           s.dep_start, s.dep_end)]
+    min_stay = route.stay.min_days
+    due.sort(key=lambda s: (
+        last.get((s.origin, s.destination, s.stay_days), ""),
+        _radical_inverse(s.stay_days - min_stay),
+        origins.get(s.origin, 99), dests.get(s.destination, 99),
+        s.dep_start))
+    return due
+
+
+def _empty_reason(resp) -> str:
+    """Why a strip stored no cells, for the log line."""
+    raw = getattr(resp, "raw", None)
+    if isinstance(raw, dict) and raw.get("error"):
+        return str(raw["error"])[:160]
+    n = len(resp.entries)
+    return (f"{n} cells returned, none inside the window" if n
+            else "no prices in the response")
+
+
+def _cell_in_window(route: RouteConfig, e: CalendarEntry) -> int | None:
+    """Stay length of a cell that sits inside the CURRENT search window
+    (the same rules alerts and followup apply), else None."""
+    sw = route.search_window
+    try:
+        dep = date.fromisoformat(e.departure_date)
+        ret = date.fromisoformat(e.return_date)
+    except ValueError:
+        return None
+    stay = (ret - dep).days
+    if not (route.stay.min_days <= stay <= route.stay.max_days):
+        return None
+    if dep < sw.earliest_departure or dep > sw.last_departure(route.stay.min_days):
+        return None
+    if ret > sw.latest_return:
+        return None
+    return stay
+
+
+def run_strip_sweep(
+    *,
+    conn,
+    client,
+    route: RouteConfig,
+    strips: Iterable[CalendarStrip],
+    wall_budget_s: float = STRIP_SWEEP_WALL_BUDGET_S,
+    clock: Callable[[], float] = time.monotonic,
+) -> StripSweepResult:
+    """Price EXACTLY the planned strips (quote == execution), storing the
+    in-window cells as `serpapi_calendar` rows and logging every call.
+
+    `client` is the (guarded) SerpApiClient: each calendar() call is
+    charged to the ledger before it runs. Stops early on the wall budget
+    or after STRIP_SWEEP_MAX_CONSECUTIVE_ERRORS failures in a row; the
+    strips it did not reach stay due, so the next run picks them up.
+    QuotaExceeded is not caught here: it means the executor outran its own
+    reservation (a planner/executor bug), and execute_search records it
+    as a failed, degraded search."""
+    strips = list(strips)
+    res = StripSweepResult(planned=len(strips))
+    snapshot_at = _now_iso()
+    deadline = clock() + wall_budget_s
+    consecutive_errors = 0
+    for strip in strips:
+        if clock() > deadline:
+            res.stopped_early = f"wall budget {wall_budget_s:.0f}s"
+            break
+        if consecutive_errors >= STRIP_SWEEP_MAX_CONSECUTIVE_ERRORS:
+            res.stopped_early = f"{consecutive_errors} errors in a row"
+            break
+        res.calls += 1
+        try:
+            resp = client.calendar(
+                origin=strip.origin, destination=strip.destination,
+                stay_days=strip.stay_days,
+                outbound_start=strip.dep_start, outbound_end=strip.dep_end,
+                currency=route.currency)
+        except SerpApiError as exc:
+            res.errors += 1
+            consecutive_errors += 1
+            LOG.error("calendar strip failed %s->%s stay=%d %s..%s: %s",
+                      strip.origin, strip.destination, strip.stay_days,
+                      strip.dep_start, strip.dep_end, exc)
+            insert_calendar_sweep(
+                conn, route_id=route.name, source=SERPAPI_CALENDAR_SOURCE,
+                origin=strip.origin, destination=strip.destination,
+                stay_days=strip.stay_days, dep_start=strip.dep_start.isoformat(),
+                dep_end=strip.dep_end.isoformat(), swept_at=snapshot_at,
+                cells=0, status="error")
+            continue
+        consecutive_errors = 0
+        rows: list[CalendarRow] = []
+        for e in resp.entries:
+            stay = _cell_in_window(route, e)
+            if stay is None:
+                continue
+            rows.append(CalendarRow(
+                snapshot_at=snapshot_at, route_id=route.name,
+                source=SERPAPI_CALENDAR_SOURCE, origin=strip.origin,
+                destination=strip.destination,
+                departure_date=e.departure_date, return_date=e.return_date,
+                stay_days=stay, price=e.price, currency=route.currency,
+                is_lowest_price=e.is_lowest_price))
+        res.cells_stored += insert_calendar_rows(conn, rows)
+        if not rows:
+            res.empty += 1
+            LOG.warning("calendar strip %s->%s stay=%d %s..%s came back empty: %s",
+                        strip.origin, strip.destination, strip.stay_days,
+                        strip.dep_start, strip.dep_end, _empty_reason(resp))
+        insert_calendar_sweep(
+            conn, route_id=route.name, source=SERPAPI_CALENDAR_SOURCE,
+            origin=strip.origin, destination=strip.destination,
+            stay_days=strip.stay_days, dep_start=strip.dep_start.isoformat(),
+            dep_end=strip.dep_end.isoformat(), swept_at=snapshot_at,
+            cells=len(rows), status="ok" if rows else "empty")
+        LOG.info("calendar strip %s->%s stay=%d %s..%s cells=%d (of %d returned)",
+                 strip.origin, strip.destination, strip.stay_days,
+                 strip.dep_start, strip.dep_end, len(rows), len(resp.entries))
+    LOG.info("calendar sweep route=%s planned=%d calls=%d cells=%d empty=%d "
+             "errors=%d%s", route.name, res.planned, res.calls,
+             res.cells_stored, res.empty, res.errors,
+             f" stopped_early={res.stopped_early}" if res.stopped_early else "")
+    return res
 
 
 def _now_iso() -> str:

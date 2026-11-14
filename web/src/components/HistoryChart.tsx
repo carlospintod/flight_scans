@@ -7,6 +7,7 @@ import type { HistoryPoint } from "@/lib/types";
 const SOURCE_COLORS: Record<string, string> = {
   googleflights: t.good,
   serpapi: t.cyan,
+  serpapi_calendar: t.hint,   // calendar-sweep grid cell (nomination)
   searchapi: t.amber,
   kiwi: t.kiwi,
   aviasales: t.aviasales,

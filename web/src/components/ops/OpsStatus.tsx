@@ -23,7 +23,9 @@ export function isVuelazoSource(source: string): boolean {
 }
 
 const SOURCE_LABELS: Record<string, string> = {
-  serpapi: "SerpAPI · verify",
+  // Tracker pool: calendar sweep (every date pair, ~2-weekly) + the
+  // per-scan date grid + OTA seller check.
+  serpapi: "SerpAPI · calendar sweep + grid",
   serpapi_ota: "SerpAPI · OTA sellers",
   kiwi: "Kiwi · discovery",
   aviasales: "Aviasales · cached scout",

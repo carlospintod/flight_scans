@@ -63,6 +63,11 @@ export function providerLabel(source: string): string {
     case "googleflights":
     case "searchapi":
       return "Google Flights";
+    // The calendar sweep's date-grid price: same corpus, but a grid cell,
+    // not a priced itinerary (no carrier detail until the scraper
+    // verifies it) — say so instead of passing it off as a point query.
+    case "serpapi_calendar":
+      return "Google Flights calendar";
     case "aviasales":
       return "Aviasales (cached)";
     case "kiwi":

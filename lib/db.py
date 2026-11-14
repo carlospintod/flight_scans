@@ -295,6 +295,29 @@ CREATE TABLE IF NOT EXISTS source_credentials (
     updated_at TEXT NOT NULL,
     updated_by INTEGER
 );
+
+-- Calendar strip sweeps (2026-11-14): one row per google_flights_calendar
+-- call, recording what was ASKED (origin, stay length, departure range)
+-- and how it landed (ok, empty, error). Prices go to calendar_snapshots.
+-- The planner reads this log to decide which strips are fresh, so a sweep
+-- cut short by budget or wall clock resumes where it stopped, an empty
+-- strip is not re-bought every run, and a moved search window counts as
+-- unswept. `source` is the row label (serpapi_calendar), not the pool.
+CREATE TABLE IF NOT EXISTS calendar_sweeps (
+    sweep_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    route_id     TEXT NOT NULL,
+    source       TEXT NOT NULL,
+    origin       TEXT NOT NULL,
+    destination  TEXT NOT NULL,
+    stay_days    INTEGER NOT NULL,
+    dep_start    TEXT NOT NULL,
+    dep_end      TEXT NOT NULL,
+    swept_at     TEXT NOT NULL,
+    cells        INTEGER NOT NULL DEFAULT 0,
+    status       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_calendar_sweeps_route
+    ON calendar_sweeps (route_id, source, swept_at);
 """
 
 
@@ -499,6 +522,40 @@ def insert_calendar_rows(conn: sqlite3.Connection, rows: Iterable[CalendarRow]) 
         payload,
     )
     return len(payload)
+
+
+def insert_calendar_sweep(conn: sqlite3.Connection, *, route_id: str,
+                          source: str, origin: str, destination: str,
+                          stay_days: int, dep_start: str, dep_end: str,
+                          swept_at: str, cells: int, status: str) -> None:
+    """Log one calendar strip call (see the calendar_sweeps table)."""
+    conn.execute(
+        """
+        INSERT INTO calendar_sweeps
+            (route_id, source, origin, destination, stay_days,
+             dep_start, dep_end, swept_at, cells, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (route_id, source, origin, destination, stay_days,
+         dep_start, dep_end, swept_at, cells, status),
+    )
+
+
+def calendar_sweep_log(conn: sqlite3.Connection, route_id: str, *,
+                       source: str) -> list[sqlite3.Row]:
+    """Every logged strip call for one route + row label, oldest first.
+    One query: the planner evaluates freshness for all strips in Python
+    (each query is a network round trip on the Turso backend)."""
+    return conn.execute(
+        """
+        SELECT origin, destination, stay_days, dep_start, dep_end,
+               swept_at, cells, status
+        FROM calendar_sweeps
+        WHERE route_id = ? AND source = ?
+        ORDER BY swept_at ASC, sweep_id ASC
+        """,
+        (route_id, source),
+    ).fetchall()
 
 
 def insert_point_rows(conn: sqlite3.Connection, rows: Iterable[PointRow]) -> int:

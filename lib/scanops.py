@@ -37,14 +37,19 @@ def enrich_ota_sellers(conn, serpapi_client, route, *, since: str) -> int:
     if serpapi_client is None:
         return 0
     from .db import CalendarRow, PointRow, insert_calendar_rows, insert_point_rows
+    from .followup import LEAD_SOURCES
     from .serpapi_io import top_booking_token
-    # Cheapest fresh LIVE observation (exclude cached aviasales leads).
+    # Cheapest fresh LIVE observation. Leads (cached aviasales quotes,
+    # calendar-sweep grid cells) are not fares: the first sweep
+    # (2026-11-14) made this check spend its call on a 594 grid cell
+    # instead of a verified fare.
+    leads = sorted(LEAD_SOURCES)
     row = conn.execute(
         "SELECT origin, destination, departure_date, return_date, "
         "stay_days, price FROM calendar_snapshots WHERE route_id = ? "
-        "AND snapshot_at >= ? AND source != 'aviasales' "
+        f"AND snapshot_at >= ? AND source NOT IN ({', '.join('?' * len(leads))}) "
         "ORDER BY price ASC LIMIT 1",
-        (route.name, since)).fetchone()
+        (route.name, since, *leads)).fetchone()
     if row is None:
         return 0
     try:

@@ -38,6 +38,7 @@ from .db import (
     latest_calendar_snapshot_per_itinerary,
 )
 from .searchapi_io import SearchApiClient, SearchApiError, SOURCE_ID as SEARCHAPI_SOURCE
+from .serpapi_io import CALENDAR_SOURCE_ID
 from .skyscanner_rapidapi import (
     SkyScrapperClient,
     SkyScrapperError,
@@ -48,10 +49,16 @@ LOG = logging.getLogger(__name__)
 
 MAX_RANKS_TO_STORE = 3
 
-# Sources whose calendar rows are re-served CACHE data rather than live
-# observations. They may nominate candidates (unique discovery value)
-# but never displace a live source as an itinerary's current price.
-CACHED_SOURCES = frozenset({"aviasales"})
+# Row labels that are LEADS, not live priced itineraries. They may
+# nominate candidates (unique discovery value) but never displace a live
+# source as an itinerary's current price, and the OTA check never spends
+# its call on one:
+#   * aviasales re-serves 2-7 day cached quotes;
+#   * serpapi_calendar is Google's date-grid price, with no carrier
+#     detail. In the first sweep (2026-11-14) it matched a point query
+#     made ten minutes later on 2 of 5 trips; the other three were off
+#     by -131, -4 and +71 EUR.
+LEAD_SOURCES = frozenset({"aviasales", CALENDAR_SOURCE_ID})
 
 
 @dataclass
@@ -129,10 +136,13 @@ def select_candidates(conn, route: RouteConfig, *, today: date | None = None) ->
     # scan. Found by the M0 adversarial audit, 2026-07-07. Cached-only
     # itineraries still nominate candidates — that discovery role
     # (carriers no live rail sees) is the point of keeping aviasales.
+    # Calendar-sweep cells get the same rank (LEAD_SOURCES): a fresh grid
+    # cell must not push aside a verified price, which is the price the
+    # drop_above filter is meant to judge.
     best_row_by_itin: dict[tuple, object] = {}
 
     def _freshness_rank(row) -> tuple:
-        return (row["source"] not in CACHED_SOURCES, row["snapshot_at"])
+        return (row["source"] not in LEAD_SOURCES, row["snapshot_at"])
 
     for row in latest_calendar_snapshot_per_itinerary(conn, route.name):
         key = (row["origin"], row["destination"],

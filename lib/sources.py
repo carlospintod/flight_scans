@@ -68,12 +68,17 @@ REGISTRY: tuple[SourceSpec, ...] = (
     SourceSpec(
         "serpapi", family=FAMILY_GOOGLE, roles=("discovery", "verification"),
         env_var="SERPAPI_KEY",
-        metered={"point_query": 1, "booking_options": 1},
+        # calendar (2026-11-14): one google_flights_calendar strip = one
+        # search credit, same as a point query. per_search_cap 7 still
+        # bounds guest searches; the calendar sweep is owner-only and
+        # owner reservations skip the per-search cap (pool + margin hold).
+        metered={"point_query": 1, "booking_options": 1, "calendar": 1},
         pool=("monthly", 250, None, 25, 7, None),
         failure_mode="clean_429", enabled=True,
         note="PRIMARY discovery + verification rail (2026-07-14): live "
              "Google Flights date grid + booking_options (OTA sellers) + "
-             "price_insights. Never captcha'd. No card. $25/mo -> 1000 switch."),
+             "the calendar sweep (every date pair, one call per stay "
+             "length). Never captcha'd. No card. $25/mo -> 1000 switch."),
     SourceSpec(
         "aviasales", family=FAMILY_CACHED, roles=("discovery", "corroboration"),
         env_var="TRAVELPAYOUTS_TOKEN",
@@ -147,7 +152,11 @@ REGISTRY: tuple[SourceSpec, ...] = (
         "serpapi_vz", family=FAMILY_GOOGLE, roles=("discovery", "verification"),
         env_var="SERPAPI_KEY_VZ", backend="serpapi",
         env_var_fallback="SERPAPI_KEY",
-        metered={"point_query": 1, "booking_options": 1, "explore": 1},
+        # Same adapter as `serpapi`, so every spending method on it is
+        # metered here too (calendar included) even though Vuelazo does
+        # not call it today: an unlisted method would pass the guard free.
+        metered={"point_query": 1, "booking_options": 1, "explore": 1,
+                 "calendar": 1},
         # Vuelazo has its OWN SerpAPI account since 2026-08-09 (probed:
         # 250/250), so this mirrors the tracker's pool instead of the
         # 50-unit holding slice it needed while borrowing one key.

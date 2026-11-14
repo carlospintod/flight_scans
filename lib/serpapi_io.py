@@ -12,19 +12,30 @@ only `other_flights` — parsed with the same code path.
 
 Request params differ slightly from SearchAPI: `type=1` (round trip)
 instead of `flight_type=round_trip`, and auth is `api_key` only.
+
+`calendar()` (2026-11-14) is the full-window rail: the
+google_flights_calendar engine prices EVERY departure day of a range for
+one trip length per call, so the tracker's 4,030 date pairs cost one call
+per (origin, stay length). See lib/sweep.py for the strip planner.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
 import requests
 
-from .searchapi_io import PointResponse, _parse_best_flights
+from .searchapi_io import (
+    CalendarEntry,
+    CalendarResponse,
+    PointResponse,
+    _parse_best_flights,
+)
 
 LOG = logging.getLogger(__name__)
 
@@ -44,7 +55,25 @@ class SellerOption:
 BASE_URL = "https://serpapi.com/search"
 ACCOUNT_URL = "https://serpapi.com/account"
 DEFAULT_TIMEOUT_S = 90
+# A calendar sweep makes ~60 calls in one run; at the point-query timeout
+# a bad day could hold the CI job for 90 minutes. 60s bounds each strip,
+# and the sweep's own wall budget (lib/sweep.py) bounds the whole pass.
+CALENDAR_TIMEOUT_S = 60
 SOURCE_ID = "serpapi"
+# Row label for calendar-sweep cells in calendar_snapshots. The LEDGER
+# source is still "serpapi" (same account, same pool); the separate label
+# keeps grid cells apart from point-query prices, because they mean
+# different things: a cell is Google's calendar price (a nomination the
+# free scraper then verifies), a point query is a priced itinerary.
+# lib/alerts.py does not alert on this label — two sweeps two weeks apart
+# would otherwise compare ~4,000 cells and fire hundreds of new_low rows.
+CALENDAR_SOURCE_ID = "serpapi_calendar"
+
+# SerpAPI answers "Google found nothing for this strip" with an error
+# payload. For a calendar strip that is ordinary data (no flights that
+# week), so it becomes an empty response, not an exception.
+_NO_RESULTS_RE = re.compile(r"hasn.t returned any results|empty results|no results",
+                            re.I)
 
 
 class SerpApiError(RuntimeError):
@@ -174,6 +203,73 @@ class SerpApiClient:
                                payload=data)
         return _parse_booking_options(data, currency)
 
+    def calendar(
+        self,
+        *,
+        origin: str,
+        destination: str,
+        stay_days: int,
+        outbound_start: date,
+        outbound_end: date,
+        currency: str,
+        adults: int = 1,
+        extra: dict[str, Any] | None = None,
+    ) -> CalendarResponse:
+        """One stay-length STRIP of the google_flights_calendar engine:
+        Google's round-trip price for every departure day in
+        [outbound_start, outbound_end], each returning `stay_days` later.
+
+        One call = one credit (metered as `calendar` in lib/sources.py).
+        The whole NBO window is one strip per stay length per origin,
+        so 31 stays x 2 origins = 62 calls price every date pair.
+
+        Returns the same CalendarResponse/CalendarEntry shape as the
+        SearchAPI calendar, so the sweep stores both the same way. A
+        "no results" error payload is an empty response (still charged).
+        """
+        if stay_days < 1:
+            raise SerpApiError(400, f"stay_days must be >= 1 (got {stay_days})")
+        if outbound_end < outbound_start:
+            raise SerpApiError(
+                400, f"empty departure range {outbound_start}..{outbound_end}")
+        params: dict[str, Any] = {
+            "engine": "google_flights_calendar",
+            "api_key": self._api_key,
+            "departure_id": origin,
+            "arrival_id": destination,
+            "type": "1",                       # round trip
+            "date_range_start": outbound_start.isoformat(),
+            "date_range_end": outbound_end.isoformat(),
+            "round_trip_days": stay_days,
+            "currency": currency,
+            "adults": adults,
+            "hl": "en",
+        }
+        if extra:
+            params.update(extra)
+        LOG.info("serpapi calendar %s->%s stay=%d dep=%s..%s",
+                 origin, destination, stay_days, outbound_start, outbound_end)
+        try:
+            r = self._session.get(BASE_URL, params=params,
+                                  timeout=CALENDAR_TIMEOUT_S)
+        except requests.RequestException as exc:
+            raise SerpApiError(0, f"network error: {exc}") from exc
+        try:
+            data = r.json()
+        except ValueError as exc:
+            raise SerpApiError(r.status_code, "non-JSON response") from exc
+        if not isinstance(data, dict):
+            raise SerpApiError(r.status_code, "response body was not a JSON object")
+        if not r.ok or "error" in data:
+            msg = str(data.get("error", r.text[:200]))
+            if r.ok and _NO_RESULTS_RE.search(msg):
+                LOG.info("serpapi calendar %s->%s stay=%d: no results (%s)",
+                         origin, destination, stay_days, msg)
+                return CalendarResponse(raw=data, entries=())
+            raise SerpApiError(r.status_code, msg, payload=data)
+        return CalendarResponse(raw=data,
+                                entries=tuple(_parse_calendar_prices(data)))
+
     def check_quota(self) -> dict:
         """Return the current SerpAPI quota (does not count as a search).
 
@@ -216,6 +312,39 @@ def _parse_point(payload: dict) -> list:
     if not options and payload.get("other_flights"):
         options = _parse_best_flights({"best_flights": payload["other_flights"]})
     return options
+
+
+def _parse_calendar_prices(payload: dict) -> list[CalendarEntry]:
+    """google_flights_calendar `prices[]` -> CalendarEntry (defensive:
+    CLAUDE.md #5). Documented cell: {outbound_date, return_date, price,
+    low_price}. A cell without both ISO dates or a positive numeric price
+    is not an observation and is dropped. `low_price` ("within 5% of the
+    range minimum") maps to is_lowest_price, Google's own cheap-cell flag.
+    """
+    out: list[CalendarEntry] = []
+    for raw in payload.get("prices") or []:
+        if not isinstance(raw, dict):
+            continue
+        dep, ret, price = (raw.get("outbound_date"), raw.get("return_date"),
+                           raw.get("price"))
+        if not isinstance(dep, str) or not isinstance(ret, str):
+            continue
+        try:
+            date.fromisoformat(dep)
+            date.fromisoformat(ret)
+        except ValueError:
+            continue
+        # bool is an int subclass: True must not become a 1-euro fare.
+        if isinstance(price, bool) or not isinstance(price, (int, float)):
+            continue
+        if price <= 0:
+            continue
+        out.append(CalendarEntry(
+            departure_date=dep, return_date=ret, price=int(round(price)),
+            has_no_flights=False,
+            is_lowest_price=bool(raw.get("low_price", False)),
+        ))
+    return out
 
 
 def top_booking_token(resp: PointResponse) -> str | None:
