@@ -212,9 +212,10 @@ and sent nothing.
 ## Waiting on Carlos
 
 1. ~~Push~~ done 2026-11-14 (64ee520..ff6b024; `tests` green on GitHub).
-2. ~~B6~~ done 2026-11-14 (run 3e8758efb2f2 above). Open: the `serpapi` pool is
-   short until 6 Dec. Let the sweep shrink (the default), or pause the sweep until
-   renewal?
+2. ~~B6~~ done 2026-11-14 (run 3e8758efb2f2 above). The `serpapi` pool is
+   short until 6 Dec. **Carlos, 2026-11-14: let the sweep shrink** (the default
+   `_serpapi_sweep_allowance` behaviour, no code change). Regular scans keep their
+   headroom. The watchdog's pool push is expected until renewal.
 3. **A6 weekly push.** Does he want it, and is this wording right? Draft (owner push,
    English like the other ops pushes; sent Monday ~08:00 Madrid):
 
