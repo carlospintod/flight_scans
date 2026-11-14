@@ -1,50 +1,43 @@
-# Vuelazo deal pipeline — scheduled discovery/gate/verify/draft (M1).
+# Vuelazo — PASSIVE COLLECTOR since 2026-11-14 (DECISIONS amendment).
 #
-# Cadence (D1): anywhere sweep 3x/day; the watchlist refresh rides the
-# first run of the day (run_deals gates it internally to 1x/day). Cron
-# jitter of 15-60 min under load is acceptable for standard deals
-# (MVP-SPEC §1); mistake-class candidates page via ntfy the moment a run
-# finds them.
+# What runs now: once a day, `run_deals.py --collect-only` prices today's
+# Google Travel Explore rotation (explore.calls_per_day windows of the
+# 4 origins x 5 areas x 6 months grid) on Vuelazo's own SerpApi account
+# (SERPAPI_KEY_VZ, ledger pool serpapi_vz) and stores the rows in
+# fare_observations. Nothing is nominated, verified, drafted, approved
+# or published. Why: a deal engine needs paid discovery volume (SearchAPI
+# Developer, about $40/mo) that Carlos has not bought; until he does, the
+# collector builds the price history a paid trial will start from.
 #
-# The cron run uses --queue: drafts land in the /ops queue; nothing
-# publishes without Carlos's approve tap (D3). The /ops approve button
-# dispatches this workflow with publish_only=true for the fan-out.
+# A run that stores ZERO rows exits non-zero, so "Notify failure" below
+# pushes to the phone. watchdog.yml catches what this cannot: the
+# workflow not running at all.
 #
-# Secrets: TURSO_*, NTFY_TOPIC (shared with scan.yml) + ANTHROPIC_API_KEY,
-# TELEGRAM_BOT_TOKEN, TELEGRAM_TEST_CHAT_ID, RESEND_API_KEY (Vuelazo
-# service rails).
+# Manual dispatch:
+#   mode=collect (default)  the same passive run as the schedule
+#   mode=full               the whole M1 pipeline (sweep, gate, verify,
+#                           draft into the /ops queue) — for the paid trial
+#   publish_only=true       fan out already-approved deals (the /ops
+#                           approve button sends exactly this input)
 #
-# FARE KEYS: Vuelazo prefers its OWN — SERPAPI_KEY_VZ,
-# TRAVELPAYOUTS_TOKEN_VZ, SEARCHAPI_KEY_VZ — and falls back to the
-# tracker's (SERPAPI_KEY, TRAVELPAYOUTS_TOKEN) with a loud warning when
-# they are unset. Both are passed so the fallback works today; setting
-# the _VZ secrets is what actually separates the two projects at the
-# PROVIDER (the ledger already separates them at the budget).
+# Secrets: TURSO_*, NTFY_TOPIC, SERPAPI_KEY_VZ (the collector). The full
+# pipeline also uses TRAVELPAYOUTS_TOKEN(_VZ), SERPAPI_KEY (fallback),
+# SEARCHAPI_KEY_VZ, ANTHROPIC_API_KEY, TELEGRAM_*, RESEND_API_KEY.
 
 name: deals
 
 on:
-  # PAUSED 2026-08-13 until SearchAPI Developer is purchased.
-  #
-  # Measured (docs/notes/viability-2026-08-13.md): the cached discovery
-  # layer these runs depend on is 76h stale at the median, missing half
-  # the long-haul routes Google sees, and wrong by +40% median when it
-  # does have data — so 71% of every verification euro was being spent
-  # disproving cache fiction. Running the cron on that costs money to
-  # learn nothing new.
-  #
-  # workflow_dispatch below still works for manual runs. The Nairobi
-  # tracker (scan.yml) is untouched. To resume, delete this comment and
-  # the `if: false` guard, restoring the schedule block.
   schedule:
-    # 3x/day; odd minute dodges queue spikes. 06:41 (not 05:41) still
-    # keeps the morning run clear of scan.yml (05:23 Mon/Wed/Sat, up to
-    # 50 min) — not for the lease any more (leases are per-project since
-    # 2026-08-08), but because two concurrent runs on a SHARED provider
-    # key still contend for the same rate limits.
-    - cron: "41 6,12,18 * * *"
+    # Once a day. 03:41 UTC keeps clear of scan.yml (05:23 Mon/Wed/Sat,
+    # which GitHub starts 7-9 h late) and watchdog.yml (19:37). GitHub may
+    # start this one hours late too; the watchdog allows 48 h.
+    - cron: "41 3 * * *"
   workflow_dispatch:
     inputs:
+      mode:
+        description: "collect = passive Explore collector; full = whole deal pipeline"
+        default: "collect"
+        required: false
       publish_only:
         description: "Only fan out already-approved deals (the /ops approve path)"
         default: "false"
@@ -60,9 +53,6 @@ permissions:
 
 jobs:
   deals:
-    # PAUSED: scheduled runs are skipped; manual dispatch still runs.
-    # Remove this line to resume (see the note under `on:` above).
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -98,17 +88,21 @@ jobs:
             python run_deals.py --publish-only \
               --trigger "${{ github.event_name }}" \
               --json-summary deal_summary.json
-          else
+          elif [ "${{ inputs.mode || 'collect' }}" = "full" ]; then
             python run_deals.py --queue \
+              --trigger "${{ github.event_name }}" \
+              --json-summary deal_summary.json
+          else
+            python run_deals.py --collect-only \
               --trigger "${{ github.event_name }}" \
               --json-summary deal_summary.json
           fi
 
       # Membership lifecycle (M2): lapse removal, T-30/T-7 reminders,
-      # refund enforcement. Idempotent (CAS + event-log dedup) — safe at
-      # 3x/day even though once would do. Runs even when the deal step
-      # failed: money/member enforcement must never be hostage to a
-      # fare-source outage.
+      # refund enforcement. Idempotent (CAS + event-log dedup); unchanged
+      # by the passive mode. Runs even when the deal step failed:
+      # money/member enforcement must never be hostage to a fare-source
+      # outage.
       - name: Member lifecycle
         if: ${{ !cancelled() && inputs.publish_only != 'true' }}
         env:
@@ -129,7 +123,10 @@ jobs:
             python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json
           s = json.load(open("deal_summary.json"))
+          print(f"- mode: {s.get('mode', 'full')}")
           print(f"- status: **{s.get('status', '?')}** (run {s.get('run_id')})")
+          if s.get("error"):
+              print(f"- ✖ {s['error']}")
           for step, info in (s.get("steps") or {}).items():
               print(f"- {step}: {info}")
           for w in s.get("warnings") or []:
@@ -145,10 +142,14 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: |
           if [ -n "$NTFY_TOPIC" ]; then
+            DETAIL=""
+            if [ -f deal_summary.json ]; then
+              DETAIL=$(python -c "import json; print(json.load(open('deal_summary.json')).get('error') or '')" || true)
+            fi
             curl -fsS -X POST "https://ntfy.sh/$NTFY_TOPIC" \
               -H "Title: Vuelazo: deals workflow FAILED" \
               -H "Priority: high" -H "Tags: rotating_light" \
-              -d "Run ${{ github.run_id }} (${{ github.event_name }}) failed — check Actions." || true
+              -d "Run ${{ github.run_id }} (${{ github.event_name }}) failed. ${DETAIL:-Check Actions.}" || true
           fi
 
       - name: Keepalive

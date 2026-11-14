@@ -10,6 +10,14 @@ the run prints the reserved-vs-used receipt (predicted = upper bound).
 Usage:
     python run_deals.py [--trigger local] [--auto-approve]
                         [--skip-publish] [--json-summary out.json]
+    python run_deals.py --collect-only [--trigger schedule]
+                        [--json-summary out.json]
+
+--collect-only is the passive collector (DECISIONS amendment 2026-11-14,
+the scheduled mode until a paid discovery tier is bought): bootstrap,
+serpapi_vz anchor, today's Explore rotation through the GuardedClient,
+rows into fare_observations, receipt, summary. Nothing else is built or
+called. Storing zero rows exits 1 so the workflow's failure push fires.
 
 Missing service keys degrade the chain, never crash it: the run stops at
 the step whose key is absent, says exactly which env var to set, and
@@ -33,6 +41,14 @@ from dotenv import load_dotenv
 REPO = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO))
 load_dotenv(dotenv_path=REPO / ".env")
+
+# A Windows console (cp1252) cannot print the receipt's "≤"; measured
+# 2026-11-14, the crash killed a local run before its first call.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -83,7 +99,7 @@ def _ensure_service_anchor(ledger, source: str) -> None:
                  source, limit, month)
 
 
-def _ensure_fare_anchor(ledger, source: str, client) -> None:
+def _ensure_fare_anchor(ledger, source: str, client, conn=None) -> None:
     """Anchor a Vuelazo fare pool, by whichever rule is HONEST for it.
 
     Dedicated key  -> probe that account's own counter (/account is
@@ -104,13 +120,13 @@ def _ensure_fare_anchor(ledger, source: str, client) -> None:
     if shares_key_with_other_project(source, os.environ):
         _ensure_service_anchor(ledger, source)
         return
-    # A dedicated key arrived. Any baseline we invented for ourselves
-    # while borrowing (origin 'seed'/'self_monthly_reset') is now a
-    # fiction that would cap the new account at the old slice — a real
-    # provider counter always outranks a self-imposed one.
-    self_imposed = state.baseline_origin in ("seed", "self_monthly_reset")
-    if state.provider_view is not None and not self_imposed:
-        return
+    # Dedicated key: probe that account's own counter EVERY run, exactly
+    # as run_batch does for `serpapi` (/account is free). Probing only
+    # once left serpapi_vz anchored on 2026-08-09 for three months: the
+    # ledger never sees a provider reset it is not shown, so the pool
+    # read 156 left while the account had renewed (found 2026-11-14).
+    # This also replaces any baseline we invented while borrowing a key
+    # ('seed'/'self_monthly_reset'): a real counter outranks it.
     if client is None:
         return
     probe = getattr(client, "check_quota", None)
@@ -123,6 +139,14 @@ def _ensure_fare_anchor(ledger, source: str, client) -> None:
         LOG.warning("%s /account probe failed: %s", source, exc)
         return
     if isinstance(q.get("remaining"), int):
+        if conn is not None:
+            from lib import db as db_mod
+            # The snapshot carries plan_renewal_date (safe fields only),
+            # which the watchdog needs to judge "runs out before reset".
+            db_mod.record_quota(conn, source=source,
+                                remaining=q["remaining"],
+                                limit_total=q.get("limit_total"),
+                                raw_json=json.dumps(q.get("raw", {})))
         ledger.record_anchor(source, remaining=q["remaining"],
                              limit_total=q.get("limit_total"),
                              origin="account_api")
@@ -181,6 +205,40 @@ def _console_approve(auto: bool) -> tuple[str, str | None, str | None]:
             print("  (vacío — ignorado)")
 
 
+def _build_service_rails(config, summary: dict, try_service):
+    """Drafting + publish rails for the full pipeline. Never built in
+    collect-only mode, so a passive run cannot reach Anthropic, Telegram
+    or Resend even by accident. Returns
+    (drafter, drafter_err, telegram, tg_chat, resend)."""
+    from lib.drafting import AnthropicDraftClient
+    from lib.resend_api import ResendClient
+    from lib.telegram_api import TelegramClient, chat_id_from_env
+
+    drafter, drafter_err = try_service(
+        "anthropic", lambda: AnthropicDraftClient.from_env(
+            model=config.draft_model,
+            max_tokens=config.draft_max_tokens),
+        required=True)      # no drafting, no publishable deal
+    telegram, _ = try_service(
+        "telegram", TelegramClient.from_env,
+        required="tg_private" in config.publish_channels)
+    # Members are admitted into the PRIVATE channel (M2); the test
+    # channel is the pre-launch fallback.
+    tg_chat: str | None = os.environ.get(
+        "TELEGRAM_PRIVATE_CHANNEL_ID", "").strip() or None
+    if tg_chat is None:
+        try:
+            tg_chat = chat_id_from_env()
+        except RuntimeError as exc:
+            if telegram is not None:
+                telegram = None
+                summary["warnings"].append(f"telegram: {exc}")
+    resend, _ = try_service(
+        "resend", ResendClient.from_env,
+        required="email" in config.publish_channels)
+    return drafter, drafter_err, telegram, tg_chat, resend
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Vuelazo deal run")
     ap.add_argument("--trigger", default="local")
@@ -194,8 +252,18 @@ def main() -> int:
     ap.add_argument("--publish-only", action="store_true",
                     help="only publish already-approved deals, then exit "
                          "(the /ops approve button dispatches this)")
+    ap.add_argument("--collect-only", action="store_true",
+                    help="passive collector (DECISIONS amendment 2026-11-14): "
+                         "only today's Explore rotation on serpapi_vz, stored "
+                         "to fare_observations. No sweep, watchlist, gate, "
+                         "verification, drafting or publishing")
     ap.add_argument("--json-summary", default=None)
     args = ap.parse_args()
+    if args.collect_only and (args.publish_only or args.queue
+                              or args.auto_approve or args.skip_publish):
+        ap.error("--collect-only runs alone (no --queue, --publish-only, "
+                 "--auto-approve or --skip-publish)")
+    collect = args.collect_only
 
     from lib import db as db_mod
     from lib import deals_db, members_db
@@ -248,7 +316,14 @@ def main() -> int:
         try:
             # ---- clients (fare rails via the shared path; service rails
             #      constructed here — their keys are env-only secrets) ----
-            raw, warnings = make_clients(FARE_SOURCES, conn)
+            # Collect-only builds ONE fare client: serpapi_vz, used only
+            # for its unmetered /account anchor. Explore gets its own
+            # client below; nothing else is constructed, so nothing else
+            # can be called.
+            if collect:
+                summary["mode"] = "collect_only"
+            raw, warnings = make_clients(
+                [SRC_GOOGLE] if collect else FARE_SOURCES, conn)
             for w in warnings:
                 LOG.warning("%s", w)
                 summary["warnings"].append(w)
@@ -272,41 +347,21 @@ def main() -> int:
                         dead_rails.append(f"{name}: {exc}")
                     return None, str(exc)
 
-            from lib.drafting import AnthropicDraftClient
-            from lib.resend_api import ResendClient
-            from lib.telegram_api import TelegramClient, chat_id_from_env
-
-            drafter, drafter_err = _try_service(
-                "anthropic", lambda: AnthropicDraftClient.from_env(
-                    model=config.draft_model,
-                    max_tokens=config.draft_max_tokens),
-                required=True)      # no drafting, no publishable deal
-            telegram, telegram_err = _try_service(
-                "telegram", TelegramClient.from_env,
-                required="tg_private" in config.publish_channels)
-            # Members are admitted into the PRIVATE channel (M2); the
-            # test channel is the pre-launch fallback.
-            tg_chat: str | None = os.environ.get(
-                "TELEGRAM_PRIVATE_CHANNEL_ID", "").strip() or None
-            if tg_chat is None:
-                try:
-                    tg_chat = chat_id_from_env()
-                except RuntimeError as exc:
-                    if telegram is not None:
-                        telegram, telegram_err = None, str(exc)
-                        summary["warnings"].append(f"telegram: {exc}")
-            resend, resend_err = _try_service(
-                "resend", ResendClient.from_env,
-                required="email" in config.publish_channels)
-
-            _ensure_fare_anchor(ledger, SRC_GOOGLE, raw.get(SRC_GOOGLE))
-            _ensure_service_anchor(ledger, "anthropic")
-            _ensure_service_anchor(ledger, "resend")
+            drafter = telegram = resend = None
+            drafter_err = None
+            tg_chat: str | None = None
+            if not collect:
+                drafter, drafter_err, telegram, tg_chat, resend = (
+                    _build_service_rails(config, summary, _try_service))
+                _ensure_service_anchor(ledger, "anthropic")
+                _ensure_service_anchor(ledger, "resend")
+            _ensure_fare_anchor(ledger, SRC_GOOGLE, raw.get(SRC_GOOGLE), conn)
 
             # ---- reserve the run's worst case, source by source ----
             months = dealpipe.sweep_months(date.today(),
                                            config.sweep_months_ahead)
-            n_cand = 0 if args.publish_only else config.max_candidates_per_run
+            n_cand = (0 if (args.publish_only or collect)
+                      else config.max_candidates_per_run)
 
             # Watchlist refresh is 1x/day (D1): skip only when today's
             # refresh actually PRODUCED something (result ok/empty above
@@ -322,7 +377,8 @@ def main() -> int:
                 "AND result IN ('ok', 'empty')",
                 (SRC_CACHED, today_prefix + "%")
             ).fetchone()[0] >= expected_wl // 4 + 1
-            wl_routes = ([] if (args.publish_only or refreshed_today)
+            wl_routes = ([] if (args.publish_only or collect
+                                or refreshed_today)
                          else all_wl)
 
             # Explore rotation for today. Once a day like the watchlist:
@@ -336,12 +392,14 @@ def main() -> int:
                     "AND op='explore' AND spent_at LIKE ? "
                     "AND result IN ('ok', 'empty')",
                     (SRC_GOOGLE, today_prefix + "%")).fetchone()[0]
+                summary["steps"]["explore_done_earlier_today"] = done_today
                 if done_today < config.explore_calls_per_day:
-                    from lib.explore_api import ExploreClient, rotation_plan
-                    explore_windows = rotation_plan(
+                    from lib.explore_api import ExploreClient, windows_due_today
+                    explore_windows = windows_due_today(
                         list(config.origins), list(config.explore_areas),
                         months, day=date.today(),
-                        budget=config.explore_calls_per_day - done_today)
+                        per_day=config.explore_calls_per_day,
+                        done_today=done_today)
                     explore_raw, explore_err = _try_service(
                         "explore",
                         lambda: ExploreClient.from_env(
@@ -353,7 +411,7 @@ def main() -> int:
             # Only deals WITH a draft can fan out; a draftless approved
             # row would otherwise inflate every reservation forever
             # while never publishing.
-            pending_publish = [] if args.skip_publish else [
+            pending_publish = [] if (args.skip_publish or collect) else [
                 dict(r) for r in conn.execute(
                     "SELECT * FROM deals WHERE status = 'approved' "
                     "AND draft_es IS NOT NULL AND draft_es != '' "
@@ -377,7 +435,13 @@ def main() -> int:
                             default=0)
 
             lines = []
-            if not args.publish_only:
+            if collect:
+                if explore_windows:
+                    lines.append(CostLine(
+                        SRC_GOOGLE, len(explore_windows), "primary",
+                        f"explore rotation ({len(explore_windows)}), "
+                        f"collect-only"))
+            elif not args.publish_only:
                 # sweep: origins x months x sortings; watchlist: one call
                 # per (route, month) of coverage.
                 sweep_calls = (len(months) * len(config.origins)
@@ -402,7 +466,7 @@ def main() -> int:
                                           "draft"))
             # T+24h free-channel fan-out (M3): free picks whose member
             # exclusivity expired and that haven't hit the public channel.
-            free_due = ([] if args.skip_publish
+            free_due = ([] if (args.skip_publish or collect)
                         else dg.free_picks_due(conn))
             tg_public = os.environ.get("TELEGRAM_PUBLIC_CHANNEL_ID",
                                        "").strip()
@@ -416,8 +480,22 @@ def main() -> int:
                 lines.append(CostLine("resend", n_pub * (1 + n_members),
                                       "primary", "owner + member emails"))
             if not lines:
-                print("nothing to do (publish-only with no approved deals?)")
+                if collect and dead_rails:
+                    # The Explore rail could not even be built: nothing
+                    # is reserved and nothing will be collected. Red job.
+                    status = "failed"
+                    summary["error"] = ("collector rail down: "
+                                        + "; ".join(dead_rails))
+                    summary["dead_rails"] = dead_rails
+                    print(f"\n✖ {summary['error']}")
+                    summary["status"] = status
+                    _write_summary(args, summary)
+                    return EXIT_FATAL
+                print("nothing to do (publish-only with no approved deals, "
+                      "or today's Explore rotation already collected)")
                 ledger.finalize_run(run_id, "ok")
+                summary["status"] = "ok"
+                _write_summary(args, summary)
                 return EXIT_OK
             cost = CostVector(lines=tuple(lines))
             if not ledger.reserve(run_id, SEARCH_ID, cost):
@@ -616,6 +694,42 @@ def main() -> int:
                 _write_summary(args, summary)
                 return EXIT_OK
 
+            explore_res = None
+            if explore_windows and guarded.get("explore") is not None:
+                from lib.explore_api import collect_windows
+                explore_res = collect_windows(
+                    guarded["explore"], explore_windows, conn,
+                    currency=config.currency, errors=(QuotaExceeded,))
+                print(f"explore: {explore_res.stored} observations stored "
+                      f"from {len(explore_windows)} window(s) "
+                      f"({', '.join(f'{o}/{a}/{m}' for o, a, m in explore_windows)})"
+                      f"; {explore_res.failed} failed, {explore_res.empty} empty")
+                summary["steps"]["explore"] = {
+                    "windows": [list(w) for w in explore_windows],
+                    "observations": explore_res.stored,
+                    "failed": explore_res.failed,
+                    "empty": explore_res.empty}
+
+            # ---- passive collector: stop here (DECISIONS 2026-11-14) ----
+            if collect:
+                from lib.explore_api import CollectResult, collect_verdict
+                verdict, why = collect_verdict(
+                    explore_res or CollectResult())
+                summary["steps"]["collect"] = {"verdict": verdict,
+                                               "detail": why}
+                print(f"collect-only: {verdict} — {why}")
+                if verdict == "error":
+                    # Zero rows stored is an outage, never a quiet day:
+                    # the job goes red and deals.yml's failure push fires.
+                    status = "failed"
+                    summary["error"] = why
+                elif verdict == "warning":
+                    summary["warnings"].append(why)
+                return_code = (EXIT_FATAL if status == "failed" else EXIT_OK)
+                summary["status"] = status
+                _write_summary(args, summary)
+                return return_code
+
             # ---- 1. discover ----
             if guarded[SRC_CACHED] is None:
                 print("TRAVELPAYOUTS_TOKEN missing — cannot discover. Stop.")
@@ -636,62 +750,22 @@ def main() -> int:
                       f"{len(wl_routes)} route refreshes")
                 obs.extend(wl_obs)
 
-            # Google Travel Explore: the long-haul rail. Same corpus we
-            # verify against, real airport codes, real date pairs — so
-            # unlike the cache it nominates candidates that can actually
-            # be confirmed. Degrades per window, never aborts discovery.
-            n_explore = 0
-            explore_failed = 0
-            explore_last_error = ""
-            explore_persisted: list[deals_db.Observation] = []
-            if explore_windows and guarded.get("explore") is not None:
-                from lib.explore_api import ExploreError, to_observations
-                for eo, area, emonth in explore_windows:
-                    try:
-                        quotes = guarded["explore"].explore(
-                            origin=eo, month=emonth, area=area,
-                            currency=config.currency)
-                    except (ExploreError, QuotaExceeded) as exc:
-                        LOG.warning("explore %s/%s/%s failed: %s",
-                                    eo, area, emonth, exc)
-                        explore_failed += 1
-                        explore_last_error = f"{area}/{emonth}: {exc}"
-                        continue
-                    # Persist per window, not at the end of discovery.
-                    # Explore is the ONLY metered discovery call: the
-                    # free sweep can afford to be lost on a crash, four
-                    # paid credits cannot. (Measured: a run died between
-                    # the Explore loop and the bulk insert and threw
-                    # away 4 charged calls' worth of rows.)
-                    window_obs = to_observations(quotes)
-                    try:
-                        deals_db.insert_observations(conn, window_obs)
-                    except Exception as exc:  # noqa: BLE001
-                        LOG.warning("explore %s/%s/%s: rows not persisted "
-                                    "(%s) — keeping them for this run",
-                                    eo, area, emonth, exc)
-                        obs.extend(window_obs)
-                    else:
-                        explore_persisted.extend(window_obs)
-                    n_explore += len(quotes)
-                print(f"explore: {n_explore} observations from "
-                      f"{len(explore_windows)} window(s) "
-                      f"({', '.join(f'{o}/{a}/{m}' for o, a, m in explore_windows)})")
-                # A rail that BUILDS but returns nothing all run is the
-                # failure the dead_rails check cannot see. Measured
-                # 2026-08-11: a wrong area kgmid errored 8/8 calls
-                # across two runs, burned the credits, and the runs
-                # still reported 'ok'. Empty windows are legitimate
-                # (asia/October really is empty from MAD) — but EVERY
-                # window empty means the rail, not the market.
-                if n_explore == 0 and explore_failed == len(explore_windows):
+            # Google Travel Explore (the long-haul rail) already ran above,
+            # through the same collect_windows() the passive collector
+            # uses, and persisted per window. A rail that BUILDS but
+            # fails every call is the failure dead_rails cannot see
+            # (measured 2026-08-11: a wrong area kgmid errored 8/8 calls
+            # and the runs still said 'ok'); empty windows are market.
+            n_explore = explore_res.stored if explore_res else 0
+            explore_persisted = explore_res.persisted if explore_res else []
+            if explore_res is not None:
+                obs.extend(explore_res.unpersisted)
+                n_explore += len(explore_res.unpersisted)
+                if (explore_res.stored == 0 and not explore_res.unpersisted
+                        and explore_res.failed == explore_res.windows):
                     dead_rails.append(
-                        f"explore: {len(explore_windows)}/"
-                        f"{len(explore_windows)} calls failed "
-                        f"({explore_last_error})")
-                summary["steps"]["explore"] = {
-                    "windows": [list(w) for w in explore_windows],
-                    "observations": n_explore}
+                        f"explore: {explore_res.failed}/{explore_res.windows} "
+                        f"calls failed ({explore_res.errors[-1]})")
 
             deals_db.insert_observations(conn, obs)
             # Explore rows are already persisted (per window, above);
@@ -966,9 +1040,15 @@ def main() -> int:
             LOG.error("QUOTA GUARD TRIPPED: %s — planner/executor "
                       "divergence bug", exc)
             status = "degraded"
-        except Exception:  # noqa: BLE001 — never leave the run dangling
+        except Exception as exc:  # noqa: BLE001 — never leave the run dangling
             LOG.exception("deal run failed")
             status = "failed"
+            # The summary lands in the public job log: strip api_key=…
+            # and the Vuelazo SerpApi key wherever else it appears.
+            from lib.credentials import redact_network_error
+            summary["error"] = "run crashed: " + redact_network_error(
+                exc, os.environ.get("SERPAPI_KEY_VZ", "").strip() or None
+            ).removeprefix("network error: ")
         finally:
             ledger.settle(run_id, SEARCH_ID)
             ledger.finalize_run(run_id, status)

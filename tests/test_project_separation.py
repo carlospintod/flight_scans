@@ -125,9 +125,32 @@ def test_a_dedicated_key_retires_the_self_imposed_slice(conn, monkeypatch):
     assert state.baseline_origin == "account_api"
 
 
-def test_a_real_provider_anchor_is_not_re_probed(conn, monkeypatch):
-    """The opposite guard: once anchored from the account, don't churn
-    it on every run."""
+def test_a_dedicated_account_is_re_probed_every_run(conn, monkeypatch):
+    """Reversed 2026-11-14. Probing once left serpapi_vz anchored on
+    2026-08-09 for three months: the ledger never presumes a provider
+    reset, so it kept counting down from August while the account had
+    renewed. /account is free; run_batch already probes every run."""
+    import run_deals
+
+    ledger = QuotaLedger(conn)
+    ledger.seed_pools()
+    ledger.record_anchor("serpapi_vz", remaining=156, limit_total=250,
+                         origin="account_api")
+
+    class _Renewed:
+        def check_quota(self):
+            return {"remaining": 244, "limit_total": 250,
+                    "raw": {"plan_renewal_date": "2026-12-09"}}
+
+    monkeypatch.setenv("SERPAPI_KEY_VZ", "vz-own-account")
+    run_deals._ensure_fare_anchor(ledger, "serpapi_vz", _Renewed(), conn)
+    assert ledger.pool_state("serpapi_vz").provider_view == 244
+    snap = conn.execute("SELECT remaining, raw_json FROM quota_snapshots "
+                        "WHERE source='serpapi_vz'").fetchone()
+    assert snap["remaining"] == 244 and "2026-12-09" in snap["raw_json"]
+
+
+def test_a_failed_probe_keeps_the_last_anchor(conn, monkeypatch):
     import run_deals
 
     ledger = QuotaLedger(conn)
@@ -137,10 +160,10 @@ def test_a_real_provider_anchor_is_not_re_probed(conn, monkeypatch):
 
     class _Boom:
         def check_quota(self):
-            raise AssertionError("re-probed an already-anchored pool")
+            raise RuntimeError("network down")
 
     monkeypatch.setenv("SERPAPI_KEY_VZ", "vz-own-account")
-    run_deals._ensure_fare_anchor(ledger, "serpapi_vz", _Boom())
+    run_deals._ensure_fare_anchor(ledger, "serpapi_vz", _Boom(), conn)
     assert ledger.pool_state("serpapi_vz").provider_view == 180
 
 

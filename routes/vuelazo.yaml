@@ -40,8 +40,11 @@ explore:
   provider: serpapi
   # Full grid = origins x areas x months = 120 windows. calls_per_day
   # walks it in a deterministic rotation so nothing starves.
-  # 4/day = ~120/mo, leaving ~130 of the free 250 for verification.
-  calls_per_day: 4
+  # PASSIVE since 2026-11-14 (DECISIONS amendment): no verification
+  # spends serpapi_vz, so the pool goes to collection. 6/day x 31 = 186
+  # of the 225 usable (250 - margin 25): 39 left for retries and a
+  # manual run. Each window is repriced every 20 days.
+  calls_per_day: 6
   areas: [north_america, south_america, asia, africa, oceania]
 
 # Watchlist: per-route cached refresh, once a day. Long-haul is the

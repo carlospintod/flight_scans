@@ -35,7 +35,7 @@ from __future__ import annotations
 import logging
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 import requests
@@ -215,3 +215,94 @@ def rotation_plan(origins: list[str], areas: list[str], months: list[str],
         return []
     start = (day.toordinal() * budget) % len(grid)
     return [grid[(start + i) % len(grid)] for i in range(min(budget, len(grid)))]
+
+
+@dataclass
+class CollectResult:
+    """What one day's Explore rotation actually produced.
+
+    `stored` counts rows that reached fare_observations; `unpersisted`
+    holds rows a failed insert could not store (the full pipeline can
+    still gate on them this run; the passive collector cannot use them).
+    """
+    windows: int = 0
+    stored: int = 0
+    failed: int = 0
+    empty: int = 0
+    errors: list[str] = field(default_factory=list)
+    persisted: list[Observation] = field(default_factory=list)
+    unpersisted: list[Observation] = field(default_factory=list)
+
+
+def collect_windows(client, windows: list[tuple[str, str, str]], conn, *,
+                    currency: str = "EUR",
+                    errors: tuple[type[BaseException], ...] = ()) -> CollectResult:
+    """Run the Explore calls for `windows` and persist each window's rows
+    as soon as it returns. `client` is the GuardedClient (the ledger
+    charges before every call). Per-window failures are counted, never
+    raised; `errors` are the extra exception types to treat as a failed
+    window (the caller passes QuotaExceeded)."""
+    from .deals_db import insert_observations
+
+    res = CollectResult(windows=len(windows))
+    for origin, area, month in windows:
+        try:
+            quotes = client.explore(origin=origin, month=month, area=area,
+                                    currency=currency)
+        except (ExploreError, *errors) as exc:
+            LOG.warning("explore %s/%s/%s failed: %s", origin, area, month, exc)
+            res.failed += 1
+            res.errors.append(f"{origin}/{area}/{month}: {exc}")
+            continue
+        if not quotes:
+            res.empty += 1
+            continue
+        # Persist per window: Explore is the metered call, so a crash
+        # later in the run must not throw away rows already paid for.
+        window_obs = to_observations(quotes)
+        try:
+            insert_observations(conn, window_obs)
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("explore %s/%s/%s: rows not persisted (%s)",
+                        origin, area, month, exc)
+            res.errors.append(f"{origin}/{area}/{month}: not stored ({exc})")
+            res.unpersisted.extend(window_obs)
+        else:
+            res.persisted.extend(window_obs)
+            res.stored += len(window_obs)
+    return res
+
+
+def collect_verdict(res: CollectResult) -> tuple[str, str]:
+    """('ok' | 'warning' | 'error', one-line reason) for a rotation.
+
+    A run that stores NOTHING is an error even when every call "worked":
+    a collector that runs green while writing zero rows is exactly the
+    silent failure the passive mode exists to rule out. Some failed or
+    empty windows are a warning, not a page — asia/October really is
+    empty from MAD."""
+    if res.windows == 0:
+        return "ok", "no Explore window due today (already collected)"
+    if res.stored == 0:
+        return "error", (f"0 Explore rows stored from {res.windows} window(s): "
+                         f"{res.failed} failed, {res.empty} empty"
+                         + (f" — last error: {res.errors[-1]}" if res.errors else ""))
+    if res.failed or res.unpersisted:
+        return "warning", (f"{res.stored} rows stored; {res.failed} of "
+                           f"{res.windows} window(s) failed"
+                           + (f" — last error: {res.errors[-1]}" if res.errors else ""))
+    return "ok", (f"{res.stored} rows stored from {res.windows} window(s)"
+                  + (f" ({res.empty} empty)" if res.empty else ""))
+
+
+def windows_due_today(origins: list[str], areas: list[str], months: list[str],
+                      *, day: date, per_day: int, done_today: int
+                      ) -> list[tuple[str, str, str]]:
+    """Today's rotation minus the calls already made today.
+
+    The rotation is planned for the FULL daily budget and then sliced, so
+    a same-day re-run continues today's windows instead of jumping to a
+    different part of the grid (planning with the reduced budget shifted
+    the rotation's start)."""
+    plan = rotation_plan(origins, areas, months, day=day, budget=per_day)
+    return plan[max(0, done_today):]

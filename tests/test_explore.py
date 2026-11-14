@@ -189,10 +189,18 @@ def test_the_oceania_id_is_the_probed_one():
 def test_an_all_failed_rotation_is_reported_as_a_dead_rail():
     """The failure dead_rails could not see: the client builds, every
     call fails, the run reports ok. Cost 8 credits and a day."""
+    class _Down:
+        def explore(self, **kw):
+            raise explore_api.ExploreError("Invalid area")
+
+    res = explore_api.collect_windows(
+        _Down(), [("MAD", "asia", "2026-12"), ("BCN", "asia", "2026-12")],
+        conn=None)
+    assert res.failed == res.windows == 2 and res.stored == 0
+    assert explore_api.collect_verdict(res)[0] == "error"
     src = (Path(__file__).resolve().parents[1] / "run_deals.py").read_text(
         encoding="utf-8")
-    assert "explore_failed == len(explore_windows)" in src
-    assert "explore_failed += 1" in src
+    assert "explore_res.failed == explore_res.windows" in src
 
 
 def test_an_unknown_provider_or_area_is_refused_loudly():
