@@ -3,16 +3,28 @@ import { fmtDate } from "@/lib/format";
 import type { Alert } from "@/lib/types";
 
 const TYPE_BADGE: Record<string, string> = {
+  window_best: "border-good text-good",
   new_low: "border-good text-good",
   drop: "border-cyan99 text-cyan99",
 };
 
+const TYPE_LABEL: Record<string, string> = {
+  window_best: "window best",
+  new_low: "new low",
+};
+
 /** What the alert's reference price IS depends on its type (lib/alerts.py):
- *  new_low compares against the trip's previous all-time low, drop
- *  against its trailing median. Saying "usual" for both would misstate
- *  every new_low row. */
+ *  window_best compares against the best verified fare the search had
+ *  seen in its window, new_low against the trip's previous all-time low,
+ *  drop against its trailing median. Saying "usual" for all three would
+ *  misstate every window_best and new_low row. */
 function comparison(a: Alert): string {
   const pct = Math.round(a.dropPct);
+  if (a.alertType === "window_best") {
+    // Any euro under the old best fires, so the gap can round to 0%.
+    const share = a.dropPct < 1 ? "<1%" : `${pct}%`;
+    return `${share} under the window's previous best of ${a.baselineMedian}`;
+  }
   return a.alertType === "new_low"
     ? `${pct}% under its previous low of ${a.baselineMedian}`
     : `${pct}% under its usual ${a.baselineMedian}`;
@@ -40,7 +52,7 @@ export function AlertsFeed({ alerts }: { alerts: Alert[] }) {
                 TYPE_BADGE[a.alertType] ?? "border-hint text-hint"
               }`}
             >
-              {a.alertType === "new_low" ? "new low" : a.alertType}
+              {TYPE_LABEL[a.alertType] ?? a.alertType}
             </span>
             <span className="font-semibold text-text-bright">
               {a.price} {a.currency}

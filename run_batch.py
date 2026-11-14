@@ -270,6 +270,7 @@ def main() -> int:
     from lib.planner import Caps, build_run_plan, cost_vector
     from lib.quota import (POOL_SEEDS, SCOPE_TRACKER, QuotaExceeded,
                            QuotaLedger)
+    from lib.alerts import summary_entry
     from lib.runner import execute_search
 
     started_at = _now_iso()
@@ -653,16 +654,9 @@ def main() -> int:
             "searches_total": len(rows),
             "searches_skipped": skipped,
             "per_search": per_search,
-            # Flat combined list keeps scripts/notify_ntfy.py working
-            # unchanged (it reads summary['alerts_fired']).
-            "alerts_fired": [
-                {"type": a.alert_type, "origin": a.origin,
-                 "destination": a.destination,
-                 "departure_date": a.departure_date,
-                 "return_date": a.return_date,
-                 "price": a.price, "currency": a.currency}
-                for a in all_alerts
-            ],
+            # Flat combined list: scripts/notify_ntfy.py reads
+            # summary['alerts_fired'] (one shape, lib.alerts.summary_entry).
+            "alerts_fired": [summary_entry(a) for a in all_alerts],
             "pools": {
                 p.source: {"available": p.effective_available,
                            "provider_view": p.provider_view}

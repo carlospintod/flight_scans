@@ -1498,8 +1498,8 @@ def alerts_dataframe(
         return pd.DataFrame()
     return pd.DataFrame([{
         "fired_at": r["fired_at"],
-        "type": ("NEW LOW" if (r["alert_type"] if "alert_type" in r.keys()
-                               else "drop") == "new_low" else "drop"),
+        "type": {"new_low": "NEW LOW", "window_best": "WINDOW BEST"}.get(
+            r["alert_type"] if "alert_type" in r.keys() else "drop", "drop"),
         "source": r["source"],
         "origin": r["origin"],
         "destination": r["destination"],

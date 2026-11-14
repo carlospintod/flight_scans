@@ -180,9 +180,12 @@ def execute_search(*, conn, route, plan, clients, caps,
         except Exception as exc:  # noqa: BLE001
             LOG.info("ota enrichment skipped (%s): %s", route.name, exc)
 
-    # --- Alerts (drop + new_low) ---
+    # --- Alerts (drop + new_low + window_best) ---
+    # since=search_started: rows this search stored above are "this
+    # scan's", which window_best needs to tell a new fare from the bar.
     out.alerts = alerts_mod.evaluate(conn=conn, route=route,
-                                     log_path=alerts_log)
+                                     log_path=alerts_log,
+                                     since=search_started)
     return out
 
 

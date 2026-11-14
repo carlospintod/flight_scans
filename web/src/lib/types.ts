@@ -58,7 +58,7 @@ export interface SourceHealthCard {
 
 export interface Alert {
   firedAt: string;
-  alertType: "drop" | "new_low" | string;
+  alertType: "drop" | "new_low" | "window_best" | string;
   source: string;
   origin: string;
   destination: string;

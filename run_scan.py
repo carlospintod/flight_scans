@@ -9,7 +9,7 @@ and executes it: Kiwi discovery bands (when quota allows), point
 verification via the followup ladder (googleflights > serpapi >
 searchapi) with an automatic serpapi fallback when the local browser is
 unavailable — the CI path — then Aviasales bonus signal and alert
-evaluation (drop + new_low). Respects TURSO_* env vars.
+evaluation (drop + new_low + window_best). Respects TURSO_* env vars.
 
 Exit codes: 0 = every requested source ran or was gracefully skipped;
 1 = fatal (DB/config unusable); 2 = degraded (a source errored
@@ -67,6 +67,7 @@ def main() -> int:
     from lib.clients import make_clients
     from lib.planner import Caps, build_run_plan
     from lib.quota import POOL_SEEDS, QuotaLedger
+    from lib.alerts import summary_entry
     from lib.runner import execute_search
 
     started_at = _now_iso()
@@ -177,14 +178,7 @@ def main() -> int:
             "client_warnings": client_warnings,
             "results": results,
             "cheapest_top5": cheapest,
-            "alerts_fired": [
-                {"type": a.alert_type, "origin": a.origin,
-                 "destination": a.destination,
-                 "departure_date": a.departure_date,
-                 "return_date": a.return_date,
-                 "price": a.price, "currency": a.currency}
-                for a in fired
-            ],
+            "alerts_fired": [summary_entry(a) for a in fired],
             "status": status,
             "ledger_shadow": {"run_id": ledger_run_id,
                               "spend": shadow_spend, "pools": pool_view},

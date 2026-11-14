@@ -423,7 +423,10 @@ class AlertRow:
     drop_pct: float
     # 'drop' = below trailing median by threshold (needs >=4 obs);
     # 'new_low' = below previous all-time min (needs only 2 obs —
-    # the alert mode that fits a near-in booking window).
+    # the alert mode that fits a near-in booking window);
+    # 'window_best' = a verified fare below every verified fare the
+    # search has seen in its current window (baseline_median holds that
+    # previous best). See lib/alerts.py.
     alert_type: str = "drop"
 
 
