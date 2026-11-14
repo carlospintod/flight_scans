@@ -310,6 +310,37 @@ def _window_best(conn, route: RouteConfig, *, since: str, fired_at: str,
     )
 
 
+CATCH_UP_MAX_DAYS = 14
+
+
+def catch_up_since(conn, route_id: str, started: str, *,
+                   max_days: int = CATCH_UP_MAX_DAYS) -> str:
+    """The `since` to evaluate with: the earlier of this scan's start and
+    the end of the last scan of this search that reached evaluate()
+    (scan_runs status ok/degraded).
+
+    Audit 2026-11-14: a run that stored rows and then died (process kill,
+    QuotaExceeded, timeout) before evaluate() never alerted them, because
+    the next run's window_best only looked at its own rows. Widening
+    `since` to the last finished scan makes those orphaned rows "this
+    scan's" for the next run. Re-firing is impossible: rows the last
+    finished scan stored are before its finished_at, and window_best's
+    prior_alerts plus the per-(source, itinerary) dedup mute anything
+    already alerted. Bounded to `max_days` so a long outage doesn't turn a
+    month of rows into one scan. No prior finished scan = this scan only.
+    """
+    row = conn.execute(
+        "SELECT MAX(finished_at) FROM scan_runs WHERE route_id = ? "
+        "AND status IN ('ok', 'degraded') AND finished_at IS NOT NULL "
+        "AND finished_at < ?", (route_id, started)).fetchone()
+    last = row[0] if row is not None else None
+    if not last:
+        return started
+    floor = (datetime.strptime(started, "%Y-%m-%dT%H:%M:%SZ")
+             - timedelta(days=max_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return max(min(last, started), floor)
+
+
 def evaluate(
     *,
     conn,

@@ -36,6 +36,13 @@ def enrich_ota_sellers(conn, serpapi_client, route, *, since: str) -> int:
     """
     if serpapi_client is None:
         return 0
+    # Round trips cannot complete this check (audit F6, 2026-11-14):
+    # SerpApi's round-trip response carries departure_token, and
+    # booking_options needs a booking_token, which only a second
+    # (return-leg) query yields. It spent one search per scan for
+    # nothing; the planner no longer reserves it either.
+    if not route.is_one_way:
+        return 0
     from .db import CalendarRow, PointRow, insert_calendar_rows, insert_point_rows
     from .followup import LEAD_SOURCES
     from .serpapi_io import top_booking_token

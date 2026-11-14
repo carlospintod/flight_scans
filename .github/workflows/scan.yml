@@ -30,7 +30,7 @@ on:
         default: "googleflights,serpapi,aviasales,searchapi"
         required: false
       force_sweep:
-        description: "Run the SearchAPI rectangle sweep now (bypasses the Saturday+cooldown gate; ~28 lifetime credits)"
+        description: "Run the SearchAPI rectangle sweep (manual only since 2026-11-14; spends LIFETIME credits, 12 usable)"
         default: "false"
         required: false
       cap:

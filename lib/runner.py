@@ -57,6 +57,32 @@ def execute_search(*, conn, route, plan, clients, caps,
         serpapi_fallback_cap = 0
     from .scanops import _now_iso
     search_started = _now_iso()
+    # Rows an earlier run stored but never evaluated (it died first) are
+    # caught up here: see alerts.catch_up_since.
+    alerts_since = alerts_mod.catch_up_since(conn, route.name, search_started)
+    try:
+        _execute_steps(conn=conn, route=route, plan=plan, clients=clients,
+                       caps=caps, out=out, search_started=search_started,
+                       serpapi_fallback_cap=serpapi_fallback_cap)
+    finally:
+        # Guaranteed step: even when a step above raises (QuotaExceeded is
+        # re-raised to run_batch), what was stored gets evaluated now.
+        try:
+            out.alerts = alerts_mod.evaluate(conn=conn, route=route,
+                                             log_path=alerts_log,
+                                             since=alerts_since)
+        except Exception as exc:  # noqa: BLE001
+            # Never mask the step's own exception; the next run's
+            # catch_up_since re-evaluates these rows.
+            LOG.error("alerts evaluate failed (%s): %s", route.name, exc)
+            out.degraded = True
+    return out
+
+
+def _execute_steps(*, conn, route, plan, clients, caps, out,
+                   search_started: str, serpapi_fallback_cap: int) -> None:
+    """The fetch/store steps of execute_search, in order. Alerts are NOT
+    here: execute_search runs them in a finally."""
 
     # --- Kiwi discovery bands (fails gracefully while quota is 0) ---
     if plan.kiwi_bands and clients.get("kiwi") is not None:
@@ -118,8 +144,7 @@ def execute_search(*, conn, route, plan, clients, caps,
                       route.name, exc)
 
     # --- SerpApi live discovery grid (the reliable finding layer) ---
-    # Kiwi is retired and gf scraping is captcha-walled from CI
-    # (2026-07-14), so SerpApi — managed Google Flights that never gets
+    # Kiwi is retired, so SerpApi — managed Google Flights that never gets
     # blocked — prices a rotating date grid across the window each scan.
     # run_followup stores the same calendar+point rows as any point query
     # (source='serpapi'); bounded by the plan's grid and the search's
@@ -140,6 +165,27 @@ def execute_search(*, conn, route, plan, clients, caps,
 
     # --- Verification via the followup ladder ---
     candidates = list(plan.followup_candidates)
+    # Candidates were chosen before the sweep stored its cells: re-select
+    # now so a cheap cell found THIS run is verified this run, inside the
+    # slots the plan reserved for it (plan.verify_after_sweep).
+    if plan.verify_after_sweep and out.results.get(
+            "serpapi_calendar", {}).get("stored"):
+        from .followup import select_candidates
+        limit = len(candidates) + plan.verify_after_sweep
+        have = {(c["origin"], c["destination"], c["departure_date"],
+                 c["return_date"]) for c in candidates}
+        for c in select_candidates(conn, route, today=plan.today):
+            if len(candidates) >= limit:
+                break
+            key = (c["origin"], c["destination"], c["departure_date"],
+                   c["return_date"])
+            if key not in have:
+                have.add(key)
+                candidates.append(c)
+        if len(candidates) > len(plan.followup_candidates):
+            LOG.info("verification: %d candidate(s) added from this run's "
+                     "calendar sweep", len(candidates)
+                     - len(plan.followup_candidates))
     if candidates:
         v_stored, v_queried, v_source, v_error = _run_verification(
             conn=conn, route=route, candidates=candidates,
@@ -179,14 +225,6 @@ def execute_search(*, conn, route, plan, clients, caps,
                 out.record("serpapi_ota", attempted=1, stored=n)
         except Exception as exc:  # noqa: BLE001
             LOG.info("ota enrichment skipped (%s): %s", route.name, exc)
-
-    # --- Alerts (drop + new_low + window_best) ---
-    # since=search_started: rows this search stored above are "this
-    # scan's", which window_best needs to tell a new fare from the bar.
-    out.alerts = alerts_mod.evaluate(conn=conn, route=route,
-                                     log_path=alerts_log,
-                                     since=search_started)
-    return out
 
 
 def _run_verification(*, conn, route, candidates, plan_source, clients,

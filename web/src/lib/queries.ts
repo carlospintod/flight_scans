@@ -44,6 +44,37 @@ function freshCutoff(): string {
  *  user input). */
 export const MAX_DISPLAY_PRICE = 600;
 
+/** Sources whose rows are LEADS, not fares (lib/followup.LEAD_SOURCES):
+ *  the cached Aviasales quotes and the SerpApi calendar-sweep cells.
+ *  Trusted constant, inlined into SQL. */
+const LEAD_SOURCES_SQL = "'aviasales', 'serpapi_calendar'";
+
+/** The ONE current observation per trip (audit F5, 2026-11-14), the same
+ *  rule lib/followup.select_candidates applies: among rows inside the
+ *  freshness window, a live fare beats a lead, then the newest wins. The
+ *  old join took each source's latest row and then the MINIMUM across
+ *  sources, so a 9 Nov 589 from SerpApi hid the scraper's 630 two days
+ *  later. Binds: route_id, [origin], freshCutoff. Joined as `m` on
+ *  (source, origin, destination, departure_date, return_date, snapshot_at). */
+function currentObsJoin(byOrigin: boolean): string {
+  return `
+      JOIN (
+          SELECT source, origin, destination, departure_date, return_date,
+                 snapshot_at AS latest
+          FROM (
+              SELECT source, origin, destination, departure_date, return_date,
+                     snapshot_at,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY origin, destination, departure_date, return_date
+                       ORDER BY CASE WHEN source IN (${LEAD_SOURCES_SQL}) THEN 1 ELSE 0 END,
+                                snapshot_at DESC) AS rn
+              FROM calendar_snapshots
+              WHERE route_id = ?${byOrigin ? " AND origin = ?" : ""}
+                AND snapshot_at >= ?
+          ) WHERE rn = 1
+      ) m`;
+}
+
 /** Effective route config — routes.config_json (canonical shape written
  *  by lib/config.RouteConfig.to_json). Mirrors route_store precedence:
  *  the web app never falls back to YAML (the DB row always exists after
@@ -94,12 +125,7 @@ export async function getOneWayCurve(
     sql: `
       SELECT cs.departure_date, cs.origin, MIN(cs.price) AS price
       FROM calendar_snapshots cs
-      JOIN (
-          SELECT source, origin, destination, departure_date, return_date,
-                 MAX(snapshot_at) AS latest
-          FROM calendar_snapshots WHERE route_id = ?
-          GROUP BY source, origin, destination, departure_date, return_date
-      ) m
+      ${currentObsJoin(false)}
         ON m.source = cs.source AND m.origin = cs.origin
        AND m.destination = cs.destination
        AND m.departure_date = cs.departure_date
@@ -110,8 +136,8 @@ export async function getOneWayCurve(
         AND cs.price <= ${MAX_DISPLAY_PRICE}
       GROUP BY cs.departure_date
       ORDER BY cs.departure_date ASC`,
-    args: [w.routeId, w.routeId, w.earliestDeparture, w.latestReturn,
-           freshCutoff()],
+    args: [w.routeId, freshCutoff(), w.routeId, w.earliestDeparture,
+           w.latestReturn, freshCutoff()],
   });
   return rs.rows.map((r) => ({
     departureDate: String(r["departure_date"]),
@@ -189,13 +215,7 @@ export async function getTopAlternatives(
                 AND pq.return_date = cs.return_date AND pq.rank = 0
               ORDER BY pq.snapshot_at DESC LIMIT 1) AS seller
       FROM calendar_snapshots cs
-      JOIN (
-          SELECT source, origin, destination, departure_date, return_date,
-                 MAX(snapshot_at) AS latest
-          FROM calendar_snapshots
-          WHERE route_id = ?
-          GROUP BY source, origin, destination, departure_date, return_date
-      ) m
+      ${currentObsJoin(false)}
         ON m.source = cs.source AND m.origin = cs.origin
        AND m.destination = cs.destination
        AND m.departure_date = cs.departure_date
@@ -210,7 +230,7 @@ export async function getTopAlternatives(
       ORDER BY cs.price ASC
       LIMIT ?`,
     args: [
-      w.routeId, w.routeId, w.minStay, w.maxStay,
+      w.routeId, freshCutoff(), w.routeId, w.minStay, w.maxStay,
       w.earliestDeparture, w.latestReturn, freshCutoff(), fetchLimit,
     ],
   });
@@ -313,13 +333,7 @@ export async function getHeatmapGrid(
     sql: `
       SELECT cs.departure_date, cs.stay_days, MIN(cs.price) AS price
       FROM calendar_snapshots cs
-      JOIN (
-          SELECT source, origin, destination, departure_date, return_date,
-                 MAX(snapshot_at) AS latest
-          FROM calendar_snapshots
-          WHERE route_id = ? AND origin = ?
-          GROUP BY source, origin, destination, departure_date, return_date
-      ) m
+      ${currentObsJoin(true)}
         ON m.source = cs.source
        AND m.origin = cs.origin
        AND m.destination = cs.destination
@@ -334,7 +348,7 @@ export async function getHeatmapGrid(
       GROUP BY cs.departure_date, cs.stay_days
       ORDER BY cs.departure_date ASC, cs.stay_days ASC`,
     args: [
-      w.routeId, origin, w.routeId, origin,
+      w.routeId, origin, freshCutoff(), w.routeId, origin,
       w.minStay, w.maxStay, w.earliestDeparture, w.latestReturn, freshCutoff(),
     ],
   });

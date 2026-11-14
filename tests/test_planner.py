@@ -282,11 +282,11 @@ def test_plan_serpapi_is_discovery_not_followup_verifier(tmp_path: Path):
     # serpapi cost is a FLAT grid + OTA — never includes followup candidates,
     # in either config, so it can't exceed the per_search_cap.
     assert plan.calls_by_source["serpapi"] == (
-        len(plan.serpapi_discovery) + SERPAPI_OTA_RESERVE)
+        len(plan.serpapi_discovery))   # no OTA reserve on round trips (F6)
     assert plan.calls_by_source["serpapi"] <= 7
     assert plan_gf.followup_source == "googleflights"
     assert plan_gf.calls_by_source["serpapi"] == (
-        len(plan_gf.serpapi_discovery) + SERPAPI_OTA_RESERVE)
+        len(plan_gf.serpapi_discovery))   # round trip: no OTA reserve (F6)
     assert plan_gf.calls_by_source["serpapi"] <= 7
 
 
@@ -309,7 +309,7 @@ def test_serpapi_grid_capped_at_discovery_cap(tmp_path: Path):
             caps=Caps(searchapi_sweep=0, serpapi=7), today=TODAY)
     assert len(plan.serpapi_discovery) <= SERPAPI_DISCOVERY_CAP
     assert plan.calls_by_source["serpapi"] == (
-        len(plan.serpapi_discovery) + SERPAPI_OTA_RESERVE)
+        len(plan.serpapi_discovery))   # no OTA reserve on round trips (F6)
     assert plan.calls_by_source["serpapi"] <= 7
 
 
@@ -445,7 +445,7 @@ def test_plan_one_way_multi_source(tmp_path: Path):
     cv = cost_vector(plan, caps=caps)
     assert not any(ln.kind == "contingency" for ln in cv.lines)
     assert plan.calls_by_source["serpapi"] == (
-        len(plan.serpapi_discovery) + SERPAPI_OTA_RESERVE)
+        len(plan.serpapi_discovery) + SERPAPI_OTA_RESERVE)   # one-way keeps the OTA check
     assert plan.calls_by_source["serpapi"] <= 7          # per_search_cap
 
 
@@ -639,8 +639,9 @@ def test_serpapi_discovery_grid_is_the_finding_layer(tmp_path: Path):
     assert all(g.get("trigger") == "grid" for g in grid)
     assert len({g["departure_date"] for g in grid}) == len(grid)  # distinct dates
     assert {g["origin"] for g in grid} == {"MAD", "BCN"}          # round-robin
-    # serpapi cost = grid + OTA reserve, within the pool per_search_cap 7.
-    assert plan.calls_by_source["serpapi"] == len(grid) + SERPAPI_OTA_RESERVE
+    # serpapi cost = the grid (round trip: no OTA reserve since F6),
+    # within the pool per_search_cap 7.
+    assert plan.calls_by_source["serpapi"] == len(grid)
     assert plan.calls_by_source["serpapi"] <= 7
     b = predict_upper_bounds(
         n_origins=2, n_destinations=1,

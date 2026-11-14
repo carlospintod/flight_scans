@@ -37,6 +37,7 @@ DEFAULT_KIWI_CAP = 20
 
 # SerpApi discovery grid: the RELIABLE finding layer after Kiwi's
 # retirement and Google-Flights scraping getting captcha-walled from CI
+# (true on 2026-07-14; the scraper has run ~95% ok from CI since)
 # (2026-07-14). SerpApi is managed Google-Flights data that never gets
 # blocked, so it prices a small rotating date grid across the window each
 # scan. GRID + OTA must stay within the serpapi pool's per_search_cap (7,
@@ -225,6 +226,13 @@ class RunPlan:
     # SerpApi calendar sweep: the due stay-length strips this run prices
     # (1 call each; lib/sweep.run_strip_sweep executes exactly these).
     serpapi_sweep: tuple[CalendarStrip, ...] = ()
+    # Extra free-scraper slots for candidates the calendar sweep nominates
+    # IN THIS RUN. Candidates are chosen at plan time, before the sweep
+    # stores its cells, so without these a fresh cheap cell waited a whole
+    # scan for verification (audit 2026-11-14). Reserved up front (the
+    # scraper is free, its politeness budget is the cap), spent only if
+    # the sweep surfaces new candidates; the runner re-selects after it.
+    verify_after_sweep: int = 0
 
 
 # Golden-ratio conjugate: phase steps by frac(ordinal * PHI) are
@@ -417,10 +425,10 @@ def build_run_plan(
         followup_candidates = cands
 
     # ---- SerpApi discovery grid (RELIABLE live discovery) ----
-    # Kiwi is retired and Google-Flights scraping is blocked from CI
-    # (2026-07-14 run: 0/25 grid points, every query captcha-walled) — so
-    # the FINDING now runs on SerpApi, a managed Google-Flights API that
-    # never gets captcha'd. It prices a small evenly-spaced date grid
+    # Kiwi is retired, so the FINDING runs on SerpApi, a managed
+    # Google-Flights API that never gets captcha'd. (The scraper was
+    # captcha-walled from CI on 2026-07-14 only; it has verified ~95% ok
+    # from Actions since, and stays the verifier.) It prices a small evenly-spaced date grid
     # across the window each scan; that IS live verification (SerpApi is
     # live Google data), so no separate gf pass is needed. Bounded by
     # SERPAPI_DISCOVERY_CAP so it stays inside the free 250/mo tier at the
@@ -453,6 +461,12 @@ def build_run_plan(
         elif strips:
             notes.append(f"calendar sweep: all {len(strips)} strips priced "
                          f"in the last {SERPAPI_SWEEP_REFRESH_DAYS} days")
+
+    verify_after_sweep = 0
+    if (serpapi_sweep and followup_source == "googleflights"
+            and followup_source in src and not route.is_one_way):
+        verify_after_sweep = max(0, (followup_cap or 0)
+                                 - len(followup_candidates))
 
     # ---- Kiwi discovery bands (range-search, 1 call per band) ----
     kiwi_bands: list[KiwiBand] = []
@@ -549,7 +563,8 @@ def build_run_plan(
             len(followup_candidates) if followup_source == "searchapi" else 0
         ),
         "googleflights": (
-            len(followup_candidates) if followup_source == "googleflights" else 0
+            len(followup_candidates) + verify_after_sweep
+            if followup_source == "googleflights" else 0
         ),
         # SerpApi = live discovery grid + OTA seller-check reserve. It is
         # NOT a followup verifier (see ladder above), so this stays a
@@ -557,7 +572,11 @@ def build_run_plan(
         # and per_search_cap can both rely on.
         "serpapi": (
             len(serpapi_discovery)
-            + (SERPAPI_OTA_RESERVE if "serpapi" in src else 0)
+            # OTA check: one-way only since 2026-11-14 (audit F6). On a
+            # round trip SerpApi returns departure_token, not
+            # booking_token, so the check spent a search and stopped.
+            + (SERPAPI_OTA_RESERVE
+               if "serpapi" in src and route.is_one_way else 0)
             + len(serpapi_sweep)          # 1 credit per calendar strip
         ),
         "aviasales": len(aviasales_pairs) * (
@@ -588,6 +607,7 @@ def build_run_plan(
         aviasales_months=tuple(aviasales_months),
         serpapi_discovery=tuple(serpapi_discovery),
         serpapi_sweep=tuple(serpapi_sweep),
+        verify_after_sweep=verify_after_sweep,
     )
 
 

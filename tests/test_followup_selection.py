@@ -574,16 +574,18 @@ def test_ota_enrichment_stores_cheaper_seller(tmp_path: Path):
                     SellerOption("Etihad", 567, "EUR", False)]
 
     db = tmp_path / "t.db"
-    route = _route(min_stay=60, max_stay=90)
+    # One-way: the only trip type whose response carries booking_token
+    # (audit F6, 2026-11-14 — round trips skip the check entirely).
+    route = _one_way_route()
     with connect(db) as conn:
         ensure_schema(conn)
         upsert_route(conn, route)
         # A verified (googleflights) fare at 567 this scan.
         insert_calendar_rows(conn, [CalendarRow(
-            snapshot_at="2026-07-14T10:00:00Z", route_id="t",
+            snapshot_at="2026-07-14T10:00:00Z", route_id=route.name,
             source="googleflights", origin="MAD", destination="NBO",
-            departure_date="2026-09-15", return_date="2026-11-17",
-            stay_days=63, price=567, currency="EUR", is_lowest_price=False)])
+            departure_date="2026-09-15", return_date="",
+            stay_days=0, price=567, currency="EUR", is_lowest_price=False)])
         stored = enrich_ota_sellers(conn, FakeSerp(), route,
                                     since="2026-07-14T00:00:00Z")
         assert stored == 1
@@ -611,7 +613,7 @@ def test_ota_enrichment_skips_calendar_sweep_cells(tmp_path: Path):
         source_id = "serpapi"
 
         def point_query(self, **kw):
-            asked.append((kw["outbound"].isoformat(), kw["return_"].isoformat()))
+            asked.append(kw["outbound"].isoformat())
             return PointResponse(
                 raw={"best_flights": [{"booking_token": "t", "price": 621}]},
                 best_flights=(FlightOption(price=621, total_minutes=800,
@@ -620,15 +622,16 @@ def test_ota_enrichment_skips_calendar_sweep_cells(tmp_path: Path):
         def booking_options(self, **kw):
             return [SellerOption("Gotogate", 600, "EUR", False)]
 
+    route = _one_way_route()
+
     def row(source, dep, ret, price):
         return CalendarRow(
-            snapshot_at="2026-07-14T10:00:00Z", route_id="t", source=source,
-            origin="MAD", destination="NBO", departure_date=dep,
-            return_date=ret, stay_days=63, price=price, currency="EUR",
-            is_lowest_price=False)
+            snapshot_at="2026-07-14T10:00:00Z", route_id=route.name,
+            source=source, origin="MAD", destination="NBO",
+            departure_date=dep, return_date="", stay_days=0, price=price,
+            currency="EUR", is_lowest_price=False)
 
     db = tmp_path / "t.db"
-    route = _route(min_stay=60, max_stay=90)
     with connect(db) as conn:
         ensure_schema(conn)
         upsert_route(conn, route)
@@ -639,8 +642,33 @@ def test_ota_enrichment_skips_calendar_sweep_cells(tmp_path: Path):
         ])
         stored = enrich_ota_sellers(conn, FakeSerp(), route,
                                     since="2026-07-14T00:00:00Z")
-    assert asked == [("2026-09-15", "2026-11-17")]
+    assert asked == ["2026-09-15"]
     assert stored == 1                       # Gotogate 600 beats the 621
+
+
+def test_ota_enrichment_never_spends_on_a_round_trip(tmp_path: Path):
+    """Audit F6 (2026-11-14): a round-trip response carries
+    departure_token, not booking_token, so the check spent one search per
+    scan and stopped. It now returns before any call."""
+    from lib.scanops import enrich_ota_sellers
+
+    class Boom:
+        source_id = "serpapi"
+
+        def __getattr__(self, name):
+            raise AssertionError(f"round trip called serpapi.{name}")
+
+    route = _route(min_stay=60, max_stay=90)
+    with connect(tmp_path / "t.db") as conn:
+        ensure_schema(conn)
+        upsert_route(conn, route)
+        insert_calendar_rows(conn, [CalendarRow(
+            snapshot_at="2026-07-14T10:00:00Z", route_id="t",
+            source="googleflights", origin="MAD", destination="NBO",
+            departure_date="2026-09-15", return_date="2026-11-17",
+            stay_days=63, price=567, currency="EUR", is_lowest_price=False)])
+        assert enrich_ota_sellers(conn, Boom(), route,
+                                  since="2026-07-14T00:00:00Z") == 0
 
 
 def test_ota_enrichment_no_improvement_stores_nothing(tmp_path: Path):

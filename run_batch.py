@@ -52,11 +52,6 @@ EST_AVIASALES_PAIR_S = 3
 EST_SWEEP_WINDOW_S = 8
 EST_SEARCH_OVERHEAD_S = 45
 
-# SearchAPI rectangle sweeps burn LIFETIME credits (~28/sweep of 100), so
-# they run at most every ~2 weeks: Saturdays, and only when no sweep has
-# spent in the cooldown window. Cooldown (not a parity gate) so a forced
-# validation sweep automatically pushes the next cron sweep out.
-SWEEP_COOLDOWN_DAYS = 12
 
 # SerpApi calendar sweep (2026-11-14): prices every date pair of the owner
 # search's window, one call per stay-length strip, re-pricing each strip
@@ -138,7 +133,7 @@ def _prior_confidence(conn, this_run_id: str):
         level=c.get("level", "no_data"), score=c.get("score", 0),
         families=c.get("families", []),
         live_verification=c.get("live_verification", False),
-        note=c.get("note", ""))
+        note=c.get("note", ""), family_level=c.get("family_level"))
 
 
 def _prior_summary(conn, this_run_id: str) -> dict | None:
@@ -189,18 +184,6 @@ def _sweep_affordable(cost, pool_states) -> bool:
     st = pool_states.get("searchapi")
     avail = getattr(st, "effective_available", None) if st else None
     return (avail or 0) >= needed
-
-
-def _sweep_recently(conn, *, days: int = SWEEP_COOLDOWN_DAYS) -> bool:
-    """True if any searchapi calendar call spent within the cooldown —
-    the biweekly cadence gate for the finite-credit rectangle sweep."""
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime(
-        "%Y-%m-%dT%H:%M:%SZ")
-    row = conn.execute(
-        "SELECT COUNT(*) AS n FROM spend_events "
-        "WHERE source = 'searchapi' AND op = 'calendar' AND spent_at >= ?",
-        (cutoff,)).fetchone()
-    return (row["n"] or 0) > 0
 
 
 def _serpapi_sweep_allowance(pool_states, *, per_scan: int,
@@ -416,12 +399,15 @@ def main() -> int:
         # QuotaLedger.capture_anchors_from_snapshots).
         anchors_probed_after = ledger.snapshot_watermark()
 
-        # Rectangle-sweep cadence: Saturdays with a cooldown (or forced).
-        # The sweep burns lifetime credits, so most runs exclude searchapi
-        # per-search below; the client/anchor above still run so the pool
-        # stays observable on /ops between sweeps.
-        sweep_day = args.force_sweep or (
-            date.today().weekday() == 5 and not _sweep_recently(conn))
+        # Rectangle sweep: MANUAL ONLY since 2026-11-14 (audit F1). The
+        # SerpApi calendar sweep prices the whole window every week, so
+        # the SearchAPI rectangle is redundant, and its pool (12 usable
+        # lifetime credits) cannot cover a full sweep anyway: every
+        # Saturday it was planned, logged "unaffordable" and dropped.
+        # Those credits stay untouched unless Carlos dispatches scan.yml
+        # with force_sweep=true. The client/anchor above still run so the
+        # pool stays observable on /ops.
+        sweep_day = args.force_sweep
         if sa is not None:
             LOG.info("rectangle sweep %s this run%s",
                      "ACTIVE" if sweep_day else "dormant",
@@ -692,11 +678,25 @@ def main() -> int:
             # families, not endpoints (2026-07-13 audit).
             from lib import confidence as _conf
             conf = _conf.assess_confidence(current_health)
-            summary["confidence"] = conf.as_dict()
             prior_conf = _prior_confidence(conn, run_id)
             drop = _conf.confidence_drop_push(conf, prior_conf)
             if drop:
                 summary["health_alerts"].append(drop)
+            # F7: cap the level by how much of the OWNER search's window
+            # is priced (the search the /ops card speaks for).
+            owner = conn.execute(
+                "SELECT search_id FROM searches WHERE status = 'active' "
+                "AND priority = 'owner' ORDER BY created_at LIMIT 1").fetchone()
+            if owner is not None:
+                try:
+                    o_route, _ = route_store.load_effective_route(
+                        conn, owner["search_id"], REPO / "routes")
+                    priced, possible = _conf.window_coverage(
+                        conn, o_route, today=date.today())
+                    conf = _conf.with_coverage(conf, priced, possible)
+                except Exception as exc:  # noqa: BLE001
+                    LOG.warning("window coverage not measured: %s", exc)
+            summary["confidence"] = conf.as_dict()
             # Never-silent: a keyed source requested but with no client is
             # UNCONFIGURED — the scan silently ran without it. Page ONCE
             # (transition vs the prior summary) so a missing key can't hide

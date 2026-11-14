@@ -399,7 +399,7 @@ def test_sweep_is_off_unless_granted(conn):
                           today=TODAY)
     assert plan.serpapi_sweep == ()
     assert plan.calls_by_source["serpapi"] == (
-        len(plan.serpapi_discovery) + SERPAPI_OTA_RESERVE)
+        len(plan.serpapi_discovery))   # no OTA reserve on round trips (F6)
 
 
 def test_granted_sweep_plans_due_strips_and_quotes_them(conn):
@@ -408,7 +408,7 @@ def test_granted_sweep_plans_due_strips_and_quotes_them(conn):
     plan = build_run_plan(conn, route, sources=["serpapi"],
                           caps=Caps(serpapi_sweep=80), today=TODAY)
     assert len(plan.serpapi_sweep) == 62
-    base = len(plan.serpapi_discovery) + SERPAPI_OTA_RESERVE
+    base = len(plan.serpapi_discovery)        # round trip: no OTA reserve
     assert plan.calls_by_source["serpapi"] == base + 62
     cv = cost_vector(plan, caps=Caps(serpapi_sweep=80))
     serp = [l for l in cv.lines if l.source == "serpapi"]
