@@ -233,6 +233,29 @@ def _estimate_seconds(plan) -> int:
             + av_calls * EST_AVIASALES_PAIR_S)
 
 
+def _anchor_from_account(conn, ledger, source: str, client) -> None:
+    """Run-start account probe (free: serpapi /account, searchapi /me):
+    store a quota snapshot and anchor the pool from it. What reaches
+    quota_snapshots.raw_json is exactly check_quota()["raw"], so keeping
+    secrets out of it is the adapter's job (lib/serpapi_io
+    ACCOUNT_SAFE_FIELDS). A failed probe is logged, and the run goes on
+    without a fresh anchor."""
+    from lib import db as db_mod
+    try:
+        q = client.check_quota()
+        if isinstance(q.get("remaining"), int):
+            db_mod.record_quota(conn, source=source,
+                                remaining=q["remaining"],
+                                limit_total=q.get("limit_total"),
+                                raw_json=json.dumps(q.get("raw", {})))
+            ledger.record_anchor(source,
+                                 remaining=q["remaining"],
+                                 limit_total=q.get("limit_total"),
+                                 origin="account_api")
+    except Exception as exc:  # noqa: BLE001
+        LOG.warning("%s account check failed: %s", source, exc)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sources",
@@ -370,19 +393,7 @@ def main() -> int:
         # key has often never made a metered call).
         sp = raw_clients.get("serpapi")
         if sp is not None:
-            try:
-                q = sp.check_quota()
-                if isinstance(q.get("remaining"), int):
-                    db_mod.record_quota(conn, source="serpapi",
-                                        remaining=q["remaining"],
-                                        limit_total=q.get("limit_total"),
-                                        raw_json=json.dumps(q.get("raw", {})))
-                    ledger.record_anchor("serpapi",
-                                         remaining=q["remaining"],
-                                         limit_total=q.get("limit_total"),
-                                         origin="account_api")
-            except Exception as exc:  # noqa: BLE001
-                LOG.warning("serpapi account check failed: %s", exc)
+            _anchor_from_account(conn, ledger, "serpapi", sp)
 
         # searchapi's /me endpoint is also free — anchor the LIFETIME
         # credit pool so sweep reservations compare against real credits
@@ -390,19 +401,7 @@ def main() -> int:
         # anchors and recorded spend, never a presumed monthly reset).
         sa = raw_clients.get("searchapi")
         if sa is not None:
-            try:
-                q = sa.check_quota()
-                if isinstance(q.get("remaining"), int):
-                    db_mod.record_quota(conn, source="searchapi",
-                                        remaining=q["remaining"],
-                                        limit_total=q.get("limit_total"),
-                                        raw_json=json.dumps(q.get("raw", {})))
-                    ledger.record_anchor("searchapi",
-                                         remaining=q["remaining"],
-                                         limit_total=q.get("limit_total"),
-                                         origin="account_api")
-            except Exception as exc:  # noqa: BLE001
-                LOG.warning("searchapi account check failed: %s", exc)
+            _anchor_from_account(conn, ledger, "searchapi", sa)
 
         # Anchor-capture cutoff: the close-out capture_anchors_from_
         # snapshots must NOT see the account-probe snapshots recorded

@@ -54,6 +54,24 @@ class SellerOption:
 
 BASE_URL = "https://serpapi.com/search"
 ACCOUNT_URL = "https://serpapi.com/account"
+# GET /account echoes the account's own api_key, email and id next to the
+# plan counters, and callers store check_quota()["raw"] verbatim in
+# quota_snapshots.raw_json. Only these fields leave the adapter (CLAUDE.md
+# #6). It is an allowlist, so a field SerpAPI adds later stays out until
+# someone decides it is safe. scripts/scrub_quota_secrets.py cuts rows
+# stored before 2026-11-14 down to the same subset.
+ACCOUNT_SAFE_FIELDS = (
+    "plan_name",
+    "plan_searches_left",
+    "searches_per_month",
+    "total_searches_left",
+    "extra_credits",
+    "this_month_usage",
+    "this_hour_searches",
+    "account_rate_limit_per_hour",
+    "account_status",        # tells a suspended account from an empty one
+    "plan_renewal_date",     # explains a pool that jumps back up
+)
 DEFAULT_TIMEOUT_S = 90
 # A calendar sweep makes ~60 calls in one run; at the point-query timeout
 # a bad day could hold the CI job for 90 minutes. 60s bounds each strip,
@@ -276,7 +294,9 @@ class SerpApiClient:
         GET /account returns e.g.:
             {"plan_searches_left": 93, "searches_per_month": 100,
              "this_month_usage": 7, ...}
-        Normalized to {remaining, limit_total, raw} like the other clients.
+        plus the account's api_key, email and id. Normalized to
+        {remaining, limit_total, raw} like the other clients. `raw` holds
+        only ACCOUNT_SAFE_FIELDS, because callers store it verbatim.
         """
         try:
             r = self._session.get(ACCOUNT_URL,
@@ -291,6 +311,8 @@ class SerpApiClient:
             data = r.json()
         except ValueError as exc:
             raise SerpApiError(r.status_code, "non-JSON response from /account") from exc
+        if not isinstance(data, dict):
+            raise SerpApiError(r.status_code, "/account response was not a JSON object")
         remaining = data.get("plan_searches_left")
         # total_searches_left includes purchased top-ups; plan_searches_left
         # is the renewing monthly pool we budget against.
@@ -298,8 +320,16 @@ class SerpApiClient:
         return {
             "remaining": remaining if isinstance(remaining, int) else None,
             "limit_total": limit_total if isinstance(limit_total, int) else None,
-            "raw": data,
+            "raw": safe_account_fields(data),
         }
+
+
+def safe_account_fields(payload: Any) -> dict:
+    """The part of a /account payload that is safe to store: the
+    ACCOUNT_SAFE_FIELDS it carries, and nothing else."""
+    if not isinstance(payload, dict):
+        return {}
+    return {k: payload[k] for k in ACCOUNT_SAFE_FIELDS if k in payload}
 
 
 def _parse_point(payload: dict) -> list:

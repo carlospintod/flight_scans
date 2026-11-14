@@ -158,6 +158,10 @@ The free plan did not bill the "no results" call, so a full sweep costs 61–62.
   a reset date from that column, server-side, so nothing reaches a browser. It is
   still a needless copy of a secret. Fixing it means storing only the safe fields
   and scrubbing the existing rows, a production write that needs Carlos's OK.
+  **Fixed 2026-11-14:** `check_quota()` keeps only an allowlist
+  (`ACCOUNT_SAFE_FIELDS`, `tests/test_quota_secrets.py`), and with Carlos's OK
+  `scripts/scrub_quota_secrets.py --apply` cut the 55 old rows to it. Afterwards
+  no live table held a key, email or account id.
 
 ## Real run
 
