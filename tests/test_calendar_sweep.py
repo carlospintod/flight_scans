@@ -266,9 +266,9 @@ def test_an_empty_strip_is_asked_once_more_then_believed(conn):
     assert due_strips(conn, route, strips, today=date(2026, 11, 18)) == [flaky]
 
     # At the refresh, the still-unconfirmed strip goes first, ahead of
-    # the 59 that are merely two weeks old.
+    # the rest (with the 7-day refresh every strip is due by 28 Nov).
     refresh = due_strips(conn, route, strips, today=date(2026, 11, 28))
-    assert refresh[0] == flaky and len(refresh) == 60
+    assert refresh[0] == flaky and len(refresh) == len(strips)
 
 
 def test_a_moved_window_counts_as_unswept(conn):

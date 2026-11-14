@@ -151,10 +151,17 @@ def select_candidates(conn, route: RouteConfig, *, today: date | None = None) ->
         if prev is None or _freshness_rank(row) > _freshness_rank(prev):
             best_row_by_itin[key] = row
 
+    # Round trips verify only the SAMPLED stay lengths (stay step, B2
+    # 2026-11-14): rows at other lengths come from older full sweeps and
+    # would spend verifications on trips the radar no longer shows.
+    sampled = (None if route.is_one_way or route.stay.step_days == 1
+               else set(route.stay.sampled()))
     out: list[dict] = []
     for row in best_row_by_itin.values():
         stay = row["stay_days"]
         if stay < min_stay or stay > max_stay:
+            continue
+        if sampled is not None and stay not in sampled:
             continue
 
         # Search-window date filter: skip itineraries whose dates fall

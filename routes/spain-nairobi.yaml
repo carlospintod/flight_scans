@@ -5,13 +5,21 @@ route:
   - BCN
   destinations:
   - NBO
+# Rolling (Carlos, 2026-11-14): departures from one month after today,
+# for three months, never before 27 Dec 2026, no end date. The window
+# moves on Mondays (step_days 7); every load resolves today's dates and
+# the routes row carries that resolution for the web radar.
 search_window:
-  earliest_departure: '2026-12-27'
-  latest_return: '2027-05-30'
-  latest_departure: '2027-03-01'
+  rolling:
+    start_months: 1
+    span_months: 3
+    not_before: '2026-12-27'
+    step_days: 7
+# Stays of one to three months, priced every 7 days: 30, 37, ... 86, 90.
 stay_preferences:
-  min_days: 60
+  min_days: 30
   max_days: 90
+  step_days: 7
 currency: EUR
 sweep:
   cadence_days: 3

@@ -24,10 +24,23 @@ export const routeConfigSchema = z
       latest_return: isoDate,
       // Optional departure cap (lib/config SearchWindow.latest_departure).
       latest_departure: isoDate.nullish(),
+      // Rolling window (lib/config RollingWindow). When present, Python
+      // re-resolves the three dates above on every load; this editor
+      // keeps the spec so saving never silently pins the window.
+      rolling: z
+        .object({
+          start_months: z.number().int().nonnegative(),
+          span_months: z.number().int().positive(),
+          not_before: isoDate.nullish(),
+          step_days: z.number().int().positive().optional(),
+        })
+        .optional(),
     }),
     stay_preferences: z.object({
       min_days: z.number().int().positive(),
       max_days: z.number().int().positive(),
+      // Stay sampling step (lib/config StayPreferences.step_days).
+      step_days: z.number().int().positive().optional(),
     }),
     currency: z.string().regex(/^[A-Z]{3}$/),
     sweep: z

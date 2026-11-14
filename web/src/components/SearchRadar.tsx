@@ -18,7 +18,7 @@ import {
   getTopAlternatives,
 } from "@/lib/queries";
 import type { RouteWindow } from "@/lib/types";
-import { datePairsPerOrigin, lastDeparture } from "@/lib/window";
+import { datePairsPerOrigin, lastDeparture, stayLengths } from "@/lib/window";
 
 const n = (x: number) => x.toLocaleString("en-GB");
 
@@ -45,7 +45,14 @@ export async function SearchRadar({ w }: { w: RouteWindow }) {
   // The grid query bounds departures from below only; the departure cap
   // (latest_departure / latestReturn - minStay) is applied here so the
   // grid and the coverage count agree on what "the window" is.
-  const grids = rawGrids.map((cells) => cells.filter((c) => c.departureDate <= lastDep));
+  // Stays are SAMPLED (every stayStep-th length): the grid and the count
+  // show only those; trips at other lengths (older sweeps, point checks)
+  // stay in the cheapest-trips table.
+  const stays = stayLengths(w);
+  const staySet = new Set(stays);
+  const sampledStays = w.stayStep > 1;
+  const grids = rawGrids.map((cells) =>
+    cells.filter((c) => c.departureDate <= lastDep && staySet.has(c.stayDays)));
   const pairsPerOrigin = datePairsPerOrigin(w);
   const pricedPerOrigin = grids.map((g) => g.length);
   const priced = pricedPerOrigin.reduce((a, b) => a + b, 0);
@@ -65,6 +72,24 @@ export async function SearchRadar({ w }: { w: RouteWindow }) {
                 : `leaving ${fmtDate(w.earliestDeparture)} – ${fmtDate(lastDep)} · ` +
                   `staying ${w.minStay}–${w.maxStay} days · back by ${fmtDate(w.latestReturn)}`}
             </p>
+            {w.rolling && (
+              <p className="font-mono text-[12px] text-hint">
+                rolling window: departures from {w.rolling.startMonths} month
+                {w.rolling.startMonths === 1 ? "" : "s"} after today for{" "}
+                {w.rolling.spanMonths} months
+                {w.rolling.notBefore ? `, never before ${fmtDate(w.rolling.notBefore)}` : ""}
+                {w.rolling.stepDays === 7
+                  ? "; moves forward each Monday"
+                  : `; moves every ${w.rolling.stepDays} days`}
+                . Dates shown are as of the last scan.
+              </p>
+            )}
+            {!oneWay && sampledStays && (
+              <p className="font-mono text-[12px] text-hint">
+                stays priced every {w.stayStep} days: {stays.join(", ")}. Other
+                lengths appear in the table below, not in the grid or the count.
+              </p>
+            )}
             {!oneWay && (
               <p className="font-mono text-[12px] text-text-mid">
                 {n(priced)} of {n(possible)} date pairs priced in the last{" "}

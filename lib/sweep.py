@@ -517,17 +517,22 @@ def _entries_to_rows(
 # rule gives resume-after-partial-sweep, no re-buying of empty strips,
 # and "a moved window is unswept" for free.
 
-# Re-price each strip every two weeks. The old full sweeps (Jul-Aug)
-# moved little in 15 days (price correlation 0.90-0.98, median change
-# 4-7 EUR, the minimum <= 2 EUR), and 2 sweeps/month (~124 searches)
-# plus the regular scans (~91) fit the free 250 minus its 25 margin.
-SERPAPI_SWEEP_REFRESH_DAYS = 14
+# Re-price each strip every week (2026-11-14, was 14). The NBO window
+# now ROLLS one week at a time, and a call costs one credit whatever its
+# range, so every step makes each strip's new tail due anyway: a 7-day
+# refresh buys the whole window weekly at the price the step already
+# forces. 20 strips x ~4.3 weeks = ~87 calls/month + ~91 for regular
+# scans = ~178 of the free 250 minus its 25 margin (budget table in
+# docs/notes/passive-vuelazo-reliable-nbo-2026-11-14.md).
+SERPAPI_SWEEP_REFRESH_DAYS = 7
 
-# Departure days per call. Probed 2026-11-14: one MAD->NBO call with a
-# 65-day range (27 Dec - 1 Mar) and a 90-day stay returned all 65 days,
-# 1 credit, 4.6 s. Longer ranges are unproven, so wider windows are
-# chunked at the proven size rather than risk a silently truncated strip.
-SERPAPI_CALENDAR_MAX_DEPARTURE_DAYS = 65
+# Departure days per call. Probed 2026-11-14: a MAD->NBO call with a
+# 65-day range and a 90-day stay returned all 65 days; a second probe
+# with a 93-day range (27 Dec - 29 Mar, 30-day stay) returned all 93
+# priced, 1 credit (tests/fixtures/serpapi_calendar_93day.json). 93 is
+# the longest a three-calendar-month window can be, so the rolling NBO
+# window is one call per stay. Longer ranges are unproven: chunked.
+SERPAPI_CALENDAR_MAX_DEPARTURE_DAYS = 93
 
 # Wall-clock budget for one sweep pass. The first real sweep (2026-11-14)
 # averaged 9.7 s per call (2.8-21.5 s): 62 strips in 10 minutes. 15 min
@@ -571,7 +576,9 @@ def plan_strips(
 ) -> list[CalendarStrip]:
     """Every strip that covers the search window, before freshness.
 
-    Per stay s, departures run from max(earliest_departure, today) to the
+    One strip set per SAMPLED stay length (route.stay.sampled(): every
+    stay, or every step_days-th one plus the maximum). Per stay s,
+    departures run from max(earliest_departure, today) to the
     last day whose s-day trip still ends by latest_return (and respects
     latest_departure), clamped so both legs sit inside Google's booking
     horizon. Ranges longer than `max_departure_days` are chunked."""
@@ -581,8 +588,7 @@ def plan_strips(
     out: list[CalendarStrip] = []
     for origin in route.origins:
         for destination in route.destinations:
-            for stay in range(max(1, route.stay.min_days),
-                              route.stay.max_days + 1):
+            for stay in route.stay.sampled():
                 hi = min(sw.last_departure(stay),
                          horizon - timedelta(days=stay))
                 start = lo
@@ -663,10 +669,10 @@ def due_strips(
     due = [s for s in strips
            if not _covered(fresh.get((s.origin, s.destination, s.stay_days), []),
                            s.dep_start, s.dep_end)]
-    min_stay = route.stay.min_days
+    rank = {stay: i for i, stay in enumerate(route.stay.sampled())}
     due.sort(key=lambda s: (
         last.get((s.origin, s.destination, s.stay_days), ""),
-        _radical_inverse(s.stay_days - min_stay),
+        _radical_inverse(rank.get(s.stay_days, s.stay_days)),
         origins.get(s.origin, 99), dests.get(s.destination, 99),
         s.dep_start))
     return due

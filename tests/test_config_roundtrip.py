@@ -55,7 +55,8 @@ def test_save_route_validates_before_overwrite(tmp_path):
     # save_route takes a RouteConfig; simulate an invalid one by dataclass
     # replace on the frozen search_window to make latest <= earliest.
     from dataclasses import replace
-    bad_sw = replace(src.search_window, latest_return=date(2020, 1, 1))
+    bad_sw = replace(src.search_window, latest_return=date(2020, 1, 1),
+                     rolling=None)   # a rolling window re-resolves itself
     bad = replace(src, search_window=bad_sw)
     with pytest.raises(ConfigError):
         save_route(out, bad)
@@ -82,10 +83,13 @@ def test_legacy_sweep_keys_accepted_and_ignored(tmp_path):
 
 
 def test_route_to_yaml_dict_shape():
-    src = load_route(REPO / "routes" / "spain-nairobi.yaml")
+    src = load_route(REPO / "routes" / "spain-nairobi.yaml",
+                     today=date(2026, 11, 14))
     d = route_to_yaml_dict(src)
     assert d["route"]["name"] == "spain-nairobi"
     assert d["search_window"]["earliest_departure"] == "2026-12-27"
-    assert d["search_window"]["latest_departure"] == "2027-03-01"
+    assert d["search_window"]["latest_departure"] == "2027-03-09"
+    assert d["search_window"]["rolling"]["not_before"] == "2026-12-27"
+    assert d["stay_preferences"]["step_days"] == 7
     assert d["stay_preferences"]["max_days"] == 90
     assert "followup" in d  # spain-nairobi has followup thresholds

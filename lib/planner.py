@@ -273,10 +273,12 @@ def _discovery_grid(route: RouteConfig, *, today: date,
         seg = span / n
         phase = ((today.toordinal() * _PHI) % 1.0) * seg
         offsets = [min(span, round(i * seg + phase)) for i in range(n)]
-    # Evenly-spaced stay samples across the range; which point gets which
-    # stay shifts with `today`, so over scans every departure region gets
-    # priced at every sampled stay length.
-    stay_steps = [min_stay + round(k * (max_stay - min_stay) / max(1, n - 1))
+    # Evenly-spaced picks from the SAMPLED stay lengths (every stay, or
+    # every step_days-th one); which point gets which stay shifts with
+    # `today`, so over scans every departure region gets priced at every
+    # sampled stay length.
+    sampled = list(route.stay.sampled()) or [min_stay]
+    stay_steps = [sampled[round(k * (len(sampled) - 1) / max(1, n - 1))]
                   for k in range(n)]
     out: list[dict] = []
     seen: set[int] = set()

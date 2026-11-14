@@ -21,6 +21,58 @@ class ConfigError(ValueError):
     """Raised when a route config fails validation."""
 
 
+# Rolling windows advance in whole steps counted from this Monday, so a
+# 7-day step always moves the window on a Monday.
+ROLLING_EPOCH = date(2024, 1, 1)
+
+
+def add_months(d: date, months: int) -> date:
+    """`d` plus whole calendar months, clamped to the month's last day
+    (31 Jan + 1 month = 28/29 Feb)."""
+    m = d.month - 1 + months
+    y, m = d.year + m // 12, m % 12 + 1
+    first_of_next = date(y + (m == 12), m % 12 + 1, 1)
+    return date(y, m, min(d.day, (first_of_next - timedelta(days=1)).day))
+
+
+@dataclass(frozen=True)
+class RollingWindow:
+    """A departure window defined relative to today (Carlos, 2026-11-14:
+    three months, from next month, never before 27 Dec 2026, no end
+    date). Resolved to concrete dates on every load.
+
+    The window moves in `step_days` steps, not daily: the calendar
+    sweep's freshness rule treats a moved window as partly unswept, so a
+    daily drift would make strips due on every scan."""
+    start_months: int           # first departure = step date + this
+    span_months: int            # last departure = step date + start + span
+    not_before: date | None = None
+    step_days: int = 7
+
+    def step_date(self, today: date) -> date:
+        n = (today - ROLLING_EPOCH).days // self.step_days
+        return ROLLING_EPOCH + timedelta(days=n * self.step_days)
+
+    def resolve(self, today: date, max_stay: int) -> "SearchWindow":
+        anchor = self.step_date(today)
+        first = add_months(anchor, self.start_months)
+        last = add_months(anchor, self.start_months + self.span_months)
+        if self.not_before is not None and first < self.not_before:
+            first = self.not_before
+        last = max(last, first)
+        return SearchWindow(earliest_departure=first,
+                            latest_return=last + timedelta(days=max_stay),
+                            latest_departure=last, rolling=self)
+
+    def to_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"start_months": self.start_months,
+                               "span_months": self.span_months,
+                               "step_days": self.step_days}
+        if self.not_before is not None:
+            out["not_before"] = self.not_before.isoformat()
+        return out
+
+
 @dataclass(frozen=True)
 class SearchWindow:
     earliest_departure: date
@@ -30,6 +82,9 @@ class SearchWindow:
     # "depart by 1 Mar, stay up to 90 days". None = no cap (configs that
     # omit it serialize byte-identically to before).
     latest_departure: date | None = None
+    # Set when the dates above were resolved from a rolling spec (they
+    # are then today's resolution, not fixed config).
+    rolling: RollingWindow | None = None
 
     def last_departure(self, min_stay: int) -> date:
         """Latest departure that still fits `min_stay` days before
@@ -44,6 +99,20 @@ class SearchWindow:
 class StayPreferences:
     min_days: int
     max_days: int
+    # Price every `step_days`-th stay length from min_days, plus max_days
+    # (30, 37, ..., 86, 90 for step 7). 1 = every stay. The calendar
+    # sweep buys one call per stay length, so the step is the budget.
+    step_days: int = 1
+
+    def sampled(self) -> tuple[int, ...]:
+        """The stay lengths this search prices, ascending."""
+        lo = max(1, self.min_days)
+        if self.max_days < lo:
+            return ()
+        out = list(range(lo, self.max_days + 1, max(1, self.step_days)))
+        if out[-1] != self.max_days:
+            out.append(self.max_days)
+        return tuple(out)
 
 
 @dataclass(frozen=True)
@@ -108,20 +177,21 @@ class RouteConfig:
         return json.dumps(route_to_yaml_dict(self), sort_keys=True)
 
 
-def load_route(path: str | Path) -> RouteConfig:
-    """Read and validate a route YAML config from disk."""
+def load_route(path: str | Path, *, today: date | None = None) -> RouteConfig:
+    """Read and validate a route YAML config from disk. `today` resolves
+    a rolling window (default: the real today)."""
     path = Path(path)
     with path.open("r", encoding="utf-8") as f:
         raw = yaml.safe_load(f)
     if not isinstance(raw, dict):
         raise ConfigError(f"{path}: top-level must be a mapping")
     try:
-        return _from_dict(raw)
+        return _from_dict(raw, today=today)
     except ConfigError as exc:
         raise ConfigError(f"{path}: {exc}") from None
 
 
-def route_from_json(text: str) -> RouteConfig:
+def route_from_json(text: str, *, today: date | None = None) -> RouteConfig:
     """Parse a routes.config_json value back into a RouteConfig.
 
     Accepts two shapes:
@@ -138,7 +208,7 @@ def route_from_json(text: str) -> RouteConfig:
         raise ConfigError("config_json: top-level must be a mapping")
     if "route" not in raw and "name" in raw:
         raw = _from_asdict_shape(raw)
-    return _from_dict(raw)
+    return _from_dict(raw, today=today)
 
 
 def _from_asdict_shape(raw: dict[str, Any]) -> dict[str, Any]:
@@ -158,7 +228,24 @@ def _from_asdict_shape(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _from_dict(raw: dict[str, Any]) -> RouteConfig:
+def _parse_rolling(rr: Any) -> RollingWindow:
+    if not isinstance(rr, dict):
+        raise ConfigError("search_window.rolling: must be a mapping")
+    start = _require_nonneg_int(rr, "start_months",
+                                path="search_window.rolling.start_months")
+    span = _require_positive_int(rr, "span_months",
+                                 path="search_window.rolling.span_months")
+    step = (_require_positive_int(rr, "step_days",
+                                  path="search_window.rolling.step_days")
+            if "step_days" in rr else 7)
+    not_before = (_require_date(rr, "not_before",
+                                path="search_window.rolling.not_before")
+                  if rr.get("not_before") not in (None, "") else None)
+    return RollingWindow(start_months=start, span_months=span,
+                         not_before=not_before, step_days=step)
+
+
+def _from_dict(raw: dict[str, Any], *, today: date | None = None) -> RouteConfig:
     route = _require_mapping(raw, "route")
     name = _require_str(route, "name", path="route.name")
     origins = _require_iata_list(route, "origins", path="route.origins")
@@ -172,6 +259,20 @@ def _from_dict(raw: dict[str, Any]) -> RouteConfig:
         raise ConfigError("trip_type must be 'round_trip' or 'one_way'")
 
     sw_raw = _require_mapping(raw, "search_window")
+    rolling = (_parse_rolling(sw_raw["rolling"])
+               if sw_raw.get("rolling") is not None else None)
+    if rolling is not None and trip_type == "one_way":
+        raise ConfigError("search_window.rolling: round trips only")
+    if rolling is not None:
+        # Stored dates are only the last resolution (kept for readers
+        # that do not resolve, such as the web app); today's win.
+        stay_max = _require_positive_int(
+            _require_mapping(raw, "stay_preferences"), "max_days",
+            path="stay_preferences.max_days")
+        res = rolling.resolve(today or date.today(), stay_max)
+        sw_raw = {"earliest_departure": res.earliest_departure,
+                  "latest_return": res.latest_return,
+                  "latest_departure": res.latest_departure}
     earliest = _require_date(sw_raw, "earliest_departure", path="search_window.earliest_departure")
     latest = _require_date(sw_raw, "latest_return", path="search_window.latest_return")
     if latest <= earliest:
@@ -196,6 +297,10 @@ def _from_dict(raw: dict[str, Any]) -> RouteConfig:
         max_days = _require_positive_int(stay_raw, "max_days", path="stay_preferences.max_days")
         if max_days < min_days:
             raise ConfigError("stay_preferences.max_days must be >= min_days")
+    stay_step = 1
+    if trip_type != "one_way" and "step_days" in (raw.get("stay_preferences") or {}):
+        stay_step = _require_positive_int(raw["stay_preferences"], "step_days",
+                                          path="stay_preferences.step_days")
 
     currency = _require_str(raw, "currency", path="currency")
     if len(currency) != 3 or not currency.isalpha() or currency != currency.upper():
@@ -244,8 +349,10 @@ def _from_dict(raw: dict[str, Any]) -> RouteConfig:
         origins=origins,
         destinations=destinations,
         search_window=SearchWindow(earliest_departure=earliest, latest_return=latest,
-                                   latest_departure=latest_dep_cap),
-        stay=StayPreferences(min_days=min_days, max_days=max_days),
+                                   latest_departure=latest_dep_cap,
+                                   rolling=rolling),
+        stay=StayPreferences(min_days=min_days, max_days=max_days,
+                             step_days=stay_step),
         currency=currency,
         sweep=SweepParams(
             outbound_window_days=outbound,
@@ -323,6 +430,13 @@ def route_to_yaml_dict(route: RouteConfig) -> dict[str, Any]:
     if route.search_window.latest_departure is not None:
         out["search_window"]["latest_departure"] = (
             route.search_window.latest_departure.isoformat())
+    # Rolling: the spec AND today's resolution. Python re-resolves on
+    # every load; readers that do not (the web app) read the dates, which
+    # route_store rewrites whenever a load resolves different ones.
+    if route.search_window.rolling is not None:
+        out["search_window"]["rolling"] = route.search_window.rolling.to_dict()
+    if route.stay.step_days != 1:
+        out["stay_preferences"]["step_days"] = route.stay.step_days
     if followup:
         out["followup"] = followup
     return out

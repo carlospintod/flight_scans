@@ -10,13 +10,16 @@ REPO = Path(__file__).resolve().parents[1]
 
 
 def test_loads_first_run_yaml():
-    cfg = load_route(REPO / "routes" / "spain-nairobi.yaml")
+    cfg = load_route(REPO / "routes" / "spain-nairobi.yaml",
+                     today=date(2026, 11, 14))
     assert cfg.name == "spain-nairobi"
     assert cfg.origins == ("MAD", "BCN")
     assert cfg.destinations == ("NBO",)
     assert cfg.currency == "EUR"
-    assert cfg.stay.min_days == 60
+    # 2026-11-14: one to three months, priced every 7 days.
+    assert cfg.stay.min_days == 30
     assert cfg.stay.max_days == 90
+    assert cfg.stay.sampled() == (30, 37, 44, 51, 58, 65, 72, 79, 86, 90)
     # Window-size keys are legacy; the real-trip YAML omits them and the
     # loader falls back to the harmless defaults.
     assert cfg.sweep.cadence_days == 3
@@ -30,12 +33,14 @@ def test_loads_first_run_yaml():
     assert cfg.alerts.drop_threshold_pct == 15
     assert cfg.alerts.baseline_window_days == 30
     assert cfg.alerts.min_observations == 4
-    # The REAL trip window: depart 27 Dec 2026 - 1 Mar 2027, 60-90 day stay
-    # (latest_return = 1 Mar + 90d).
+    # The REAL trip window, rolling since 2026-11-14: on Sat 14 Nov the
+    # step date is Mon 9 Nov, so departures 9 Dec (floored to 27 Dec)
+    # to 9 Mar, back by 9 Mar + 90 d.
+    assert cfg.search_window.rolling is not None
     assert cfg.search_window.earliest_departure == date(2026, 12, 27)
-    assert cfg.search_window.latest_departure == date(2027, 3, 1)
-    assert cfg.search_window.latest_return == date(2027, 5, 30)
-    assert cfg.search_window.last_departure(cfg.stay.min_days) == date(2027, 3, 1)
+    assert cfg.search_window.latest_departure == date(2027, 3, 9)
+    assert cfg.search_window.latest_return == date(2027, 6, 7)
+    assert cfg.search_window.last_departure(cfg.stay.min_days) == date(2027, 3, 9)
 
 
 def test_legacy_oversized_window_keys_no_longer_rejected(tmp_path):

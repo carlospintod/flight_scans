@@ -11,9 +11,22 @@ export interface RouteWindow {
   latestDeparture: string | null;
   minStay: number;
   maxStay: number;
+  /** Stay sampling step (stay_preferences.step_days; 1 = every stay).
+   *  Use stayLengths() in lib/window.ts for the sampled set. */
+  stayStep: number;
+  /** Set when the dates above are the resolution of a rolling window
+   *  (search_window.rolling): the dates as of the last scan's load. */
+  rolling: RollingSpec | null;
   currency: string;
   watchBelowPrice: number | null;
   tripType: "round_trip" | "one_way";
+}
+
+export interface RollingSpec {
+  startMonths: number;
+  spanMonths: number;
+  notBefore: string | null;
+  stepDays: number;
 }
 
 export interface Itinerary {

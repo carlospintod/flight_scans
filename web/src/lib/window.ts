@@ -1,3 +1,4 @@
+import { sampledStays } from "./stays";
 import type { RouteWindow } from "./types";
 
 /** Pure search-window geometry for the results page: which departure
@@ -37,11 +38,11 @@ export function departureDays(w: RouteWindow): string[] {
   return out;
 }
 
-/** Stay lengths the window asks for, ascending (round trip only). */
+/** Stay lengths the search prices, ascending (round trip only): every
+ *  stay, or every stayStep-th one plus the maximum. The grid and the
+ *  coverage count use exactly this set. */
 export function stayLengths(w: RouteWindow): number[] {
-  const out: number[] = [];
-  for (let s = w.minStay; s <= w.maxStay; s++) out.push(s);
-  return out;
+  return sampledStays(w.minStay, w.maxStay, w.stayStep);
 }
 
 /** True when a trip leaving `departure` and staying `stay` days is back

@@ -68,6 +68,15 @@ export async function getRouteWindow(
     latestDeparture: cfg.search_window.latest_departure ?? null,
     minStay: cfg.stay_preferences?.min_days ?? 0,
     maxStay: cfg.stay_preferences?.max_days ?? 0,
+    stayStep: cfg.stay_preferences?.step_days ?? 1,
+    rolling: cfg.search_window.rolling
+      ? {
+          startMonths: cfg.search_window.rolling.start_months,
+          spanMonths: cfg.search_window.rolling.span_months,
+          notBefore: cfg.search_window.rolling.not_before ?? null,
+          stepDays: cfg.search_window.rolling.step_days ?? 7,
+        }
+      : null,
     currency: cfg.currency,
     watchBelowPrice: cfg.followup?.watch_below_price ?? null,
     tripType: cfg.trip_type === "one_way" ? "one_way" : "round_trip",

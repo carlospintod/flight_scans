@@ -66,7 +66,7 @@ SWEEP_COOLDOWN_DAYS = 12
 # short the sweep shrinks or waits — and resumes after the monthly reset —
 # instead of starving the regular scans.
 SERPAPI_SWEEP_HEADROOM_SCANS = 6     # ~two weeks of Mon/Wed/Sat scans
-SERPAPI_SWEEP_MAX_STRIPS = 80        # a full NBO window is 62 strips
+SERPAPI_SWEEP_MAX_STRIPS = 80        # a full NBO window is 20 strips (10 sampled stays x 2 origins) since 2026-11-14
 # First real sweep (2026-11-14), 62 strips: mean 9.7 s, p90 15.1 s,
 # max 21.5 s. 15 s (about the p90) keeps this estimate generous, as the
 # A8 skip rule above requires.
