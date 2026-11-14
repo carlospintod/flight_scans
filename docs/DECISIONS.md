@@ -10,6 +10,33 @@ Legend: [R] = ratified explicitly by Carlos in the planning session.
 
 ---
 
+## Amendment (14 Nov 2026) — Vuelazo goes passive; Nairobi is the active mission [R]
+
+Carlos, 2026-11-14 (plan: `docs/notes/PLAN-passive-vuelazo-reliable-nbo-2026-11-14.md`;
+implementation: `docs/notes/passive-vuelazo-reliable-nbo-2026-11-14.md`).
+
+1. **Vuelazo is a passive collector until Carlos buys live discovery.** A deal engine
+   needs SearchAPI Developer (~$40/mo), and he is not paying for that now. So the daily
+   job only collects Google Explore price history (`run_deals.py --collect-only`, 6
+   calls/day on the separate `serpapi_vz` free pool). It does no nomination,
+   verification, drafting, approval or publishing. Explore data only: the cached
+   Aviasales sweep stays off. The full pipeline stays runnable by manual dispatch for
+   the future paid trial. **This is a deliberate detour from the M0→M4b milestone
+   order** (MVP-SPEC §5). The milestones resume when Carlos flips a paid tier. That
+   flip is his explicit action, as before.
+2. **Silent failure is the main risk.** A daily read-only watchdog pushes when
+   collection or scans stop, when calendar strips keep failing, or when a SerpApi pool
+   will run out before its reset.
+3. **Nairobi search:**
+   - The window is **rolling**: departures from one month after today, for three
+     months, never before 27 Dec 2026. It steps weekly and has no end date; it keeps
+     rolling until Carlos changes or pauses the search.
+   - Stays are **30–90 days in weekly steps** (30, 37, … 86, 90), every departure day.
+4. Everything stays on free tiers. The 12 remaining SearchAPI lifetime credits and the
+   landing-page claim about scan frequency are untouched.
+
+---
+
 ## D0 — Origins instrumented [R]
 
 **Choice:** MAD, BCN, VLC, ALC polled from day one.
