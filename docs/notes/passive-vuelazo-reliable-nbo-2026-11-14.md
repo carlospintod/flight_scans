@@ -152,8 +152,9 @@ shrinks first. `serpapi_vz` has 244 left and renews on 9 Dec.
 - **F6.** No OTA-seller call and no reserve on round trips. A round-trip response
   carries `departure_token`, not `booking_token`, so the call could never complete.
   The departure-token step would cost a second call per check, and on 30–90-day
-  stays the OTA delta is a lead anyway. **Aviasales:** measure during the B6 real
-  scan whether it returns rows for 30-day stays before deciding anything.
+  stays the OTA delta is a lead anyway. **Aviasales, measured in the B6 scan:**
+  2 calls (free), 2 rows: MAD 56-day stay at 547 EUR (in range) and one 7-day stay
+  (out of range, ignored). It returns in-range leads again, so it stays on.
 - **F7.** `with_coverage` caps the confidence level by how much of the window is
   priced in the last 21 days: below 25% it is capped at low, below 75% at medium. The
   note says, for example, "20 of 4,030 date pairs priced in the last 21 days (0%),
@@ -162,7 +163,7 @@ shrinks first. `serpapi_vz` has 244 left and renews on 9 Dec.
 - The stale "captcha-walled from CI" comments are rewritten. The scraper has run
   ~95% ok from Actions since July.
 
-**B6. Production write (waiting on Carlos).** Dry-run diff of the live `searches` row
+**B6. Production write (applied 2026-11-14 on Carlos's yes).** Dry-run diff of the live `searches` row
 on Turso, read with `.env` loaded:
 - window: `latest_departure` 2027-03-01 → 2027-03-09; `latest_return` 2027-05-30 →
   2027-06-07; `rolling` block added;
@@ -179,7 +180,30 @@ the local SQLite, not Turso. Run it with the `TURSO_*` vars set, or use the
 | daf12d2ebaa8 | first collect-only try; died on the cp1252 console before any call | `serpapi_vz reserved 6 used 0` (status failed) |
 | 72b6e003a152 | collect-only: MAD/BCN/VLC/ALC south_america 2027-03, MAD/BCN asia 2027-03; 113 rows | `serpapi_vz reserved 6 used 6` |
 | b348e836006f | B3 probe, 93-day strip | `serpapi reserved 1 used 1` |
-| (pending B6) | one real scan + sweep on the new window | — |
+| 3e8758efb2f2 | B6: real scan + sweep on the new window (local, against Turso); 1,546 rows, 0 alerts, ok | `serpapi reserved 25 used 25` (20 calendar + 5 grid) · `googleflights reserved 25 used 25` (free) · `aviasales reserved 2 used 2` (free) · no SearchAPI spend |
+
+B6 run details:
+- The sweep covered 20 of 20 strips, 73 departures each (27 Dec → 9 Mar), 1,460
+  cells, 0 empty, 0 errors. Coverage after the run: "1,460 of 1,460 date pairs priced
+  in the last 21 days (100%)". Confidence: medium (one live family, google).
+- Verification after the sweep: candidate selection ran again after the sweep and
+  went from 5 to 25 (the cap). The scraper verified 25 trips and stored 23 fares; 2
+  came back with no flights. Its log line still said "followup searchapi" from an old
+  hard-coded label; it now names the real source.
+- Best verified fare in the new window this run: 600 EUR, BCN 16 Jan → 15 Feb (30 d,
+  SerpApi). Cheapest calendar cells (leads) by stay: 30–44 d 594 EUR · 45–74 d 589 EUR ·
+  75–90 d 594 EUR, all from BCN. No alert fired: the window's bar is still the 557
+  from 11 Nov, which is correct.
+- The live `routes` row now reads `latest_departure 2027-03-09`, `latest_return
+  2027-06-07`, plus the `rolling` block. The web radar reads these dates from that row.
+- **The watchdog read the new window and flags the `serpapi` pool**, dry run right
+  after the scan: 103 usable, a 28-day rate of 6.2/day, about 137 needed before the
+  6 Dec renewal, run-out around 30 Nov. The rate includes today's one-off 62-strip
+  sweep plus this 20-strip sweep and the probe. The forward rate is about 35 a week
+  (a 20-strip sweep plus 3 scans × 5), about 110 to renewal, so it is still short by
+  about 7. The sweep allowance keeps scan headroom, so next week's sweep shrinks before
+  any scan is skipped. The first real watchdog run (19:37 UTC) will send this push.
+  Repeats come every 3 days while the pool stays short.
 
 Forced-stale watchdog demo (dry run, `--now 2026-11-20T19:37Z`):
 `out/watchdog_forced_stale_2026-11-20.txt`. It produced the collector and scan pushes
@@ -187,9 +211,10 @@ and sent nothing.
 
 ## Waiting on Carlos
 
-1. **Push** `main`. Until then, `deals.yml` (daily collect), `watchdog.yml` and the
-   scan changes do not run in CI.
-2. **B6 production write** (diff above), then one real scan plus sweep, with receipts.
+1. ~~Push~~ done 2026-11-14 (64ee520..ff6b024; `tests` green on GitHub).
+2. ~~B6~~ done 2026-11-14 (run 3e8758efb2f2 above). Open: the `serpapi` pool is
+   short until 6 Dec. Let the sweep shrink (the default), or pause the sweep until
+   renewal?
 3. **A6 weekly push.** Does he want it, and is this wording right? Draft (owner push,
    English like the other ops pushes; sent Monday ~08:00 Madrid):
 

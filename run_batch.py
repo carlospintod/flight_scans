@@ -255,9 +255,9 @@ def main() -> int:
                              "workflow_dispatch"])
     ap.add_argument("--json-summary", type=Path, default=None)
     ap.add_argument("--force-sweep", action="store_true",
-                    help="run the SearchAPI rectangle sweep this run, "
-                         "bypassing the Saturday+cooldown cadence gate "
-                         "(still ledger-metered)")
+                    help="run the SearchAPI rectangle sweep this run; "
+                         "manual only since 2026-11-14 (spends LIFETIME "
+                         "credits, ledger-metered)")
     ap.add_argument("--calendar-sweep-max", type=int, default=None,
                     help="cap the SerpApi calendar sweep at N strips this "
                          "run (0 = off). Default: as many due strips as "

@@ -419,8 +419,8 @@ def run_followup(
                     # stored nothing — surface it instead of hiding it.
                     sa_empty += 1
                     LOG.warning(
-                        "followup searchapi NO FLIGHTS %s->%s dep=%s ret=%s "
-                        "(call spent, nothing stored)",
+                        "followup %s NO FLIGHTS %s->%s dep=%s ret=%s "
+                        "(call spent, nothing stored)", client_source,
                         c["origin"], c["destination"],
                         c["departure_date"], c["return_date"],
                     )
